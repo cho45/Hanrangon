@@ -8,35 +8,110 @@ templ Index(entries []model.Entry) {
 	<!DOCTYPE html>
 	<html lang="ja">
 	<head>
-		<meta charset="UTF-8"/>
-		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-		<title>Hanrangon</title>
-		<style>
-			body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 1rem; }
-			article { margin-bottom: 2rem; border-bottom: 1px solid #ccc; padding-bottom: 1rem; }
-			h1 { font-size: 1.5rem; }
-			.meta { color: #666; font-size: 0.85rem; }
-		</style>
+		<meta charset="utf-8"/>
+
+		<title>氾濫原</title>
+		<meta name="description" content="写真・文章による、ある普通の人間の人生の記録"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=2.0, user-scalable=yes"/>
+		<meta name="theme-color" content="#000000"/>
+
+		<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin=""/>
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
+		<link rel="preconnect" href="https://googleads.g.doubleclick.net" crossorigin=""/>
+
+		<link rel="alternate" type="application/atom+xml" title="Feed" href="/feed"/>
+
+		<meta name="referrer" content="unsafe-url"/>
+
+		<meta itemprop="name" content="氾濫原"/>
+		<meta itemprop="description" content="写真・文章による、ある普通の人間の人生の記録"/>
+
+		<meta property="og:title" content="氾濫原"/>
+		<meta property="og:type" content="blog"/>
+		<meta property="og:url" content="/"/>
+		<meta property="og:email" content="cho45@lowreal.net"/>
+		<meta property="fb:admins" content="cho45"/>
+
+		<link rel="stylesheet" href="/css/style.css"/>
+
+		<script src="/js/daterelative.js" defer></script>
+		<script src="/js/balancetext/tinysegmenter.js" defer></script>
+		<script src="/js/balancetext/balance.js" defer></script>
+		<script src="/js/abcjs_basic_5.1.1-min.js" defer></script>
+		<script src="/js/nogag.js" defer></script>
 	</head>
 	<body>
-		<header>
-			<h1>Hanrangon (Go Prototype)</h1>
+		<header id="global-header">
+			<h1 id="header">
+				<a href="/">
+					<img src="/images/hanrangen.svg" width="60" height="50" style="margin: auto; display: block" alt="氾濫原"/>
+				</a>
+			</h1>
 		</header>
-		<main>
-			for _, e := range entries {
-				<article>
-					<header>
-						<h1><a href={ templ.SafeURL("/" + e.Path) }>{ e.Title }</a></h1>
-						<div class="meta">
-							<time>{ e.Date.Format("2006-01-02") }</time>
+
+		<nav id="global-navigation">
+			<ul>
+				<li><a href="/">最新</a></li>
+				<li><a href="/photo/">写真</a></li>
+				<li><a href="https://www.lowreal.net/">誰？</a></li>
+			</ul>
+		</nav>
+
+		<div id="content">
+			<div class="entries">
+				for i, e := range entries {
+					if i == 0 || !IsSameDay(entries[i-1].Date, e.Date) {
+						<div class="date"><a href={ templ.SafeURL(e.Date.Format("/2006/01/02/")) }>{ e.Date.Format("2006年 01月 02日") }</a></div>
+					}
+					<article>
+						<header>
+							<h1><a href={ templ.SafeURL("/" + e.Path) }>{ e.Title }</a></h1>
+						</header>
+						<div class="content">
+							@templ.Raw(e.FormattedBody)
 						</div>
-					</header>
-					<div class="content">
-						@templ.Raw(e.FormattedBody)
-					</div>
-				</article>
-			}
-		</main>
+						<footer>
+							<ul class="meta">
+								<li><a href={ templ.SafeURL("/" + e.Path) } rel="bookmark"><time datetime={ e.CreatedAt.Format("2006-01-02T15:04:05Z07:00") }>{ e.CreatedAt.Format("15:04") }</time></a></li>
+								<li><a href={ templ.SafeURL("/" + e.Path) } rel="bookmark" title="Permalink">Permalink</a></li>
+							</ul>
+						</footer>
+					</article>
+				}
+			</div>
+
+			<div class="pager">
+				<!-- TODO: Pagination -->
+			</div>
+		</div>
+
+		<footer id="global-footer">
+			<h2>書いている人</h2>
+			<div class="author">
+				<div class="image">
+					<img src="/images/profile.jpg" alt="Photo" width="160" height="160"/>
+				</div>
+				<div class="desc">
+					<p>
+						cho45 (<a href="https://www.lowreal.net/" rel="author">www.lowreal.net</a>) 
+						&lt;<a href="mailto:cho45@lowreal.net">cho45@lowreal.net</a>&gt;
+					</p>
+					<p>
+						JavaScript, Perl, Ruby, HTML, CSS, Web etc
+					</p>
+					<p>
+						<a class="button github-button" href="https://github.com/cho45" rel="nofollow"><i></i>
+							<span class="label">
+								Follow <b>&#64;cho45</b>
+							</span>
+						</a>
+					</p>
+					<p>
+						<a href="/archive">アーカイブ</a>
+					</p>
+				</div>
+			</div>
+		</footer>
 	</body>
 	</html>
 }

@@ -43,6 +43,11 @@ func main() {
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 
+	// Static files
+	e.Static("/css", "../static/css")
+	e.Static("/js", "../static/js")
+	e.Static("/images", "../static/images")
+
 	// Routes
 	e.GET("/", app.HandleIndex)
 
