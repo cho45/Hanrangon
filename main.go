@@ -60,7 +60,7 @@ func NewServer(db *sql.DB) *echo.Echo {
 	e.GET("/", app.HandleIndex)
 	e.GET("/.page/:date/:limit", app.HandleIndex)
 	e.GET("/archive", app.HandleArchive)
-	
+
 	// Date archives (order matters vs /:yyyy/:mm/:dd/:n)
 	e.GET("/:yyyy/", app.HandleDateArchive)
 	e.GET("/:yyyy/:mm/", app.HandleDateArchive)
@@ -71,13 +71,35 @@ func NewServer(db *sql.DB) *echo.Echo {
 	e.GET("/:category/", app.HandleCategory)
 	e.GET("/:category/.page/:date/:limit", app.HandleCategory)
 
+	e.GET("/feed", app.HandleFeed)
+
 	return e
+}
+
+func (app *App) HandleFeed(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	entries, err := app.queries.ListEntries(ctx, model.ListEntriesParams{
+		Date:  time.Now(),
+		Limit: 20,
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
+	}
+
+	updated := time.Now()
+	if len(entries) > 0 {
+		updated = entries[0].ModifiedAt
+	}
+
+	c.Response().Header().Set(echo.HeaderContentType, "application/atom+xml; charset=utf-8")
+	return view.Feed(entries, updated).Render(ctx, c.Response())
 }
 
 func (app *App) HandleCategory(c echo.Context) error {
 	ctx := c.Request().Context()
 	category := c.Param("category")
-	
+
 	// ページネーションパラメータの取得
 	dateStr := c.Param("date")
 	limit := 10 // Default limit
@@ -108,7 +130,7 @@ func (app *App) HandleCategory(c echo.Context) error {
 	if len(entries) > limit {
 		lastEntry := entries[len(entries)-1]
 		entries = entries[:limit]
-		
+
 		nextDate := lastEntry.Date.Format("20060102")
 		nextPage = fmt.Sprintf("/%s/.page/%s/%d", category, nextDate, limit)
 	}
@@ -208,7 +230,7 @@ func (app *App) HandleIndex(c echo.Context) error {
 		lastEntry := entries[len(entries)-1]
 		// 表示用からは削除
 		entries = entries[:limit]
-		
+
 		// 次ページのURLを生成 (例: /.page/20251230/10)
 		nextDate := lastEntry.Date.Format("20060102")
 		nextPage = fmt.Sprintf("/.page/%s/%d", nextDate, limit)

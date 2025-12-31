@@ -247,75 +247,57 @@ func TestHandleDateArchive(t *testing.T) {
 		},
 	}
 
-		for _, tt := range tests {
+	for _, tt := range tests {
 
-			t.Run(tt.path, func(t *testing.T) {
+		t.Run(tt.path, func(t *testing.T) {
 
-				req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
 
-				rec := httptest.NewRecorder()
+			rec := httptest.NewRecorder()
 
-				
+			e.ServeHTTP(rec, req)
 
-				e.ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
 
-	
+				t.Errorf("want status 200, got %d", rec.Code)
 
-				if rec.Code != http.StatusOK {
+			}
 
-					t.Errorf("want status 200, got %d", rec.Code)
+			body := rec.Body.String()
 
-				}
+			for _, title := range tt.wantTitles {
 
-	
+				if !strings.Contains(body, title) {
 
-				body := rec.Body.String()
-
-				for _, title := range tt.wantTitles {
-
-					if !strings.Contains(body, title) {
-
-						t.Errorf("path %s: body does not contain '%s'", tt.path, title)
-
-					}
+					t.Errorf("path %s: body does not contain '%s'", tt.path, title)
 
 				}
 
-				for _, title := range tt.notTitles {
+			}
 
-					if strings.Contains(body, title) {
+			for _, title := range tt.notTitles {
 
-						t.Errorf("path %s: body SHOULD NOT contain '%s'", tt.path, title)
+				if strings.Contains(body, title) {
 
-					}
+					t.Errorf("path %s: body SHOULD NOT contain '%s'", tt.path, title)
 
 				}
 
-			})
+			}
 
-		}
+		})
 
 	}
 
-	
+}
 
-	func TestHandleCategory(t *testing.T) {
+func TestHandleCategory(t *testing.T) {
 
-	
+	db := setupTestDB(t)
 
-		db := setupTestDB(t)
+	defer db.Close()
 
-	
-
-		defer db.Close()
-
-	
-
-	
-
-	
-
-		_, err := db.Exec(`
+	_, err := db.Exec(`
 
 	
 
@@ -331,46 +313,106 @@ func TestHandleDateArchive(t *testing.T) {
 
 		`)
 
-		if err != nil {
+	if err != nil {
 
-			t.Fatalf("failed to insert test data: %v", err)
-
-		}
-
-	
-
-		e := NewServer(db)
-
-		req := httptest.NewRequest(http.MethodGet, "/test/", nil)
-
-		rec := httptest.NewRecorder()
-
-		e.ServeHTTP(rec, req)
-
-	
-
-		if rec.Code != http.StatusOK {
-
-			t.Errorf("want status 200, got %d", rec.Code)
-
-		}
-
-	
-
-		body := rec.Body.String()
-
-		if !strings.Contains(body, "[test] Tagged Entry") {
-
-			t.Errorf("body does not contain tagged entry")
-
-		}
-
-		if strings.Contains(body, "Normal Entry") {
-
-			t.Errorf("body SHOULD NOT contain normal entry")
-
-		}
+		t.Fatalf("failed to insert test data: %v", err)
 
 	}
 
-	
+	e := NewServer(db)
+
+	req := httptest.NewRequest(http.MethodGet, "/test/", nil)
+
+	rec := httptest.NewRecorder()
+
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+
+		t.Errorf("want status 200, got %d", rec.Code)
+
+	}
+
+	body := rec.Body.String()
+
+	// ParseTitle separates tags, so we look for the tag link and the clean title
+
+	if !strings.Contains(body, ">test</a>") {
+
+		t.Errorf("body does not contain tag link for 'test'")
+
+	}
+
+	if !strings.Contains(body, "Tagged Entry") {
+
+		t.Errorf("body does not contain clean title 'Tagged Entry'")
+
+	}
+
+	if strings.Contains(body, "Normal Entry") {
+
+		t.Errorf("body SHOULD NOT contain normal entry")
+
+	}
+
+}
+
+func TestHandleFeed(t *testing.T) {
+
+	db := setupTestDB(t)
+
+	defer db.Close()
+
+	_, err := db.Exec(`
+
+				INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
+
+				VALUES 
+
+				('Feed Entry 1', 'Body', '<p>Body</p>', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00')
+
+			`)
+
+	if err != nil {
+
+		t.Fatalf("failed to insert test data: %v", err)
+
+	}
+
+	e := NewServer(db)
+
+	req := httptest.NewRequest(http.MethodGet, "/feed", nil)
+
+	rec := httptest.NewRecorder()
+
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+
+		t.Errorf("want status 200, got %d", rec.Code)
+
+	}
+
+	contentType := rec.Header().Get("Content-Type")
+
+	if !strings.Contains(contentType, "application/atom+xml") {
+
+		t.Errorf("want Content-Type application/atom+xml, got %s", contentType)
+
+	}
+
+	body := rec.Body.String()
+
+	if !strings.Contains(body, "<feed xmlns=\"http://www.w3.org/2005/Atom\">") {
+
+		t.Errorf("body does not contain atom feed tag")
+
+	}
+
+	if !strings.Contains(body, "<title>Feed Entry 1</title>") {
+
+		t.Errorf("body does not contain entry title")
+
+	}
+
+}
