@@ -100,22 +100,21 @@ templ EntryList(entries []model.Entry, nextPage string) {
 			}
 			<article>
 				<header>
-					<h1>
-						<a href={ templ.SafeURL("/" + e.Path) }>
-							{{ cleanTitle, tags := ParseTitle(e.Title) }}
-							for _, tag := range tags {
-								<span class="tag">[<a href={ templ.SafeURL("/" + tag + "/") }>{ tag }</a>]</span>
-							}
-							{ cleanTitle }
-						</a>
-					</h1>
+					{{ cleanTitle, tags := ParseTitle(e.Title) }}
+					<h2><a href={ templ.SafeURL("/" + e.Path) }>{ cleanTitle }</a></h2>
+					<div class="metadata">
+						for _, tag := range tags {
+							<a href={ templ.SafeURL("/" + tag + "/") }><span itemprop="keywords">{ tag }</span></a>
+						}
+						| 
+						<time datetime={ e.CreatedAt.Format("2006-01-02T15:04:05Z07:00") }>{ e.CreatedAt.Format("15:04") }</time>
+					</div>
 				</header>
 				<div class="content">
 					@templ.Raw(e.FormattedBody)
 				</div>
 				<footer>
 					<ul class="meta">
-						<li><a href={ templ.SafeURL("/" + e.Path) } rel="bookmark"><time datetime={ e.CreatedAt.Format("2006-01-02T15:04:05Z07:00") }>{ e.CreatedAt.Format("15:04") }</time></a></li>
 						<li><a href={ templ.SafeURL("/" + e.Path) } rel="bookmark" title="Permalink">Permalink</a></li>
 					</ul>
 				</footer>
@@ -135,22 +134,21 @@ templ EntryDetail(entry model.Entry, prev, next *model.Entry) {
 		<div class="date"><a href={ templ.SafeURL(entry.Date.Format("/2006/01/02/")) }>{ entry.Date.Format("2006年 01月 02日") }</a></div>
 		<article>
 			<header>
-				<h1>
-					<a href={ templ.SafeURL("/" + entry.Path) }>
-						{{ cleanTitle, tags := ParseTitle(entry.Title) }}
-						for _, tag := range tags {
-							<span class="tag">[<a href={ templ.SafeURL("/" + tag + "/") }>{ tag }</a>]</span>
-						}
-						{ cleanTitle }
-					</a>
-				</h1>
+				{{ cleanTitle, tags := ParseTitle(entry.Title) }}
+				<h2><a href={ templ.SafeURL("/" + entry.Path) }>{ cleanTitle }</a></h2>
+				<div class="metadata">
+					for _, tag := range tags {
+						<a href={ templ.SafeURL("/" + tag + "/") }><span itemprop="keywords">{ tag }</span></a>
+					}
+					| 
+					<time datetime={ entry.CreatedAt.Format("2006-01-02T15:04:05Z07:00") }>{ entry.CreatedAt.Format("15:04") }</time>
+				</div>
 			</header>
 			<div class="content">
 				@templ.Raw(entry.FormattedBody)
 			</div>
 			<footer>
 				<ul class="meta">
-					<li><a href={ templ.SafeURL("/" + entry.Path) } rel="bookmark"><time datetime={ entry.CreatedAt.Format("2006-01-02T15:04:05Z07:00") }>{ entry.CreatedAt.Format("15:04") }</time></a></li>
 					<li><a href={ templ.SafeURL("/" + entry.Path) } rel="bookmark" title="Permalink">Permalink</a></li>
 				</ul>
 			</footer>

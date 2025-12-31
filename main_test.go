@@ -337,7 +337,9 @@ func TestHandleCategory(t *testing.T) {
 
 	// ParseTitle separates tags, so we look for the tag link and the clean title
 
-	if !strings.Contains(body, ">test</a>") {
+	// Structure: <a href="/test/"><span itemprop="keywords">test</span></a>
+
+	if !strings.Contains(body, "<span itemprop=\"keywords\">test</span></a>") {
 
 		t.Errorf("body does not contain tag link for 'test'")
 
