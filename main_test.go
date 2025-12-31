@@ -195,3 +195,80 @@ func TestHandleArchive(t *testing.T) {
 		t.Errorf("body does not contain '2024年'")
 	}
 }
+
+func TestHandleDateArchive(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	queries := model.New(db)
+
+	_, err := db.Exec(`
+		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
+		VALUES 
+		('Entry 2025-01-01', 'Body', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
+		('Entry 2025-01-02', 'Body', '', '2025/01/02/1', 'Markdown', '2025-01-02', '2025-01-02 10:00:00', '2025-01-02 10:00:00'),
+		('Entry 2025-02-01', 'Body', '', '2025/02/01/1', 'Markdown', '2025-02-01', '2025-02-01 10:00:00', '2025-02-01 10:00:00'),
+		('Entry 2024-12-31', 'Body', '', '2024/12/31/1', 'Markdown', '2024-12-31', '2024-12-31 10:00:00', '2024-12-31 10:00:00')
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test data: %v", err)
+	}
+
+	app := &App{
+		queries: queries,
+		db:      db,
+	}
+
+	e := echo.New()
+	// Register routes as in main()
+	e.GET("/:yyyy/", app.HandleDateArchive)
+	e.GET("/:yyyy/:mm/", app.HandleDateArchive)
+	e.GET("/:yyyy/:mm/:dd/", app.HandleDateArchive)
+
+	tests := []struct {
+		path       string
+		wantTitles []string
+		notTitles  []string
+	}{
+		{
+			path:       "/2025/",
+			wantTitles: []string{"Entry 2025-01-01", "Entry 2025-01-02", "Entry 2025-02-01"},
+			notTitles:  []string{"Entry 2024-12-31"},
+		},
+		{
+			path:       "/2025/01/",
+			wantTitles: []string{"Entry 2025-01-01", "Entry 2025-01-02"},
+			notTitles:  []string{"Entry 2025-02-01", "Entry 2024-12-31"},
+		},
+		{
+			path:       "/2025/01/01/",
+			wantTitles: []string{"Entry 2025-01-01"},
+			notTitles:  []string{"Entry 2025-01-02", "Entry 2025-02-01"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			rec := httptest.NewRecorder()
+
+			e.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Errorf("want status 200, got %d", rec.Code)
+			}
+
+			body := rec.Body.String()
+			for _, title := range tt.wantTitles {
+				if !strings.Contains(body, title) {
+					t.Errorf("path %s: body does not contain '%s'", tt.path, title)
+				}
+			}
+			for _, title := range tt.notTitles {
+				if strings.Contains(body, title) {
+					t.Errorf("path %s: body SHOULD NOT contain '%s'", tt.path, title)
+				}
+			}
+		})
+	}
+}

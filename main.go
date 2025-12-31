@@ -33,6 +33,13 @@ func main() {
 		log.Fatalf("failed to ping db: %v", err)
 	}
 
+	e := NewServer(db)
+
+	// Start server
+	e.Logger.Fatal(e.Start(":5555"))
+}
+
+func NewServer(db *sql.DB) *echo.Echo {
 	app := &App{
 		queries: model.New(db),
 		db:      db,
@@ -52,11 +59,61 @@ func main() {
 	// Routes
 	e.GET("/", app.HandleIndex)
 	e.GET("/.page/:date/:limit", app.HandleIndex)
-	e.GET("/:yyyy/:mm/:dd/:n", app.HandleEntry)
 	e.GET("/archive", app.HandleArchive)
+	
+	// Date archives (order matters vs /:yyyy/:mm/:dd/:n)
+	e.GET("/:yyyy/", app.HandleDateArchive)
+	e.GET("/:yyyy/:mm/", app.HandleDateArchive)
+	e.GET("/:yyyy/:mm/:dd/", app.HandleDateArchive)
 
-	// Start server
-	e.Logger.Fatal(e.Start(":5555"))
+	e.GET("/:yyyy/:mm/:dd/:n", app.HandleEntry)
+
+	return e
+}
+
+func (app *App) HandleDateArchive(c echo.Context) error {
+	ctx := c.Request().Context()
+	yyyy := c.Param("yyyy")
+	mm := c.Param("mm")
+	dd := c.Param("dd")
+
+	var start time.Time
+	var end time.Time
+	var err error
+
+	if dd != "" {
+		// Daily
+		start, err = time.Parse("20060102", yyyy+mm+dd)
+		if err == nil {
+			end = start.AddDate(0, 0, 1)
+		}
+	} else if mm != "" {
+		// Monthly
+		start, err = time.Parse("200601", yyyy+mm)
+		if err == nil {
+			end = start.AddDate(0, 1, 0)
+		}
+	} else {
+		// Yearly
+		start, err = time.Parse("2006", yyyy)
+		if err == nil {
+			end = start.AddDate(1, 0, 0)
+		}
+	}
+
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid date format").SetInternal(err)
+	}
+
+	entries, err := app.queries.ListEntriesByYearMonthDay(ctx, model.ListEntriesByYearMonthDayParams{
+		Column1: start.Format("2006-01-02"),
+		Column2: end.Format("2006-01-02"),
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
+	}
+
+	return view.Index(entries, "").Render(ctx, c.Response())
 }
 
 func (app *App) HandleArchive(c echo.Context) error {

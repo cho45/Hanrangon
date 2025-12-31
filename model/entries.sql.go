@@ -177,17 +177,17 @@ func (q *Queries) ListEntries(ctx context.Context, arg ListEntriesParams) ([]Ent
 
 const listEntriesByYearMonthDay = `-- name: ListEntriesByYearMonthDay :many
 SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at FROM entries
-WHERE ? <= date AND date < ?
+WHERE CAST(? AS TEXT) <= date AND date < CAST(? AS TEXT)
 ORDER BY created_at
 `
 
 type ListEntriesByYearMonthDayParams struct {
-	Date   time.Time `json:"date"`
-	Date_2 time.Time `json:"date_2"`
+	Column1 string `json:"column_1"`
+	Column2 string `json:"column_2"`
 }
 
 func (q *Queries) ListEntriesByYearMonthDay(ctx context.Context, arg ListEntriesByYearMonthDayParams) ([]Entry, error) {
-	rows, err := q.db.QueryContext(ctx, listEntriesByYearMonthDay, arg.Date, arg.Date_2)
+	rows, err := q.db.QueryContext(ctx, listEntriesByYearMonthDay, arg.Column1, arg.Column2)
 	if err != nil {
 		return nil, err
 	}
