@@ -1,0 +1,28 @@
+package view
+
+import (
+	"fmt"
+)
+
+templ Archive(archives []ArchiveYear) {
+	@Layout("アーカイブ - 氾濫原", ArchiveContent(archives))
+}
+
+templ ArchiveContent(archives []ArchiveYear) {
+	<section id="archive">
+		for _, year := range archives {
+			<section class="year">
+				<h1>{ year.Year }年</h1>
+				<ol class="months">
+					for _, month := range year.Months {
+						<li class="month">
+							<a href={ templ.SafeURL(fmt.Sprintf("/%s/%s/", month.Year, month.Month)) } title={ fmt.Sprintf("%d", month.Count) }>
+								{ month.Month }月
+							</a>
+						</li>
+					}
+				</ol>
+			</section>
+		}
+	</section>
+}

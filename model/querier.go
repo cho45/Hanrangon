@@ -14,6 +14,7 @@ type Querier interface {
 	GetEntryByPath(ctx context.Context, path string) (Entry, error)
 	GetNextEntry(ctx context.Context, createdAt time.Time) (Entry, error)
 	GetPrevEntry(ctx context.Context, createdAt time.Time) (Entry, error)
+	ListArchiveMonths(ctx context.Context) ([]ListArchiveMonthsRow, error)
 	ListEntries(ctx context.Context, arg ListEntriesParams) ([]Entry, error)
 	ListEntriesByYearMonthDay(ctx context.Context, arg ListEntriesByYearMonthDayParams) ([]Entry, error)
 }

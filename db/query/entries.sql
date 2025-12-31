@@ -27,3 +27,12 @@ SELECT * FROM entries
 WHERE created_at > ?
 ORDER BY created_at ASC
 LIMIT 1;
+
+-- name: ListArchiveMonths :many
+SELECT
+	strftime('%Y', date) as year,
+	strftime('%m', date) as month,
+	count(*) as count
+FROM entries
+GROUP BY strftime('%Y-%m', date)
+ORDER BY date DESC;

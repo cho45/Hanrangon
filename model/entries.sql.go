@@ -91,6 +91,45 @@ func (q *Queries) GetPrevEntry(ctx context.Context, createdAt time.Time) (Entry,
 	return i, err
 }
 
+const listArchiveMonths = `-- name: ListArchiveMonths :many
+SELECT
+	strftime('%Y', date) as year,
+	strftime('%m', date) as month,
+	count(*) as count
+FROM entries
+GROUP BY strftime('%Y-%m', date)
+ORDER BY date DESC
+`
+
+type ListArchiveMonthsRow struct {
+	Year  interface{} `json:"year"`
+	Month interface{} `json:"month"`
+	Count int64       `json:"count"`
+}
+
+func (q *Queries) ListArchiveMonths(ctx context.Context) ([]ListArchiveMonthsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listArchiveMonths)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListArchiveMonthsRow
+	for rows.Next() {
+		var i ListArchiveMonthsRow
+		if err := rows.Scan(&i.Year, &i.Month, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listEntries = `-- name: ListEntries :many
 SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at FROM entries
 WHERE date <= ?
