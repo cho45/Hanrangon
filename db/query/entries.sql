@@ -1,0 +1,29 @@
+-- name: ListEntries :many
+SELECT * FROM entries
+WHERE date <= ?
+ORDER BY date DESC, created_at ASC
+LIMIT ?;
+
+-- name: CountEntries :one
+SELECT count(*) FROM entries;
+
+-- name: GetEntryByPath :one
+SELECT * FROM entries
+WHERE path = ? LIMIT 1;
+
+-- name: ListEntriesByYearMonthDay :many
+SELECT * FROM entries
+WHERE ? <= date AND date < ?
+ORDER BY created_at;
+
+-- name: GetPrevEntry :one
+SELECT * FROM entries
+WHERE created_at < ?
+ORDER BY created_at DESC
+LIMIT 1;
+
+-- name: GetNextEntry :one
+SELECT * FROM entries
+WHERE created_at > ?
+ORDER BY created_at ASC
+LIMIT 1;
