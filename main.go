@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/cho45/hanrangon/model"
+	"github.com/cho45/hanrangon/view"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	_ "modernc.org/sqlite"
@@ -61,5 +62,6 @@ func (app *App) HandleIndex(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
 	}
 
-	return c.JSON(http.StatusOK, entries)
+	// HTMLレンダリング
+	return view.Index(entries).Render(ctx, c.Response())
 }

@@ -1,0 +1,42 @@
+package view
+
+import (
+	"github.com/cho45/hanrangon/model"
+)
+
+templ Index(entries []model.Entry) {
+	<!DOCTYPE html>
+	<html lang="ja">
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<title>Hanrangon</title>
+		<style>
+			body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 1rem; }
+			article { margin-bottom: 2rem; border-bottom: 1px solid #ccc; padding-bottom: 1rem; }
+			h1 { font-size: 1.5rem; }
+			.meta { color: #666; font-size: 0.85rem; }
+		</style>
+	</head>
+	<body>
+		<header>
+			<h1>Hanrangon (Go Prototype)</h1>
+		</header>
+		<main>
+			for _, e := range entries {
+				<article>
+					<header>
+						<h1><a href={ templ.SafeURL("/" + e.Path) }>{ e.Title }</a></h1>
+						<div class="meta">
+							<time>{ e.Date.Format("2006-01-02") }</time>
+						</div>
+					</header>
+					<div class="content">
+						@templ.Raw(e.FormattedBody)
+					</div>
+				</article>
+			}
+		</main>
+	</body>
+	</html>
+}
