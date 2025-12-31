@@ -175,6 +175,52 @@ func (q *Queries) ListEntries(ctx context.Context, arg ListEntriesParams) ([]Ent
 	return items, nil
 }
 
+const listEntriesByCategory = `-- name: ListEntriesByCategory :many
+SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at FROM entries
+WHERE title LIKE ? AND date <= ?
+ORDER BY date DESC, created_at ASC
+LIMIT ?
+`
+
+type ListEntriesByCategoryParams struct {
+	Title string    `json:"title"`
+	Date  time.Time `json:"date"`
+	Limit int64     `json:"limit"`
+}
+
+func (q *Queries) ListEntriesByCategory(ctx context.Context, arg ListEntriesByCategoryParams) ([]Entry, error) {
+	rows, err := q.db.QueryContext(ctx, listEntriesByCategory, arg.Title, arg.Date, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Entry
+	for rows.Next() {
+		var i Entry
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Body,
+			&i.FormattedBody,
+			&i.Path,
+			&i.Format,
+			&i.Date,
+			&i.CreatedAt,
+			&i.ModifiedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listEntriesByYearMonthDay = `-- name: ListEntriesByYearMonthDay :many
 SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at FROM entries
 WHERE CAST(? AS TEXT) <= date AND date < CAST(? AS TEXT)

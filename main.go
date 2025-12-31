@@ -68,7 +68,52 @@ func NewServer(db *sql.DB) *echo.Echo {
 
 	e.GET("/:yyyy/:mm/:dd/:n", app.HandleEntry)
 
+	e.GET("/:category/", app.HandleCategory)
+	e.GET("/:category/.page/:date/:limit", app.HandleCategory)
+
 	return e
+}
+
+func (app *App) HandleCategory(c echo.Context) error {
+	ctx := c.Request().Context()
+	category := c.Param("category")
+	
+	// ページネーションパラメータの取得
+	dateStr := c.Param("date")
+	limit := 10 // Default limit
+
+	var targetDate time.Time
+	if dateStr != "" {
+		var err error
+		targetDate, err = time.Parse("20060102", dateStr)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "Invalid date format").SetInternal(err)
+		}
+	} else {
+		targetDate = time.Now()
+	}
+
+	fetchLimit := limit + 1
+
+	entries, err := app.queries.ListEntriesByCategory(ctx, model.ListEntriesByCategoryParams{
+		Title: fmt.Sprintf("%%[%s]%%", category),
+		Date:  targetDate,
+		Limit: int64(fetchLimit),
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
+	}
+
+	var nextPage string
+	if len(entries) > limit {
+		lastEntry := entries[len(entries)-1]
+		entries = entries[:limit]
+		
+		nextDate := lastEntry.Date.Format("20060102")
+		nextPage = fmt.Sprintf("/%s/.page/%s/%d", category, nextDate, limit)
+	}
+
+	return view.Index(entries, nextPage).Render(ctx, c.Response())
 }
 
 func (app *App) HandleDateArchive(c echo.Context) error {

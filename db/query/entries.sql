@@ -36,3 +36,9 @@ SELECT
 FROM entries
 GROUP BY strftime('%Y-%m', date)
 ORDER BY date DESC;
+
+-- name: ListEntriesByCategory :many
+SELECT * FROM entries
+WHERE title LIKE ? AND date <= ?
+ORDER BY date DESC, created_at ASC
+LIMIT ?;

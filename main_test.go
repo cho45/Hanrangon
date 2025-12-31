@@ -247,28 +247,130 @@ func TestHandleDateArchive(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.path, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
-			rec := httptest.NewRecorder()
+		for _, tt := range tests {
 
-			e.ServeHTTP(rec, req)
+			t.Run(tt.path, func(t *testing.T) {
 
-			if rec.Code != http.StatusOK {
-				t.Errorf("want status 200, got %d", rec.Code)
-			}
+				req := httptest.NewRequest(http.MethodGet, tt.path, nil)
 
-			body := rec.Body.String()
-			for _, title := range tt.wantTitles {
-				if !strings.Contains(body, title) {
-					t.Errorf("path %s: body does not contain '%s'", tt.path, title)
+				rec := httptest.NewRecorder()
+
+				
+
+				e.ServeHTTP(rec, req)
+
+	
+
+				if rec.Code != http.StatusOK {
+
+					t.Errorf("want status 200, got %d", rec.Code)
+
 				}
-			}
-			for _, title := range tt.notTitles {
-				if strings.Contains(body, title) {
-					t.Errorf("path %s: body SHOULD NOT contain '%s'", tt.path, title)
+
+	
+
+				body := rec.Body.String()
+
+				for _, title := range tt.wantTitles {
+
+					if !strings.Contains(body, title) {
+
+						t.Errorf("path %s: body does not contain '%s'", tt.path, title)
+
+					}
+
 				}
-			}
-		})
+
+				for _, title := range tt.notTitles {
+
+					if strings.Contains(body, title) {
+
+						t.Errorf("path %s: body SHOULD NOT contain '%s'", tt.path, title)
+
+					}
+
+				}
+
+			})
+
+		}
+
 	}
-}
+
+	
+
+	func TestHandleCategory(t *testing.T) {
+
+	
+
+		db := setupTestDB(t)
+
+	
+
+		defer db.Close()
+
+	
+
+	
+
+	
+
+		_, err := db.Exec(`
+
+	
+
+	
+
+			INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
+
+			VALUES 
+
+			('[test] Tagged Entry', 'Body', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
+
+			('Normal Entry', 'Body', '', '2025/01/02/1', 'Markdown', '2025-01-02', '2025-01-02 10:00:00', '2025-01-02 10:00:00')
+
+		`)
+
+		if err != nil {
+
+			t.Fatalf("failed to insert test data: %v", err)
+
+		}
+
+	
+
+		e := NewServer(db)
+
+		req := httptest.NewRequest(http.MethodGet, "/test/", nil)
+
+		rec := httptest.NewRecorder()
+
+		e.ServeHTTP(rec, req)
+
+	
+
+		if rec.Code != http.StatusOK {
+
+			t.Errorf("want status 200, got %d", rec.Code)
+
+		}
+
+	
+
+		body := rec.Body.String()
+
+		if !strings.Contains(body, "[test] Tagged Entry") {
+
+			t.Errorf("body does not contain tagged entry")
+
+		}
+
+		if strings.Contains(body, "Normal Entry") {
+
+			t.Errorf("body SHOULD NOT contain normal entry")
+
+		}
+
+	}
+
+	
