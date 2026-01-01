@@ -4,8 +4,8 @@ import (
 	"fmt"
 )
 
-templ Archive(archives []ArchiveYear) {
-	@Layout("アーカイブ - 氾濫原", ArchiveContent(archives))
+templ Archive(archives []ArchiveYear, isAuth bool) {
+	@Layout("アーカイブ - 氾濫原", isAuth, ArchiveContent(archives))
 }
 
 templ ArchiveContent(archives []ArchiveYear) {

@@ -77,7 +77,7 @@ func (app *App) HandleDateArchive(c echo.Context) error {
 		entries[i] = model.Entry(r)
 	}
 
-	return view.Index(entries, "").Render(ctx, c.Response())
+	return view.Index(entries, "", app.IsAuth(c)).Render(ctx, c.Response())
 }
 
 func (app *App) HandleArchive(c echo.Context) error {
@@ -88,7 +88,7 @@ func (app *App) HandleArchive(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch archives").SetInternal(err)
 	}
 
-	return view.Archive(view.ConvertArchives(archives)).Render(ctx, c.Response())
+	return view.Archive(view.ConvertArchives(archives), app.IsAuth(c)).Render(ctx, c.Response())
 }
 
 func (app *App) HandleIndex(c echo.Context) error {
@@ -130,7 +130,7 @@ func (app *App) HandleIndex(c echo.Context) error {
 	}
 
 	if len(dates) == 0 {
-		return view.Index([]model.Entry{}, "").Render(ctx, c.Response())
+		return view.Index([]model.Entry{}, "", app.IsAuth(c)).Render(ctx, c.Response())
 	}
 
 	// 2. 取得した日付に含まれる全記事を取得
@@ -145,7 +145,7 @@ func (app *App) HandleIndex(c echo.Context) error {
 	}
 
 	// HTMLレンダリング
-	return view.Index(entries, nextPage).Render(ctx, c.Response())
+	return view.Index(entries, nextPage, app.IsAuth(c)).Render(ctx, c.Response())
 }
 
 func (app *App) HandleEntry(c echo.Context) error {
@@ -187,7 +187,7 @@ func (app *App) HandleEntry(c echo.Context) error {
 		nextPtr = &n
 	}
 
-	return view.Entry(entry, prevPtr, nextPtr).Render(ctx, c.Response())
+	return view.Entry(entry, prevPtr, nextPtr, app.IsAuth(c)).Render(ctx, c.Response())
 }
 
 func (app *App) HandleCategory(c echo.Context) error {
@@ -234,7 +234,7 @@ func (app *App) HandleCategory(c echo.Context) error {
 		entries[i] = model.Entry(r)
 	}
 
-	return view.Index(entries, nextPage).Render(ctx, c.Response())
+	return view.Index(entries, nextPage, app.IsAuth(c)).Render(ctx, c.Response())
 }
 
 func (app *App) HandleFeed(c echo.Context) error {

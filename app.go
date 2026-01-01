@@ -29,15 +29,35 @@ func NewApp(config *Config, db *sql.DB, tfidfDB *sql.DB) *App {
 }
 
 func (app *App) RequireAuth(next echo.HandlerFunc) echo.HandlerFunc {
+
 	return func(c echo.Context) error {
-		sess, _ := session.Get("session", c)
-		if auth, ok := sess.Values["auth"].(bool); !ok || !auth {
+
+		if !app.IsAuth(c) {
+
 			if c.Request().Header.Get("X-Requested-With") == "XMLHttpRequest" ||
+
 				strings.HasPrefix(c.Request().URL.Path, "/api/") {
+
 				return echo.NewHTTPError(http.StatusUnauthorized, "Authentication required")
+
 			}
+
 			return c.Redirect(http.StatusFound, "/login?return="+c.Request().URL.Path)
+
 		}
+
 		return next(c)
+
 	}
+
+}
+
+func (app *App) IsAuth(c echo.Context) bool {
+
+	sess, _ := session.Get("session", c)
+
+	auth, ok := sess.Values["auth"].(bool)
+
+	return ok && auth
+
 }

@@ -7,9 +7,9 @@ import (
 	"github.com/cho45/hanrangon/model"
 )
 
-templ Layout(title string, content templ.Component) {
+templ Layout(title string, isAuth bool, content templ.Component) {
 	<!DOCTYPE html>
-	<html lang="ja">
+	<html lang="ja" data-auth={ fmt.Sprintf("%t", isAuth) }>
 	<head>
 		<meta charset="utf-8"/>
 
@@ -57,6 +57,10 @@ templ Layout(title string, content templ.Component) {
 				<li><a href="/">最新</a></li>
 				<li><a href="/photo/">写真</a></li>
 				<li><a href="https://www.lowreal.net/">誰？</a></li>
+				if isAuth {
+					<li><a href="#" class="nogag-new">新規</a></li>
+					<li><a href="/logout">ログアウト</a></li>
+				}
 			</ul>
 		</nav>
 
@@ -108,7 +112,7 @@ func datePath(dateStr string) string {
 	return "/" + strings.ReplaceAll(dateStr, "-", "/") + "/"
 }
 
-templ EntryList(entries []model.Entry, nextPage string) {
+templ EntryList(entries []model.Entry, nextPage string, isAuth bool) {
 	<div class="entries">
 		{{
 			var ids []string
@@ -141,6 +145,9 @@ templ EntryList(entries []model.Entry, nextPage string) {
 				<footer>
 					<ul class="meta">
 						<li><a href={ templ.SafeURL("/" + e.Path) } rel="bookmark" title="Permalink">Permalink</a></li>
+						if isAuth {
+							<li><a href="#" class="nogag-edit">Edit</a></li>
+						}
 					</ul>
 				</footer>
 			</article>
@@ -154,7 +161,7 @@ templ EntryList(entries []model.Entry, nextPage string) {
 	</div>
 }
 
-templ EntryDetail(entry model.Entry, prev, next *model.Entry) {
+templ EntryDetail(entry model.Entry, prev, next *model.Entry, isAuth bool) {
 	<div class="entries">
 		<link rel="preload" id="preload-similar-entries" href={ templ.SafeURL(fmt.Sprintf("/api/similar?id=%d", entry.ID)) } as="fetch" crossorigin="anonymous"/>
 		<div class="date"><a href={ templ.SafeURL(datePath(entry.Date)) }>{ formatDate(entry.Date) }</a></div>
@@ -177,6 +184,9 @@ templ EntryDetail(entry model.Entry, prev, next *model.Entry) {
 			<footer>
 				<ul class="meta">
 					<li><a href={ templ.SafeURL("/" + entry.Path) } rel="bookmark" title="Permalink">Permalink</a></li>
+					if isAuth {
+						<li><a href="#" class="nogag-edit">Edit</a></li>
+					}
 				</ul>
 			</footer>
 		</article>
@@ -192,10 +202,10 @@ templ EntryDetail(entry model.Entry, prev, next *model.Entry) {
 	</div>
 }
 
-templ Index(entries []model.Entry, nextPage string) {
-	@Layout("氾濫原", EntryList(entries, nextPage))
+templ Index(entries []model.Entry, nextPage string, isAuth bool) {
+	@Layout("氾濫原", isAuth, EntryList(entries, nextPage, isAuth))
 }
 
-templ Entry(entry model.Entry, prev, next *model.Entry) {
-	@Layout(entry.Title + " - 氾濫原", EntryDetail(entry, prev, next))
+templ Entry(entry model.Entry, prev, next *model.Entry, isAuth bool) {
+	@Layout(entry.Title + " - 氾濫原", isAuth, EntryDetail(entry, prev, next, isAuth))
 }
