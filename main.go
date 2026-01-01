@@ -64,6 +64,7 @@ func main() {
 	sim := tfidf.NewSimilarityCalculator(tfidfDB, model.New(tfidfDB))
 	registry.Register(jobs.NewRecalculateTFIDFJob(model.New(db), calc, sim))
 	registry.Register(jobs.NewUpdateTrackbacksJob(model.New(db), config.BaseURL))
+	registry.Register(jobs.NewIndexImagesJob(model.New(db), config.UploadDir, config.UploadURLPrefix, config.BaseURL))
 
 	queue := jobqueue.NewQueue(workerDB, model.New(workerDB), registry)
 	queue.Start(context.Background())

@@ -9,16 +9,17 @@ import (
 )
 
 type Config struct {
-	DataDBPath    string `toml:"data_db_path"`
-	ImagesDBPath  string `toml:"images_db_path"`
-	TFIDFDBPath   string `toml:"tfidf_db_path"`
-	WorkerDBPath  string `toml:"worker_db_path"`
-	StaticDir     string `toml:"static_dir"`
-	Username      string `toml:"username"`
-	Password      string `toml:"password"`
-	SessionSecret string `toml:"session_secret"`
-	UploadDir     string `toml:"upload_dir"`
-	BaseURL       string `toml:"base_url"`
+	DataDBPath      string `toml:"data_db_path"`
+	ImagesDBPath    string `toml:"images_db_path"`
+	TFIDFDBPath     string `toml:"tfidf_db_path"`
+	WorkerDBPath    string `toml:"worker_db_path"`
+	StaticDir       string `toml:"static_dir"`
+	Username        string `toml:"username"`
+	Password        string `toml:"password"`
+	SessionSecret   string `toml:"session_secret"`
+	UploadDir       string `toml:"upload_dir"`
+	UploadURLPrefix string `toml:"upload_url_prefix"`
+	BaseURL         string `toml:"base_url"`
 }
 
 func LoadConfig() *Config {
@@ -28,14 +29,15 @@ func LoadConfig() *Config {
 	staticDir := filepath.Join(wd, "static")
 
 	cfg := &Config{
-		DataDBPath:    filepath.Join(varDir, "db", "data.db"),
-		ImagesDBPath:  filepath.Join(varDir, "db", "images.db"),
-		TFIDFDBPath:   filepath.Join(varDir, "db", "tfidf.db"),
-		WorkerDBPath:  filepath.Join(varDir, "db", "worker.db"),
-		StaticDir:     staticDir,
-		UploadDir:     filepath.Join(staticDir, "images", "entry"),
-		BaseURL:       "http://localhost:5555",
-		SessionSecret: "change-me-please", // Default secret
+		DataDBPath:      filepath.Join(varDir, "db", "data.db"),
+		ImagesDBPath:    filepath.Join(varDir, "db", "images.db"),
+		TFIDFDBPath:     filepath.Join(varDir, "db", "tfidf.db"),
+		WorkerDBPath:    filepath.Join(varDir, "db", "worker.db"),
+		StaticDir:       staticDir,
+		UploadDir:       filepath.Join(staticDir, "images", "entry"),
+		UploadURLPrefix: "/images/entry/",
+		BaseURL:         "http://localhost:5555",
+		SessionSecret:   "change-me-please", // Default secret
 	}
 	// 1. Load from TOML (mandatory)
 	configPath := os.Getenv("HANRANGON_CONFIG")
@@ -65,6 +67,9 @@ func LoadConfig() *Config {
 	}
 	if env := os.Getenv("HANRANGON_UPLOAD_DIR"); env != "" {
 		cfg.UploadDir = env
+	}
+	if env := os.Getenv("HANRANGON_UPLOAD_URL_PREFIX"); env != "" {
+		cfg.UploadURLPrefix = env
 	}
 	if env := os.Getenv("HANRANGON_BASE_URL"); env != "" {
 		cfg.BaseURL = env

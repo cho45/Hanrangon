@@ -13,6 +13,7 @@ require (
 
 require (
 	github.com/cho45/xatena-go v0.0.0-20250711122401-413f434d6e12 // indirect
+	github.com/corona10/goimagehash v1.1.0 // indirect
 	github.com/gorilla/context v1.1.2 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/ikawaha/kagome-dict v1.1.6 // indirect
@@ -22,6 +23,7 @@ require (
 	github.com/labstack/gommon v0.4.2 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	github.com/sergi/go-diff v1.4.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect

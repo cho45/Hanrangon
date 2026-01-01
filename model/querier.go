@@ -15,7 +15,11 @@ type Querier interface {
 	CountEntriesByDate(ctx context.Context, date string) (int64, error)
 	CountPendingJobs(ctx context.Context) (int64, error)
 	CreateEntry(ctx context.Context, arg CreateEntryParams) (Entry, error)
+	CreateImage(ctx context.Context, arg CreateImageParams) (int64, error)
+	CreateNgram(ctx context.Context, arg CreateNgramParams) error
 	CreateTrackback(ctx context.Context, arg CreateTrackbackParams) error
+	DeleteImagesByEntryID(ctx context.Context, entryID int64) error
+	DeleteNgramsByImageID(ctx context.Context, imageID int64) error
 	DeleteRelatedEntriesByEntryID(ctx context.Context, entryID int64) error
 	DeleteTFIDFByEntryID(ctx context.Context, entryID int64) error
 	DeleteTrackbacksBySourceEntryId(ctx context.Context, trackbackEntryID sql.NullInt64) error
@@ -23,6 +27,7 @@ type Querier interface {
 	FindNextJob(ctx context.Context, runAfter time.Time) (Job, error)
 	GetEntryById(ctx context.Context, id int64) (GetEntryByIdRow, error)
 	GetEntryByPath(ctx context.Context, path string) (GetEntryByPathRow, error)
+	GetImageByURI(ctx context.Context, uri string) (Image, error)
 	GetJobByID(ctx context.Context, id int64) (Job, error)
 	GetJobTypeByID(ctx context.Context, id int64) (JobType, error)
 	GetNextEntry(ctx context.Context, createdAt time.Time) (GetNextEntryRow, error)
@@ -43,7 +48,9 @@ type Querier interface {
 	ListEntriesByDates(ctx context.Context, dates []string) ([]ListEntriesByDatesRow, error)
 	ListEntriesByIds(ctx context.Context, ids []int64) ([]ListEntriesByIdsRow, error)
 	ListEntriesByYearMonthDay(ctx context.Context, arg ListEntriesByYearMonthDayParams) ([]ListEntriesByYearMonthDayRow, error)
+	ListImagesByEntryID(ctx context.Context, entryID int64) ([]Image, error)
 	ListRelatedEntries(ctx context.Context, entryID int64) ([]ListRelatedEntriesRow, error)
+	ListSimilarImages(ctx context.Context, arg ListSimilarImagesParams) ([]ListSimilarImagesRow, error)
 	ListTrackbackEntries(ctx context.Context, entryID sql.NullInt64) ([]ListTrackbackEntriesRow, error)
 	ListUniqueDates(ctx context.Context, arg ListUniqueDatesParams) ([]string, error)
 	MarkJobCompleted(ctx context.Context, id int64) error

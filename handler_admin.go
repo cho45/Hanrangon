@@ -233,6 +233,14 @@ func (app *App) HandleApiEdit(c echo.Context) error {
 		log.Printf("Failed to enqueue Trackback job: %v", err)
 	}
 
+	// 画像インデックスジョブをエンキュー
+	err = app.jobQueue.Enqueue(context.Background(), "IndexImages",
+		jobs.IndexImagesArg{EntryID: resEntry.ID},
+		fmt.Sprintf("index-images-%d", resEntry.ID))
+	if err != nil {
+		log.Printf("Failed to enqueue IndexImages job: %v", err)
+	}
+
 	return c.JSON(http.StatusOK, EditResponse{
 		ID:       resEntry.ID,
 		Location: "/" + resEntry.Path,
