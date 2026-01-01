@@ -60,7 +60,7 @@ func TestHandleIndex(t *testing.T) {
 		t.Fatalf("failed to insert test data: %v", err)
 	}
 
-	config := &Config{StaticDir: "../static"}
+	config := &Config{StaticDir: "static"}
 	e := NewServer(config, db, tfidfDB)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -95,7 +95,7 @@ func TestHandleEntry(t *testing.T) {
 		t.Fatalf("failed to insert test data: %v", err)
 	}
 
-	config := &Config{StaticDir: "../static"}
+	config := &Config{StaticDir: "static"}
 	e := NewServer(config, db, tfidfDB)
 
 	t.Run("Existing entry", func(t *testing.T) {
@@ -144,7 +144,7 @@ func TestHandleArchive(t *testing.T) {
 		t.Fatalf("failed to insert test data: %v", err)
 	}
 
-	config := &Config{StaticDir: "../static"}
+	config := &Config{StaticDir: "static"}
 	e := NewServer(config, db, tfidfDB)
 	req := httptest.NewRequest(http.MethodGet, "/archive", nil)
 	rec := httptest.NewRecorder()
@@ -184,7 +184,7 @@ func TestHandleDateArchive(t *testing.T) {
 		t.Fatalf("failed to insert test data: %v", err)
 	}
 
-	config := &Config{StaticDir: "../static"}
+	config := &Config{StaticDir: "static"}
 	e := NewServer(config, db, tfidfDB)
 
 	tests := []struct {
@@ -250,7 +250,7 @@ func TestHandleCategory(t *testing.T) {
 		t.Fatalf("failed to insert test data: %v", err)
 	}
 
-	config := &Config{StaticDir: "../static"} // Mock config
+	config := &Config{StaticDir: "static"} // Mock config
 	e := NewServer(config, db, tfidfDB)
 	req := httptest.NewRequest(http.MethodGet, "/test/", nil)
 	rec := httptest.NewRecorder()
@@ -289,7 +289,7 @@ func TestHandleFeed(t *testing.T) {
 		t.Fatalf("failed to insert test data: %v", err)
 	}
 
-	config := &Config{StaticDir: "../static"}
+	config := &Config{StaticDir: "static"}
 	e := NewServer(config, db, tfidfDB)
 	req := httptest.NewRequest(http.MethodGet, "/feed", nil)
 	rec := httptest.NewRecorder()
@@ -328,7 +328,7 @@ func TestHandleSitemap(t *testing.T) {
 		t.Fatalf("failed to insert test data: %v", err)
 	}
 
-	config := &Config{StaticDir: "../static"}
+	config := &Config{StaticDir: "static"}
 	e := NewServer(config, db, tfidfDB)
 	req := httptest.NewRequest(http.MethodGet, "/sitemap.xml", nil)
 	rec := httptest.NewRecorder()
@@ -378,7 +378,7 @@ func TestHandleApiSimilar(t *testing.T) {
 		t.Fatalf("failed to insert related_entries: %v", err)
 	}
 
-	config := &Config{StaticDir: "../static"}
+	config := &Config{StaticDir: "static"}
 	e := NewServer(config, db, tfidfDB)
 	req := httptest.NewRequest(http.MethodGet, "/api/similar?id=1", nil)
 	rec := httptest.NewRecorder()

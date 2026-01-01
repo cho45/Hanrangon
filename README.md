@@ -45,6 +45,3 @@ Server listens on http://localhost:5555
 ## Notes
 
 開発モードでは、親ディレクトリ (`../`) にある以下のリソースを参照します。
-
-*   `../data.db`: SQLiteデータベース (本番データコピー)
-*   `../static/`: 静的ファイル (CSS, JS, Images)

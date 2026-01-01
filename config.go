@@ -16,7 +16,7 @@ func LoadConfig() *Config {
 	// Default paths
 	wd, _ := os.Getwd()
 	varDir := filepath.Join(wd, "var")
-	staticDir := filepath.Join(wd, "../static") // Dev default
+	staticDir := filepath.Join(wd, "static") // Dev default
 
 	cfg := &Config{
 		DataDBPath:   filepath.Join(varDir, "db", "data.db"),
