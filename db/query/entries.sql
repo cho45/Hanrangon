@@ -1,3 +1,8 @@
+-- Note: sqlite3 driver converts DATE to time.Time by default, which is undesirable for 
+-- date-based logic here (we want YYYY-MM-DD string). We use CAST(date AS TEXT) to 
+-- ensure string return and we cannot change the schema to TEXT because we reuse 
+-- existing data files.
+
 -- name: ListEntries :many
 SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
 WHERE date <= sqlc.arg(target_date)
@@ -46,6 +51,17 @@ LIMIT sqlc.arg('limit');
 -- name: ListEntriesByIds :many
 SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
 WHERE id IN (sqlc.slice('ids'));
+
+-- name: ListUniqueDates :many
+SELECT DISTINCT CAST(date AS TEXT) AS date FROM entries
+WHERE date <= sqlc.arg(target_date)
+ORDER BY date DESC
+LIMIT sqlc.arg('limit');
+
+-- name: ListEntriesByDates :many
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
+WHERE date IN (sqlc.slice('dates'))
+ORDER BY date DESC, created_at ASC;
 
 -- name: ListAllEntriesForSitemap :many
 SELECT path, modified_at FROM entries

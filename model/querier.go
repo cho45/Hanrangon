@@ -16,11 +16,17 @@ type Querier interface {
 	GetPrevEntry(ctx context.Context, createdAt time.Time) (GetPrevEntryRow, error)
 	ListAllEntriesForSitemap(ctx context.Context) ([]ListAllEntriesForSitemapRow, error)
 	ListArchiveMonths(ctx context.Context) ([]ListArchiveMonthsRow, error)
+	// Note: sqlite3 driver converts DATE to time.Time by default, which is undesirable for
+	// date-based logic here (we want YYYY-MM-DD string). We use CAST(date AS TEXT) to
+	// ensure string return and we cannot change the schema to TEXT because we reuse
+	// existing data files.
 	ListEntries(ctx context.Context, arg ListEntriesParams) ([]ListEntriesRow, error)
 	ListEntriesByCategory(ctx context.Context, arg ListEntriesByCategoryParams) ([]ListEntriesByCategoryRow, error)
+	ListEntriesByDates(ctx context.Context, dates []string) ([]ListEntriesByDatesRow, error)
 	ListEntriesByIds(ctx context.Context, ids []int64) ([]ListEntriesByIdsRow, error)
 	ListEntriesByYearMonthDay(ctx context.Context, arg ListEntriesByYearMonthDayParams) ([]ListEntriesByYearMonthDayRow, error)
 	ListRelatedEntries(ctx context.Context, entryID int64) ([]ListRelatedEntriesRow, error)
+	ListUniqueDates(ctx context.Context, arg ListUniqueDatesParams) ([]string, error)
 }
 
 var _ Querier = (*Queries)(nil)

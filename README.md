@@ -42,6 +42,3 @@ Server listens on http://localhost:5555
 *   `db/`: SQL schemas and queries.
 *   `main.go`: Entry point and HTTP handlers.
 
-## Notes
-
-開発モードでは、親ディレクトリ (`../`) にある以下のリソースを参照します。

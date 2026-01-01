@@ -201,6 +201,7 @@ func (q *Queries) ListArchiveMonths(ctx context.Context) ([]ListArchiveMonthsRow
 }
 
 const listEntries = `-- name: ListEntries :many
+
 SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
 WHERE date <= ?1
 ORDER BY date DESC, created_at ASC
@@ -224,6 +225,10 @@ type ListEntriesRow struct {
 	ModifiedAt    time.Time `json:"modified_at"`
 }
 
+// Note: sqlite3 driver converts DATE to time.Time by default, which is undesirable for
+// date-based logic here (we want YYYY-MM-DD string). We use CAST(date AS TEXT) to
+// ensure string return and we cannot change the schema to TEXT because we reuse
+// existing data files.
 func (q *Queries) ListEntries(ctx context.Context, arg ListEntriesParams) ([]ListEntriesRow, error) {
 	rows, err := q.db.QueryContext(ctx, listEntries, arg.TargetDate, arg.Limit)
 	if err != nil {
@@ -291,6 +296,67 @@ func (q *Queries) ListEntriesByCategory(ctx context.Context, arg ListEntriesByCa
 	var items []ListEntriesByCategoryRow
 	for rows.Next() {
 		var i ListEntriesByCategoryRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Body,
+			&i.FormattedBody,
+			&i.Path,
+			&i.Format,
+			&i.Date,
+			&i.CreatedAt,
+			&i.ModifiedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEntriesByDates = `-- name: ListEntriesByDates :many
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
+WHERE date IN (/*SLICE:dates*/?)
+ORDER BY date DESC, created_at ASC
+`
+
+type ListEntriesByDatesRow struct {
+	ID            int64     `json:"id"`
+	Title         string    `json:"title"`
+	Body          string    `json:"body"`
+	FormattedBody string    `json:"formatted_body"`
+	Path          string    `json:"path"`
+	Format        string    `json:"format"`
+	Date          string    `json:"date"`
+	CreatedAt     time.Time `json:"created_at"`
+	ModifiedAt    time.Time `json:"modified_at"`
+}
+
+func (q *Queries) ListEntriesByDates(ctx context.Context, dates []string) ([]ListEntriesByDatesRow, error) {
+	query := listEntriesByDates
+	var queryParams []interface{}
+	if len(dates) > 0 {
+		for _, v := range dates {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:dates*/?", strings.Repeat(",?", len(dates))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:dates*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListEntriesByDatesRow
+	for rows.Next() {
+		var i ListEntriesByDatesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
@@ -421,6 +487,41 @@ func (q *Queries) ListEntriesByYearMonthDay(ctx context.Context, arg ListEntries
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUniqueDates = `-- name: ListUniqueDates :many
+SELECT DISTINCT CAST(date AS TEXT) AS date FROM entries
+WHERE date <= ?1
+ORDER BY date DESC
+LIMIT ?2
+`
+
+type ListUniqueDatesParams struct {
+	TargetDate string `json:"target_date"`
+	Limit      int64  `json:"limit"`
+}
+
+func (q *Queries) ListUniqueDates(ctx context.Context, arg ListUniqueDatesParams) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listUniqueDates, arg.TargetDate, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var date string
+		if err := rows.Scan(&date); err != nil {
+			return nil, err
+		}
+		items = append(items, date)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

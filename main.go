@@ -174,41 +174,47 @@ func (app *App) HandleIndex(c echo.Context) error {
 
 	// ページネーションパラメータの取得
 	dateStr := c.Param("date")
-	limit := 10 // Default limit
+	limit := 10 // Default limit (days)
 
-	var targetDate time.Time
+	var targetDate string
 	if dateStr != "" {
-		var err error
-		targetDate, err = time.Parse("20060102", dateStr)
+		t, err := time.Parse("20060102", dateStr)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, "Invalid date format").SetInternal(err)
 		}
+		targetDate = t.Format("2006-01-02")
 	} else {
-		targetDate = time.Now()
+		targetDate = "9999-99-99"
 	}
 
-	// 次ページ判定のために +1 件取得
-	fetchLimit := limit + 1
-
-	// 記事を取得
-	rows, err := app.queries.ListEntries(ctx, model.ListEntriesParams{
-		TargetDate: targetDate.Format("2006-01-02"),
-		Limit:      int64(fetchLimit),
+	// 1. 表示対象となるユニークな日付を取得 (次ページ判定用に +1)
+	dates, err := app.queries.ListUniqueDates(ctx, model.ListUniqueDatesParams{
+		TargetDate: targetDate,
+		Limit:      int64(limit + 1),
 	})
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch dates").SetInternal(err)
 	}
 
 	var nextPage string
-	if len(rows) > limit {
+	if len(dates) > limit {
 		// 次ページがある場合
-		lastRow := rows[len(rows)-1]
-		// 表示用からは削除
-		rows = rows[:limit]
+		lastDate := dates[len(dates)-1]
+		dates = dates[:limit]
 
-		// 次ページのURLを生成 (例: /.page/20251230/10)
-		nextDate := strings.ReplaceAll(lastRow.Date, "-", "")
+		// 次ページのURLを生成
+		nextDate := strings.ReplaceAll(lastDate, "-", "")
 		nextPage = fmt.Sprintf("/.page/%s/%d", nextDate, limit)
+	}
+
+	if len(dates) == 0 {
+		return view.Index([]model.Entry{}, "").Render(ctx, c.Response())
+	}
+
+	// 2. 取得した日付に含まれる全記事を取得
+	rows, err := app.queries.ListEntriesByDates(ctx, dates)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
 	}
 
 	entries := make([]model.Entry, len(rows))
@@ -219,7 +225,6 @@ func (app *App) HandleIndex(c echo.Context) error {
 	// HTMLレンダリング
 	return view.Index(entries, nextPage).Render(ctx, c.Response())
 }
-
 func (app *App) HandleEntry(c echo.Context) error {
 	ctx := c.Request().Context()
 	yyyy := c.Param("yyyy")
