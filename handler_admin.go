@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -19,11 +20,13 @@ import (
 )
 
 type EditRequest struct {
-	ID     int64  `json:"id" form:"id"`
-	Title  string `json:"title" form:"title"`
-	Body   string `json:"body" form:"body"`
-	Format string `json:"format" form:"format"`
-	Path   string `json:"path" form:"path"`
+	ID        int64  `json:"id" form:"id"`
+	Title     string `json:"title" form:"title"`
+	Body      string `json:"body" form:"body"`
+	Format    string `json:"format" form:"format"`
+	Path      string `json:"path" form:"path"`
+	Status    string `json:"status" form:"status"`
+	PublishAt string `json:"publish_at" form:"publish_at"`
 }
 
 type EditResponse struct {
@@ -44,7 +47,19 @@ func (app *App) HandleEdit(c echo.Context) error {
 		if err != nil {
 			return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
 		}
-		entry = model.Entry(row)
+		entry = model.Entry{
+			ID:            row.ID,
+			Title:         row.Title,
+			Body:          row.Body,
+			FormattedBody: row.FormattedBody,
+			Path:          row.Path,
+			Format:        row.Format,
+			Date:          row.Date,
+			CreatedAt:     row.CreatedAt,
+			ModifiedAt:    row.ModifiedAt,
+			PublishAt:     row.PublishAt,
+			Status:        row.Status,
+		}
 	}
 
 	entryBytes, err := json.Marshal(entry)
@@ -114,6 +129,19 @@ func (app *App) HandleApiEdit(c echo.Context) error {
 		req.Format = "HTML" // Default
 	}
 
+	if req.Status == "" {
+		req.Status = "public"
+	}
+
+	var publishAt sql.NullTime
+	if req.PublishAt != "" {
+		t, err := time.Parse(time.RFC3339, req.PublishAt)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "Invalid publish_at format").SetInternal(err)
+		}
+		publishAt = sql.NullTime{Time: t, Valid: true}
+	}
+
 	// 1. Format the body
 	formattedBody, err := formatter.Format(req.Body, req.Format)
 	if err != nil {
@@ -147,6 +175,8 @@ func (app *App) HandleApiEdit(c echo.Context) error {
 			Format:        req.Format,
 			Date:          existing.Date, // Keep original date string
 			ModifiedAt:    now,
+			PublishAt:     publishAt,
+			Status:        req.Status,
 		})
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "Failed to update entry").SetInternal(err)
@@ -173,6 +203,8 @@ func (app *App) HandleApiEdit(c echo.Context) error {
 			Date:          date, // String YYYY-MM-DD
 			CreatedAt:     now,
 			ModifiedAt:    now,
+			PublishAt:     publishAt,
+			Status:        req.Status,
 		})
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create entry").SetInternal(err)

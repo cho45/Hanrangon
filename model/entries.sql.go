@@ -7,12 +7,13 @@ package model
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 	"time"
 )
 
 const countEntries = `-- name: CountEntries :one
-SELECT count(*) FROM entries
+SELECT count(*) FROM entries WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP)
 `
 
 func (q *Queries) CountEntries(ctx context.Context) (int64, error) {
@@ -23,7 +24,7 @@ func (q *Queries) CountEntries(ctx context.Context) (int64, error) {
 }
 
 const countEntriesByDate = `-- name: CountEntriesByDate :one
-SELECT count(*) FROM entries WHERE CAST(date AS TEXT) = ?1
+SELECT count(*) FROM entries WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND CAST(date AS TEXT) = ?1
 `
 
 func (q *Queries) CountEntriesByDate(ctx context.Context, date string) (int64, error) {
@@ -35,21 +36,23 @@ func (q *Queries) CountEntriesByDate(ctx context.Context, date string) (int64, e
 
 const createEntry = `-- name: CreateEntry :one
 INSERT INTO entries (
-    title, body, formatted_body, path, format, date, created_at, modified_at
+    title, body, formatted_body, path, format, date, created_at, modified_at, publish_at, status
 ) VALUES (
-    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8
-) RETURNING id, title, body, formatted_body, path, format, date, created_at, modified_at
+    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10
+) RETURNING id, title, body, formatted_body, path, format, date, created_at, modified_at, publish_at, status
 `
 
 type CreateEntryParams struct {
-	Title         string    `json:"title"`
-	Body          string    `json:"body"`
-	FormattedBody string    `json:"formatted_body"`
-	Path          string    `json:"path"`
-	Format        string    `json:"format"`
-	Date          string    `json:"date"`
-	CreatedAt     time.Time `json:"created_at"`
-	ModifiedAt    time.Time `json:"modified_at"`
+	Title         string       `json:"title"`
+	Body          string       `json:"body"`
+	FormattedBody string       `json:"formatted_body"`
+	Path          string       `json:"path"`
+	Format        string       `json:"format"`
+	Date          string       `json:"date"`
+	CreatedAt     time.Time    `json:"created_at"`
+	ModifiedAt    time.Time    `json:"modified_at"`
+	PublishAt     sql.NullTime `json:"publish_at"`
+	Status        string       `json:"status"`
 }
 
 func (q *Queries) CreateEntry(ctx context.Context, arg CreateEntryParams) (Entry, error) {
@@ -62,6 +65,8 @@ func (q *Queries) CreateEntry(ctx context.Context, arg CreateEntryParams) (Entry
 		arg.Date,
 		arg.CreatedAt,
 		arg.ModifiedAt,
+		arg.PublishAt,
+		arg.Status,
 	)
 	var i Entry
 	err := row.Scan(
@@ -74,25 +79,29 @@ func (q *Queries) CreateEntry(ctx context.Context, arg CreateEntryParams) (Entry
 		&i.Date,
 		&i.CreatedAt,
 		&i.ModifiedAt,
+		&i.PublishAt,
+		&i.Status,
 	)
 	return i, err
 }
 
 const getEntryById = `-- name: GetEntryById :one
-SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
 WHERE id = ?1 LIMIT 1
 `
 
 type GetEntryByIdRow struct {
-	ID            int64     `json:"id"`
-	Title         string    `json:"title"`
-	Body          string    `json:"body"`
-	FormattedBody string    `json:"formatted_body"`
-	Path          string    `json:"path"`
-	Format        string    `json:"format"`
-	Date          string    `json:"date"`
-	CreatedAt     time.Time `json:"created_at"`
-	ModifiedAt    time.Time `json:"modified_at"`
+	ID            int64        `json:"id"`
+	Title         string       `json:"title"`
+	Body          string       `json:"body"`
+	FormattedBody string       `json:"formatted_body"`
+	Path          string       `json:"path"`
+	Format        string       `json:"format"`
+	Date          string       `json:"date"`
+	CreatedAt     time.Time    `json:"created_at"`
+	ModifiedAt    time.Time    `json:"modified_at"`
+	PublishAt     sql.NullTime `json:"publish_at"`
+	Status        string       `json:"status"`
 }
 
 func (q *Queries) GetEntryById(ctx context.Context, id int64) (GetEntryByIdRow, error) {
@@ -108,25 +117,29 @@ func (q *Queries) GetEntryById(ctx context.Context, id int64) (GetEntryByIdRow, 
 		&i.Date,
 		&i.CreatedAt,
 		&i.ModifiedAt,
+		&i.PublishAt,
+		&i.Status,
 	)
 	return i, err
 }
 
 const getEntryByPath = `-- name: GetEntryByPath :one
-SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
 WHERE path = ?1 LIMIT 1
 `
 
 type GetEntryByPathRow struct {
-	ID            int64     `json:"id"`
-	Title         string    `json:"title"`
-	Body          string    `json:"body"`
-	FormattedBody string    `json:"formatted_body"`
-	Path          string    `json:"path"`
-	Format        string    `json:"format"`
-	Date          string    `json:"date"`
-	CreatedAt     time.Time `json:"created_at"`
-	ModifiedAt    time.Time `json:"modified_at"`
+	ID            int64        `json:"id"`
+	Title         string       `json:"title"`
+	Body          string       `json:"body"`
+	FormattedBody string       `json:"formatted_body"`
+	Path          string       `json:"path"`
+	Format        string       `json:"format"`
+	Date          string       `json:"date"`
+	CreatedAt     time.Time    `json:"created_at"`
+	ModifiedAt    time.Time    `json:"modified_at"`
+	PublishAt     sql.NullTime `json:"publish_at"`
+	Status        string       `json:"status"`
 }
 
 func (q *Queries) GetEntryByPath(ctx context.Context, path string) (GetEntryByPathRow, error) {
@@ -142,27 +155,31 @@ func (q *Queries) GetEntryByPath(ctx context.Context, path string) (GetEntryByPa
 		&i.Date,
 		&i.CreatedAt,
 		&i.ModifiedAt,
+		&i.PublishAt,
+		&i.Status,
 	)
 	return i, err
 }
 
 const getNextEntry = `-- name: GetNextEntry :one
-SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
-WHERE created_at > ?1
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
+WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND created_at > ?1
 ORDER BY created_at ASC
 LIMIT 1
 `
 
 type GetNextEntryRow struct {
-	ID            int64     `json:"id"`
-	Title         string    `json:"title"`
-	Body          string    `json:"body"`
-	FormattedBody string    `json:"formatted_body"`
-	Path          string    `json:"path"`
-	Format        string    `json:"format"`
-	Date          string    `json:"date"`
-	CreatedAt     time.Time `json:"created_at"`
-	ModifiedAt    time.Time `json:"modified_at"`
+	ID            int64        `json:"id"`
+	Title         string       `json:"title"`
+	Body          string       `json:"body"`
+	FormattedBody string       `json:"formatted_body"`
+	Path          string       `json:"path"`
+	Format        string       `json:"format"`
+	Date          string       `json:"date"`
+	CreatedAt     time.Time    `json:"created_at"`
+	ModifiedAt    time.Time    `json:"modified_at"`
+	PublishAt     sql.NullTime `json:"publish_at"`
+	Status        string       `json:"status"`
 }
 
 func (q *Queries) GetNextEntry(ctx context.Context, createdAt time.Time) (GetNextEntryRow, error) {
@@ -178,27 +195,31 @@ func (q *Queries) GetNextEntry(ctx context.Context, createdAt time.Time) (GetNex
 		&i.Date,
 		&i.CreatedAt,
 		&i.ModifiedAt,
+		&i.PublishAt,
+		&i.Status,
 	)
 	return i, err
 }
 
 const getPrevEntry = `-- name: GetPrevEntry :one
-SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
-WHERE created_at < ?1
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
+WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND created_at < ?1
 ORDER BY created_at DESC
 LIMIT 1
 `
 
 type GetPrevEntryRow struct {
-	ID            int64     `json:"id"`
-	Title         string    `json:"title"`
-	Body          string    `json:"body"`
-	FormattedBody string    `json:"formatted_body"`
-	Path          string    `json:"path"`
-	Format        string    `json:"format"`
-	Date          string    `json:"date"`
-	CreatedAt     time.Time `json:"created_at"`
-	ModifiedAt    time.Time `json:"modified_at"`
+	ID            int64        `json:"id"`
+	Title         string       `json:"title"`
+	Body          string       `json:"body"`
+	FormattedBody string       `json:"formatted_body"`
+	Path          string       `json:"path"`
+	Format        string       `json:"format"`
+	Date          string       `json:"date"`
+	CreatedAt     time.Time    `json:"created_at"`
+	ModifiedAt    time.Time    `json:"modified_at"`
+	PublishAt     sql.NullTime `json:"publish_at"`
+	Status        string       `json:"status"`
 }
 
 func (q *Queries) GetPrevEntry(ctx context.Context, createdAt time.Time) (GetPrevEntryRow, error) {
@@ -214,12 +235,69 @@ func (q *Queries) GetPrevEntry(ctx context.Context, createdAt time.Time) (GetPre
 		&i.Date,
 		&i.CreatedAt,
 		&i.ModifiedAt,
+		&i.PublishAt,
+		&i.Status,
 	)
 	return i, err
 }
 
+const listAllEntries = `-- name: ListAllEntries :many
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
+ORDER BY date DESC, created_at DESC
+`
+
+type ListAllEntriesRow struct {
+	ID            int64        `json:"id"`
+	Title         string       `json:"title"`
+	Body          string       `json:"body"`
+	FormattedBody string       `json:"formatted_body"`
+	Path          string       `json:"path"`
+	Format        string       `json:"format"`
+	Date          string       `json:"date"`
+	CreatedAt     time.Time    `json:"created_at"`
+	ModifiedAt    time.Time    `json:"modified_at"`
+	PublishAt     sql.NullTime `json:"publish_at"`
+	Status        string       `json:"status"`
+}
+
+func (q *Queries) ListAllEntries(ctx context.Context) ([]ListAllEntriesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAllEntries)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAllEntriesRow
+	for rows.Next() {
+		var i ListAllEntriesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Body,
+			&i.FormattedBody,
+			&i.Path,
+			&i.Format,
+			&i.Date,
+			&i.CreatedAt,
+			&i.ModifiedAt,
+			&i.PublishAt,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAllEntriesForSitemap = `-- name: ListAllEntriesForSitemap :many
 SELECT path, modified_at FROM entries
+WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP)
 ORDER BY date DESC
 `
 
@@ -257,6 +335,7 @@ SELECT
 	strftime('%m', date) as month,
 	count(*) as count
 FROM entries
+WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP)
 GROUP BY strftime('%Y-%m', date)
 ORDER BY date DESC
 `
@@ -292,8 +371,8 @@ func (q *Queries) ListArchiveMonths(ctx context.Context) ([]ListArchiveMonthsRow
 
 const listEntries = `-- name: ListEntries :many
 
-SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
-WHERE date <= ?1
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
+WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND date <= ?1
 ORDER BY date DESC, created_at ASC
 LIMIT ?2
 `
@@ -304,15 +383,17 @@ type ListEntriesParams struct {
 }
 
 type ListEntriesRow struct {
-	ID            int64     `json:"id"`
-	Title         string    `json:"title"`
-	Body          string    `json:"body"`
-	FormattedBody string    `json:"formatted_body"`
-	Path          string    `json:"path"`
-	Format        string    `json:"format"`
-	Date          string    `json:"date"`
-	CreatedAt     time.Time `json:"created_at"`
-	ModifiedAt    time.Time `json:"modified_at"`
+	ID            int64        `json:"id"`
+	Title         string       `json:"title"`
+	Body          string       `json:"body"`
+	FormattedBody string       `json:"formatted_body"`
+	Path          string       `json:"path"`
+	Format        string       `json:"format"`
+	Date          string       `json:"date"`
+	CreatedAt     time.Time    `json:"created_at"`
+	ModifiedAt    time.Time    `json:"modified_at"`
+	PublishAt     sql.NullTime `json:"publish_at"`
+	Status        string       `json:"status"`
 }
 
 // Note: sqlite3 driver converts DATE to time.Time by default, which is undesirable for
@@ -338,6 +419,8 @@ func (q *Queries) ListEntries(ctx context.Context, arg ListEntriesParams) ([]Lis
 			&i.Date,
 			&i.CreatedAt,
 			&i.ModifiedAt,
+			&i.PublishAt,
+			&i.Status,
 		); err != nil {
 			return nil, err
 		}
@@ -353,8 +436,8 @@ func (q *Queries) ListEntries(ctx context.Context, arg ListEntriesParams) ([]Lis
 }
 
 const listEntriesByCategory = `-- name: ListEntriesByCategory :many
-SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
-WHERE title LIKE ?1 AND date <= ?2
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
+WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND title LIKE ?1 AND date <= ?2
 ORDER BY date DESC, created_at ASC
 LIMIT ?3
 `
@@ -366,15 +449,17 @@ type ListEntriesByCategoryParams struct {
 }
 
 type ListEntriesByCategoryRow struct {
-	ID            int64     `json:"id"`
-	Title         string    `json:"title"`
-	Body          string    `json:"body"`
-	FormattedBody string    `json:"formatted_body"`
-	Path          string    `json:"path"`
-	Format        string    `json:"format"`
-	Date          string    `json:"date"`
-	CreatedAt     time.Time `json:"created_at"`
-	ModifiedAt    time.Time `json:"modified_at"`
+	ID            int64        `json:"id"`
+	Title         string       `json:"title"`
+	Body          string       `json:"body"`
+	FormattedBody string       `json:"formatted_body"`
+	Path          string       `json:"path"`
+	Format        string       `json:"format"`
+	Date          string       `json:"date"`
+	CreatedAt     time.Time    `json:"created_at"`
+	ModifiedAt    time.Time    `json:"modified_at"`
+	PublishAt     sql.NullTime `json:"publish_at"`
+	Status        string       `json:"status"`
 }
 
 func (q *Queries) ListEntriesByCategory(ctx context.Context, arg ListEntriesByCategoryParams) ([]ListEntriesByCategoryRow, error) {
@@ -396,6 +481,8 @@ func (q *Queries) ListEntriesByCategory(ctx context.Context, arg ListEntriesByCa
 			&i.Date,
 			&i.CreatedAt,
 			&i.ModifiedAt,
+			&i.PublishAt,
+			&i.Status,
 		); err != nil {
 			return nil, err
 		}
@@ -411,21 +498,23 @@ func (q *Queries) ListEntriesByCategory(ctx context.Context, arg ListEntriesByCa
 }
 
 const listEntriesByDates = `-- name: ListEntriesByDates :many
-SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
-WHERE date IN (/*SLICE:dates*/?)
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
+WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND date IN (/*SLICE:dates*/?)
 ORDER BY date DESC, created_at ASC
 `
 
 type ListEntriesByDatesRow struct {
-	ID            int64     `json:"id"`
-	Title         string    `json:"title"`
-	Body          string    `json:"body"`
-	FormattedBody string    `json:"formatted_body"`
-	Path          string    `json:"path"`
-	Format        string    `json:"format"`
-	Date          string    `json:"date"`
-	CreatedAt     time.Time `json:"created_at"`
-	ModifiedAt    time.Time `json:"modified_at"`
+	ID            int64        `json:"id"`
+	Title         string       `json:"title"`
+	Body          string       `json:"body"`
+	FormattedBody string       `json:"formatted_body"`
+	Path          string       `json:"path"`
+	Format        string       `json:"format"`
+	Date          string       `json:"date"`
+	CreatedAt     time.Time    `json:"created_at"`
+	ModifiedAt    time.Time    `json:"modified_at"`
+	PublishAt     sql.NullTime `json:"publish_at"`
+	Status        string       `json:"status"`
 }
 
 func (q *Queries) ListEntriesByDates(ctx context.Context, dates []string) ([]ListEntriesByDatesRow, error) {
@@ -457,6 +546,8 @@ func (q *Queries) ListEntriesByDates(ctx context.Context, dates []string) ([]Lis
 			&i.Date,
 			&i.CreatedAt,
 			&i.ModifiedAt,
+			&i.PublishAt,
+			&i.Status,
 		); err != nil {
 			return nil, err
 		}
@@ -472,20 +563,22 @@ func (q *Queries) ListEntriesByDates(ctx context.Context, dates []string) ([]Lis
 }
 
 const listEntriesByIds = `-- name: ListEntriesByIds :many
-SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
 WHERE id IN (/*SLICE:ids*/?)
 `
 
 type ListEntriesByIdsRow struct {
-	ID            int64     `json:"id"`
-	Title         string    `json:"title"`
-	Body          string    `json:"body"`
-	FormattedBody string    `json:"formatted_body"`
-	Path          string    `json:"path"`
-	Format        string    `json:"format"`
-	Date          string    `json:"date"`
-	CreatedAt     time.Time `json:"created_at"`
-	ModifiedAt    time.Time `json:"modified_at"`
+	ID            int64        `json:"id"`
+	Title         string       `json:"title"`
+	Body          string       `json:"body"`
+	FormattedBody string       `json:"formatted_body"`
+	Path          string       `json:"path"`
+	Format        string       `json:"format"`
+	Date          string       `json:"date"`
+	CreatedAt     time.Time    `json:"created_at"`
+	ModifiedAt    time.Time    `json:"modified_at"`
+	PublishAt     sql.NullTime `json:"publish_at"`
+	Status        string       `json:"status"`
 }
 
 func (q *Queries) ListEntriesByIds(ctx context.Context, ids []int64) ([]ListEntriesByIdsRow, error) {
@@ -517,6 +610,8 @@ func (q *Queries) ListEntriesByIds(ctx context.Context, ids []int64) ([]ListEntr
 			&i.Date,
 			&i.CreatedAt,
 			&i.ModifiedAt,
+			&i.PublishAt,
+			&i.Status,
 		); err != nil {
 			return nil, err
 		}
@@ -532,8 +627,8 @@ func (q *Queries) ListEntriesByIds(ctx context.Context, ids []int64) ([]ListEntr
 }
 
 const listEntriesByYearMonthDay = `-- name: ListEntriesByYearMonthDay :many
-SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
-WHERE CAST(?1 AS TEXT) <= CAST(date AS TEXT) AND CAST(date AS TEXT) < CAST(?2 AS TEXT)
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
+WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND CAST(?1 AS TEXT) <= CAST(date AS TEXT) AND CAST(date AS TEXT) < CAST(?2 AS TEXT)
 ORDER BY created_at
 `
 
@@ -543,15 +638,17 @@ type ListEntriesByYearMonthDayParams struct {
 }
 
 type ListEntriesByYearMonthDayRow struct {
-	ID            int64     `json:"id"`
-	Title         string    `json:"title"`
-	Body          string    `json:"body"`
-	FormattedBody string    `json:"formatted_body"`
-	Path          string    `json:"path"`
-	Format        string    `json:"format"`
-	Date          string    `json:"date"`
-	CreatedAt     time.Time `json:"created_at"`
-	ModifiedAt    time.Time `json:"modified_at"`
+	ID            int64        `json:"id"`
+	Title         string       `json:"title"`
+	Body          string       `json:"body"`
+	FormattedBody string       `json:"formatted_body"`
+	Path          string       `json:"path"`
+	Format        string       `json:"format"`
+	Date          string       `json:"date"`
+	CreatedAt     time.Time    `json:"created_at"`
+	ModifiedAt    time.Time    `json:"modified_at"`
+	PublishAt     sql.NullTime `json:"publish_at"`
+	Status        string       `json:"status"`
 }
 
 func (q *Queries) ListEntriesByYearMonthDay(ctx context.Context, arg ListEntriesByYearMonthDayParams) ([]ListEntriesByYearMonthDayRow, error) {
@@ -573,6 +670,8 @@ func (q *Queries) ListEntriesByYearMonthDay(ctx context.Context, arg ListEntries
 			&i.Date,
 			&i.CreatedAt,
 			&i.ModifiedAt,
+			&i.PublishAt,
+			&i.Status,
 		); err != nil {
 			return nil, err
 		}
@@ -589,7 +688,7 @@ func (q *Queries) ListEntriesByYearMonthDay(ctx context.Context, arg ListEntries
 
 const listUniqueDates = `-- name: ListUniqueDates :many
 SELECT DISTINCT CAST(date AS TEXT) AS date FROM entries
-WHERE date <= ?1
+WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND date <= ?1
 ORDER BY date DESC
 LIMIT ?2
 `
@@ -630,20 +729,24 @@ UPDATE entries SET
     path = ?4,
     format = ?5,
     date = ?6,
-    modified_at = ?7
-WHERE id = ?8
-RETURNING id, title, body, formatted_body, path, format, date, created_at, modified_at
+    modified_at = ?7,
+    publish_at = ?8,
+    status = ?9
+WHERE id = ?10
+RETURNING id, title, body, formatted_body, path, format, date, created_at, modified_at, publish_at, status
 `
 
 type UpdateEntryParams struct {
-	Title         string    `json:"title"`
-	Body          string    `json:"body"`
-	FormattedBody string    `json:"formatted_body"`
-	Path          string    `json:"path"`
-	Format        string    `json:"format"`
-	Date          string    `json:"date"`
-	ModifiedAt    time.Time `json:"modified_at"`
-	ID            int64     `json:"id"`
+	Title         string       `json:"title"`
+	Body          string       `json:"body"`
+	FormattedBody string       `json:"formatted_body"`
+	Path          string       `json:"path"`
+	Format        string       `json:"format"`
+	Date          string       `json:"date"`
+	ModifiedAt    time.Time    `json:"modified_at"`
+	PublishAt     sql.NullTime `json:"publish_at"`
+	Status        string       `json:"status"`
+	ID            int64        `json:"id"`
 }
 
 func (q *Queries) UpdateEntry(ctx context.Context, arg UpdateEntryParams) (Entry, error) {
@@ -655,6 +758,8 @@ func (q *Queries) UpdateEntry(ctx context.Context, arg UpdateEntryParams) (Entry
 		arg.Format,
 		arg.Date,
 		arg.ModifiedAt,
+		arg.PublishAt,
+		arg.Status,
 		arg.ID,
 	)
 	var i Entry
@@ -668,6 +773,8 @@ func (q *Queries) UpdateEntry(ctx context.Context, arg UpdateEntryParams) (Entry
 		&i.Date,
 		&i.CreatedAt,
 		&i.ModifiedAt,
+		&i.PublishAt,
+		&i.Status,
 	)
 	return i, err
 }

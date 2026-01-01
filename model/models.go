@@ -10,15 +10,17 @@ import (
 )
 
 type Entry struct {
-	ID            int64     `json:"id"`
-	Title         string    `json:"title"`
-	Body          string    `json:"body"`
-	FormattedBody string    `json:"formatted_body"`
-	Path          string    `json:"path"`
-	Format        string    `json:"format"`
-	Date          string    `json:"date"`
-	CreatedAt     time.Time `json:"created_at"`
-	ModifiedAt    time.Time `json:"modified_at"`
+	ID            int64        `json:"id"`
+	Title         string       `json:"title"`
+	Body          string       `json:"body"`
+	FormattedBody string       `json:"formatted_body"`
+	Path          string       `json:"path"`
+	Format        string       `json:"format"`
+	Date          string       `json:"date"`
+	CreatedAt     time.Time    `json:"created_at"`
+	ModifiedAt    time.Time    `json:"modified_at"`
+	PublishAt     sql.NullTime `json:"publish_at"`
+	Status        string       `json:"status"`
 }
 
 type Exif struct {
@@ -77,4 +79,10 @@ type Tfidf struct {
 	TermCount int64   `json:"term_count"`
 	Tfidf     float64 `json:"tfidf"`
 	TfidfN    float64 `json:"tfidf_n"`
+}
+
+type Trackback struct {
+	ID               int64         `json:"id"`
+	EntryID          sql.NullInt64 `json:"entry_id"`
+	TrackbackEntryID sql.NullInt64 `json:"trackback_entry_id"`
 }

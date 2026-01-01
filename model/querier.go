@@ -28,6 +28,7 @@ type Querier interface {
 	GrabJob(ctx context.Context, arg GrabJobParams) error
 	InsertRelatedEntry(ctx context.Context, arg InsertRelatedEntryParams) error
 	InsertTFIDF(ctx context.Context, arg InsertTFIDFParams) error
+	ListAllEntries(ctx context.Context) ([]ListAllEntriesRow, error)
 	ListAllEntriesForSitemap(ctx context.Context) ([]ListAllEntriesForSitemapRow, error)
 	ListArchiveMonths(ctx context.Context) ([]ListArchiveMonthsRow, error)
 	// Note: sqlite3 driver converts DATE to time.Time by default, which is undesirable for

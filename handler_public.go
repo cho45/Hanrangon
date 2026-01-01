@@ -165,7 +165,27 @@ func (app *App) HandleEntry(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entry").SetInternal(err)
 	}
 
-	entry := model.Entry(row)
+	if row.Status != "public" && !app.IsAuth(c) {
+		return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
+	}
+
+	if row.PublishAt.Valid && row.PublishAt.Time.After(time.Now()) && !app.IsAuth(c) {
+		return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
+	}
+
+	entry := model.Entry{
+		ID:            row.ID,
+		Title:         row.Title,
+		Body:          row.Body,
+		FormattedBody: row.FormattedBody,
+		Path:          row.Path,
+		Format:        row.Format,
+		Date:          row.Date,
+		CreatedAt:     row.CreatedAt,
+		ModifiedAt:    row.ModifiedAt,
+		PublishAt:     row.PublishAt,
+		Status:        row.Status,
+	}
 
 	prevRow, err := app.queries.GetPrevEntry(ctx, entry.CreatedAt)
 	if err != nil && err != sql.ErrNoRows {
