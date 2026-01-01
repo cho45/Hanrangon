@@ -72,10 +72,13 @@ func main() {
 			continue
 		}
 
-		newFormatted, _ := formatter.Format(body, fType)
+		newFormatted, err := formatter.Format(body, fType)
+		if err != nil {
+			fmt.Printf("ID %d [%s]: ERROR: %v\n", eid, fType, err)
+		}
 
-		na := NormalizeHTML(oldFormatted)
-		nb := NormalizeHTML(newFormatted)
+		na := NormalizeHTML(oldFormatted, fType)
+		nb := NormalizeHTML(newFormatted, fType)
 
 		if na == nb {
 			passed++
@@ -85,6 +88,8 @@ func main() {
 		} else {
 			fmt.Printf("ID %d [%s]: FAIL\n", eid, fType)
 			if *idFlag != 0 || *verboseFlag {
+				fmt.Printf("  OLD NORM: %s\n", na)
+				fmt.Printf("  NEW NORM: %s\n", nb)
 				diffs := dmp.DiffMain(na, nb, false)
 				for _, d := range diffs {
 					switch d.Type {
@@ -107,7 +112,7 @@ func main() {
 	}
 }
 
-func NormalizeHTML(input string) string {
+func NormalizeHTML(input string, format string) string {
 	doc, err := html.Parse(strings.NewReader(input))
 	if err != nil {
 		return input
@@ -130,7 +135,7 @@ func NormalizeHTML(input string) string {
 		return input
 	}
 
-	canonicalize(body)
+	canonicalize(body, format)
 
 	var buf bytes.Buffer
 	for c := body.FirstChild; c != nil; c = c.NextSibling {
@@ -139,8 +144,91 @@ func NormalizeHTML(input string) string {
 	return strings.TrimSpace(buf.String())
 }
 
-func canonicalize(n *html.Node) {
+func canonicalize(n *html.Node, format string) {
 	if n.Type == html.ElementNode {
+		if format == "Hatena" {
+			// 1. Remove footnotes completely
+			if n.Data == "div" {
+				for _, attr := range n.Attr {
+					if attr.Key == "class" && attr.Val == "footnotes" {
+						removeNode(n)
+						return
+					}
+				}
+			}
+
+			// 2. Normalize Amazon/Figure cards to simple placeholder
+			if n.Data == "figure" {
+				isCard := false
+				for _, attr := range n.Attr {
+					if attr.Key == "class" && (attr.Val == "amazon" || attr.Val == "http") {
+						isCard = true
+						break
+					}
+				}
+				if isCard {
+					n.Data = "span"
+					n.Attr = []html.Attribute{{Key: "class", Val: "card-placeholder"}}
+					n.FirstChild = &html.Node{Type: html.TextNode, Data: "[CARD]"}
+					n.LastChild = n.FirstChild
+					// If inside P, move out
+					if n.Parent != nil && n.Parent.Data == "p" {
+						moveCardOutOfP(n.Parent, n)
+						return
+					}
+				}
+			}
+
+			// 3. Normalize ASIN links to match normalized card
+			if n.Data == "a" {
+				if n.FirstChild != nil && n.FirstChild.Type == html.TextNode && strings.HasPrefix(n.FirstChild.Data, "asin:") {
+					n.Data = "span"
+					n.Attr = []html.Attribute{{Key: "class", Val: "card-placeholder"}}
+					n.FirstChild.Data = "[CARD]"
+					// If inside P, move out
+					if n.Parent != nil && n.Parent.Data == "p" {
+						moveCardOutOfP(n.Parent, n)
+						return
+					}
+				}
+			}
+
+			// 4. Normalize Fotolife
+			if n.Data == "a" {
+				for i := range n.Attr {
+					if n.Attr[i].Key == "class" && n.Attr[i].Val == "hatena-fotolife" {
+						for j := range n.Attr {
+							if n.Attr[j].Key == "href" {
+								n.Attr[j].Val = "#fotolife-placeholder"
+							}
+						}
+					}
+				}
+			}
+			if n.Data == "img" {
+				isFotolife := false
+				for _, attr := range n.Attr {
+					if attr.Key == "class" && attr.Val == "hatena-fotolife" {
+						isFotolife = true
+						break
+					}
+				}
+				if isFotolife {
+					for j := range n.Attr {
+						if n.Attr[j].Key == "src" {
+							n.Attr[j].Val = strings.Replace(n.Attr[j].Val, "http://", "https://", 1)
+						}
+					}
+				}
+			}
+
+			// 5. Cleanup empty P tags (common artifacts)
+			if n.Data == "p" && isEmptyOrWhitespaceOnly(n) {
+				removeNode(n)
+				return
+			}
+		}
+
 		sort.Slice(n.Attr, func(i, j int) bool {
 			return n.Attr[i].Key < n.Attr[j].Key
 		})
@@ -158,9 +246,90 @@ func canonicalize(n *html.Node) {
 	if n.Type == html.TextNode {
 		n.Data = strings.Join(strings.Fields(html.UnescapeString(n.Data)), " ")
 	}
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		canonicalize(c)
+	for c := n.FirstChild; c != nil; {
+		next := c.NextSibling
+		canonicalize(c, format)
+		c = next
 	}
+}
+
+func isCardPlaceholder(n *html.Node) bool {
+	if n == nil || n.Type != html.ElementNode || n.Data != "span" {
+		return false
+	}
+	for _, attr := range n.Attr {
+		if attr.Key == "class" && attr.Val == "card-placeholder" {
+			return true
+		}
+	}
+	return false
+}
+
+func moveCardOutOfP(p *html.Node, card *html.Node) {
+	parent := p.Parent
+	if parent == nil {
+		return
+	}
+
+	// Create a new P for the part after the card
+	afterP := &html.Node{Type: html.ElementNode, Data: "p"}
+	for c := card.NextSibling; c != nil; {
+		next := c.NextSibling
+		p.RemoveChild(c)
+		afterP.AppendChild(c)
+		c = next
+	}
+
+	// Move the card out of the P and place it after the original P
+	p.RemoveChild(card)
+	parent.InsertBefore(card, p.NextSibling)
+
+	// Insert the new P after the card ONLY if it has significant content
+	if !isEmptyOrWhitespaceOnly(afterP) {
+		parent.InsertBefore(afterP, card.NextSibling)
+	}
+
+	// Clean up original P if now empty
+	if isEmptyOrWhitespaceOnly(p) {
+		removeNode(p)
+	}
+}
+
+func removeNode(n *html.Node) {
+	if n.Parent != nil {
+		n.Parent.RemoveChild(n)
+	}
+}
+
+func unwrapNode(n *html.Node) {
+	parent := n.Parent
+	if parent == nil {
+		return
+	}
+	for c := n.FirstChild; c != nil; {
+		next := c.NextSibling
+		parent.InsertBefore(c, n)
+		c = next
+	}
+	parent.RemoveChild(n)
+}
+
+func isEmptyOrWhitespaceOnly(n *html.Node) bool {
+	if n == nil {
+		return true
+	}
+	if n.FirstChild == nil {
+		return true
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type == html.ElementNode {
+			return false
+		}
+		if c.Type == html.TextNode && strings.TrimSpace(c.Data) != "" {
+			return false
+		}
+	}
+	return true
 }
 
 func loadIgnoreMap(path string) map[int64]string {

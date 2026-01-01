@@ -36,6 +36,11 @@ func TestFormatHatena(t *testing.T) {
 			body: ">|math|\nE=mc^2\n||<",
 			want: []string{`<p class="code lang-math">E=mc^2</p>`},
 		},
+		{
+			name: "html-tag",
+			body: "><ins datetime=\"2026-01-01T00:00:00+09:00\"><\ncontent\n></ins><",
+			want: []string{"<ins datetime=\"2026-01-01T00:00:00+09:00\">", "content", "</ins>"},
+		},
 	}
 
 	for _, tt := range tests {
