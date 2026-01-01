@@ -23,6 +23,11 @@ func TestFormatHTML(t *testing.T) {
 			body: "<![CDATA[<a>]]> and <![CDATA[<b>]]>",
 			want: "&lt;a&gt; and &lt;b&gt;",
 		},
+		{
+			name: "strip comments",
+			body: "hello<!-- secret -->world",
+			want: "helloworld",
+		},
 	}
 
 	for _, tt := range tests {

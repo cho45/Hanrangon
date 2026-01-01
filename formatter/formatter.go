@@ -12,6 +12,8 @@ func Format(body string, format string) (string, error) {
 		return FormatHatena(body)
 	case "tDiary":
 		return FormatTDiary(body), nil
+	case "Markdown":
+		return FormatMarkdown(body)
 	default:
 		// Unknown format, fallback to plain HTML or error
 		return "", fmt.Errorf("unsupported format: %s", format)

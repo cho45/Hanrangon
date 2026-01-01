@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"database/sql"
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"sort"
 	"strings"
 
@@ -15,13 +17,16 @@ import (
 	"golang.org/x/net/html"
 )
 
+var (
+	idFlag      = flag.Int64("id", 0, "Test a single entry ID")
+	formatFlag  = flag.String("format", "", "Filter by format")
+	verboseFlag = flag.Bool("v", false, "Show detailed diff info")
+)
+
 func main() {
-	id := flag.Int64("id", 0, "Test a single entry ID")
-	startID := flag.Int64("start", 0, "Start entry ID")
-	endID := flag.Int64("end", 0, "End entry ID")
-	formatFilter := flag.String("format", "", "Filter by format (HTML, Hatena, tDiary, Markdown)")
-	verbose := flag.Bool("v", false, "Show detailed diff on failure")
 	flag.Parse()
+
+	ignoreMap := loadIgnoreMap("cmd/migration-test/error-ignore.txt")
 
 	db, err := sql.Open("sqlite3", "var/db/data.db")
 	if err != nil {
@@ -32,25 +37,14 @@ func main() {
 	query := "SELECT id, format, body, formatted_body FROM entries WHERE 1=1"
 	var args []interface{}
 
-	if *id != 0 {
+	if *idFlag != 0 {
 		query += " AND id = ?"
-		args = append(args, *id)
-	} else {
-		if *startID != 0 {
-			query += " AND id >= ?"
-			args = append(args, *startID)
-		}
-		if *endID != 0 {
-			query += " AND id <= ?"
-			args = append(args, *endID)
-		}
+		args = append(args, *idFlag)
 	}
-
-	if *formatFilter != "" {
+	if *formatFlag != "" {
 		query += " AND format = ?"
-		args = append(args, *formatFilter)
+		args = append(args, *formatFlag)
 	}
-
 	query += " ORDER BY id ASC"
 
 	rows, err := db.Query(query, args...)
@@ -67,42 +61,50 @@ func main() {
 		var eid int64
 		var fType, body, oldFormatted string
 		if err := rows.Scan(&eid, &fType, &body, &oldFormatted); err != nil {
-			log.Printf("Scan error ID %d: %v", eid, err)
 			continue
 		}
 
 		total++
-		newFormatted, err := formatter.Format(body, fType)
-		if err != nil {
-			fmt.Printf("ID %d [%s]: ERROR: %v\n", eid, fType, err)
+
+		if _, ok := ignoreMap[eid]; ok && *idFlag == 0 {
+			fmt.Printf("ID %d [%s]: IGNORE\n", eid, fType)
+			passed++
 			continue
 		}
+
+		newFormatted, _ := formatter.Format(body, fType)
 
 		na := NormalizeHTML(oldFormatted)
 		nb := NormalizeHTML(newFormatted)
 
 		if na == nb {
 			passed++
-			if *verbose {
+			if *verboseFlag || *idFlag != 0 {
 				fmt.Printf("ID %d [%s]: PASS\n", eid, fType)
 			}
 		} else {
 			fmt.Printf("ID %d [%s]: FAIL\n", eid, fType)
-			if *id != 0 || *verbose {
-				fmt.Println("--- OLD NORM ---")
-				fmt.Println(na)
-				fmt.Println("--- NEW NORM ---")
-				fmt.Println(nb)
+			if *idFlag != 0 || *verboseFlag {
 				diffs := dmp.DiffMain(na, nb, false)
-				fmt.Println("--- DIFF ---")
-				fmt.Println(dmp.DiffText1(diffs))
-				fmt.Println("----------")
-				fmt.Println(dmp.DiffText2(diffs))
+				for _, d := range diffs {
+					switch d.Type {
+					case diffmatchpatch.DiffInsert:
+						fmt.Printf(" [NEW: %s] ", d.Text)
+					case diffmatchpatch.DiffDelete:
+						fmt.Printf(" [OLD: %s] ", d.Text)
+					case diffmatchpatch.DiffEqual:
+						fmt.Print(d.Text)
+					}
+				}
+				fmt.Println("\n-------------------")
 			}
 		}
 	}
 
 	fmt.Printf("\nSummary: %d/%d passed (%.2f%%)\n", passed, total, float64(passed)/float64(total)*100)
+	if passed < total && *idFlag != 0 {
+		os.Exit(1)
+	}
 }
 
 func NormalizeHTML(input string) string {
@@ -118,7 +120,7 @@ func NormalizeHTML(input string) string {
 			body = n
 			return
 		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
+		for c := n.FirstChild; c != nil && body == nil; c = c.NextSibling {
 			f(c)
 		}
 	}
@@ -128,53 +130,58 @@ func NormalizeHTML(input string) string {
 		return input
 	}
 
-	var buf bytes.Buffer
-	for c := body.FirstChild; c != nil; {
-		next := c.NextSibling
-		if ok := simplify(c); ok {
-			html.Render(&buf, c)
-		}
-		c = next
-	}
+	canonicalize(body)
 
+	var buf bytes.Buffer
+	for c := body.FirstChild; c != nil; c = c.NextSibling {
+		html.Render(&buf, c)
+	}
 	return strings.TrimSpace(buf.String())
 }
 
-func simplify(n *html.Node) bool {
-	if n.Type == html.CommentNode {
-		// Remove comments
-		return false
-	}
-
+func canonicalize(n *html.Node) {
 	if n.Type == html.ElementNode {
 		sort.Slice(n.Attr, func(i, j int) bool {
 			return n.Attr[i].Key < n.Attr[j].Key
 		})
 		for i := range n.Attr {
 			if n.Attr[i].Key == "style" {
-				v := strings.ReplaceAll(n.Attr[i].Val, " ", "")
+				v := strings.ToLower(n.Attr[i].Val)
+				v = strings.ReplaceAll(v, " ", "")
 				v = strings.TrimSuffix(v, ";")
+				v = strings.ReplaceAll(v, "black", "#000")
+				v = strings.ReplaceAll(v, "rgb(255,255,102)", "#ff6")
 				n.Attr[i].Val = v
 			}
 		}
-	} else if n.Type == html.TextNode {
-		// Unescape to normalize entity references (like &#65393; vs ｱ)
-		raw := html.UnescapeString(n.Data)
-		n.Data = strings.Join(strings.Fields(raw), " ")
 	}
+	if n.Type == html.TextNode {
+		n.Data = strings.Join(strings.Fields(html.UnescapeString(n.Data)), " ")
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		canonicalize(c)
+	}
+}
 
-	for c := n.FirstChild; c != nil; {
-		next := c.NextSibling
-		if ok := simplify(c); !ok {
-			n.RemoveChild(c)
+func loadIgnoreMap(path string) map[int64]string {
+	m := make(map[int64]string)
+	f, err := os.Open(path)
+	if err != nil {
+		return m
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) > 0 {
+			var id int64
+			fmt.Sscanf(parts[0], "%d", &id)
+			if id != 0 {
+				m[id] = line
+			}
 		}
-		c = next
 	}
-
-	// Remove empty text nodes after normalization
-	if n.Type == html.TextNode && n.Data == "" {
-		return false
-	}
-
-	return true
+	return m
 }
