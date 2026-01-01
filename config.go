@@ -9,10 +9,13 @@ import (
 )
 
 type Config struct {
-	DataDBPath   string `toml:"data_db_path"`
-	ImagesDBPath string `toml:"images_db_path"`
-	TFIDFDBPath  string `toml:"tfidf_db_path"`
-	StaticDir    string `toml:"static_dir"`
+	DataDBPath    string `toml:"data_db_path"`
+	ImagesDBPath  string `toml:"images_db_path"`
+	TFIDFDBPath   string `toml:"tfidf_db_path"`
+	StaticDir     string `toml:"static_dir"`
+	Username      string `toml:"username"`
+	Password      string `toml:"password"`
+	SessionSecret string `toml:"session_secret"`
 }
 
 func LoadConfig() *Config {
@@ -22,12 +25,12 @@ func LoadConfig() *Config {
 	staticDir := filepath.Join(wd, "static")
 
 	cfg := &Config{
-		DataDBPath:   filepath.Join(varDir, "db", "data.db"),
-		ImagesDBPath: filepath.Join(varDir, "db", "images.db"),
-		TFIDFDBPath:  filepath.Join(varDir, "db", "tfidf.db"),
-		StaticDir:    staticDir,
+		DataDBPath:    filepath.Join(varDir, "db", "data.db"),
+		ImagesDBPath:  filepath.Join(varDir, "db", "images.db"),
+		TFIDFDBPath:   filepath.Join(varDir, "db", "tfidf.db"),
+		StaticDir:     staticDir,
+		SessionSecret: "change-me-please", // Default secret
 	}
-
 	// 1. Load from TOML (mandatory)
 	configPath := os.Getenv("HANRANGON_CONFIG")
 	if configPath == "" {

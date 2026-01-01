@@ -5,6 +5,8 @@ import (
 	"log"
 	"path/filepath"
 
+	"github.com/gorilla/sessions"
+	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	_ "github.com/mattn/go-sqlite3"
@@ -36,12 +38,13 @@ func main() {
 }
 
 func NewServer(config *Config, db *sql.DB, tfidfDB *sql.DB) *echo.Echo {
-	app := NewApp(db, tfidfDB)
+	app := NewApp(config, db, tfidfDB)
 
 	e := echo.New()
 	e.HideBanner = true
 
 	// Middleware
+	e.Use(session.Middleware(sessions.NewCookieStore([]byte(config.SessionSecret))))
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		LogStatus:   true,
 		LogURI:      true,
@@ -60,6 +63,14 @@ func NewServer(config *Config, db *sql.DB, tfidfDB *sql.DB) *echo.Echo {
 	e.Static("/css", filepath.Join(config.StaticDir, "css"))
 	e.Static("/js", filepath.Join(config.StaticDir, "js"))
 	e.Static("/images", filepath.Join(config.StaticDir, "images"))
+
+	// Auth
+	e.GET("/login", app.HandleLogin)
+	e.POST("/login", app.HandleLoginPost)
+	e.GET("/logout", app.HandleLogout)
+
+	// Admin
+	e.GET("/edit", app.HandleEdit, app.RequireAuth)
 
 	// Public Routes
 	e.GET("/", app.HandleIndex)
@@ -80,7 +91,13 @@ func NewServer(config *Config, db *sql.DB, tfidfDB *sql.DB) *echo.Echo {
 	e.GET("/robots.txt", app.HandleRobotsTxt)
 
 	e.GET("/api/similar", app.HandleApiSimilar)
-	e.POST("/api/edit", app.HandleApiEdit)
+
+	// Admin API
+
+	e.POST("/api/edit", app.HandleApiEdit, app.RequireAuth)
+
+	e.GET("/api/edit/progress", app.HandleApiEditProgress, app.RequireAuth)
 
 	return e
+
 }

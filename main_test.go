@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cho45/hanrangon/model"
 	"github.com/labstack/echo/v4"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -61,13 +60,33 @@ func (env *testEnv) close() {
 func setupTest(t *testing.T) *testEnv {
 	t.Helper()
 	db, tfidfDB := setupTestDB(t)
-	config := &Config{StaticDir: "static"}
+	config := &Config{
+		StaticDir:     "static",
+		Username:      "testuser",
+		Password:      "testpass",
+		SessionSecret: "testsecret",
+	}
 	e := NewServer(config, db, tfidfDB)
 	return &testEnv{
 		db:      db,
 		tfidfDB: tfidfDB,
 		server:  e,
 	}
+}
+
+func (env *testEnv) login(t *testing.T) string {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("username=testuser&password=testpass"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	env.server.ServeHTTP(rec, req)
+
+	cookie := rec.Header().Get("Set-Cookie")
+	if cookie == "" {
+		t.Fatal("failed to get session cookie")
+	}
+	// Extract the actual cookie value (e.g. "session=...")
+	return strings.Split(cookie, ";")[0]
 }
 
 func TestHandleIndex(t *testing.T) {
@@ -444,10 +463,13 @@ func TestHandleApiEdit(t *testing.T) {
 	env := setupTest(t)
 	defer env.close()
 
+	cookie := env.login(t)
+
 	t.Run("Create new entry with auto path", func(t *testing.T) {
 		payload := `{"title":"New Entry", "body":"Hello <![CDATA[<b>world</b>]]>", "format":"HTML"}`
 		req := httptest.NewRequest(http.MethodPost, "/api/edit", strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Cookie", cookie)
 		rec := httptest.NewRecorder()
 
 		env.server.ServeHTTP(rec, req)
@@ -456,22 +478,73 @@ func TestHandleApiEdit(t *testing.T) {
 			t.Fatalf("want status 200, got %d: %s", rec.Code, rec.Body.String())
 		}
 
-		var entry model.Entry
-		if err := json.Unmarshal(rec.Body.Bytes(), &entry); err != nil {
+		var res EditResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
 			t.Fatalf("failed to unmarshal response: %v", err)
 		}
 
-		if entry.Title != "New Entry" {
-			t.Errorf("want New Entry, got %s", entry.Title)
+		if res.ID == 0 {
+			t.Fatal("got zero ID")
 		}
-		// Check formatted body (CDATA should be escaped)
-		if entry.FormattedBody != "Hello &lt;b&gt;world&lt;/b&gt;" {
-			t.Errorf("formatted body not escaped: %s", entry.FormattedBody)
+
+		// Verify saved data in DB
+		row, err := env.db.Query(`SELECT title, formatted_body, path FROM entries WHERE id = ?`, res.ID)
+		if err != nil {
+			t.Fatalf("failed to query db: %v", err)
+		}
+		defer row.Close()
+		if !row.Next() {
+			t.Fatal("entry not found in db")
+		}
+		var title, formattedBody, path string
+		row.Scan(&title, &formattedBody, &path)
+
+		if title != "New Entry" {
+			t.Errorf("want New Entry, got %s", title)
+		}
+		if formattedBody != "Hello &lt;b&gt;world&lt;/b&gt;" {
+			t.Errorf("formatted body not escaped: %s", formattedBody)
 		}
 		// Check path format YYYY/MM/DD/1
 		now := time.Now().Format("2006/01/02")
-		if !strings.HasPrefix(entry.Path, now) || !strings.HasSuffix(entry.Path, "/1") {
-			t.Errorf("unexpected path format: %s", entry.Path)
+		if !strings.HasPrefix(path, now) || !strings.HasSuffix(path, "/1") {
+			t.Errorf("unexpected path format: %s", path)
+		}
+		if res.Location != "/"+path {
+			t.Errorf("want location /%s, got %s", path, res.Location)
+		}
+	})
+}
+
+func TestHandleEdit(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	t.Run("Redirect unauthenticated", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/edit", nil)
+		rec := httptest.NewRecorder()
+		env.server.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusFound {
+			t.Errorf("want status 302, got %d", rec.Code)
+		}
+		if !strings.Contains(rec.Header().Get("Location"), "/login") {
+			t.Errorf("expected redirect to /login, got %s", rec.Header().Get("Location"))
+		}
+	})
+
+	t.Run("Render for authenticated", func(t *testing.T) {
+		cookie := env.login(t)
+		req := httptest.NewRequest(http.MethodGet, "/edit", nil)
+		req.Header.Set("Cookie", cookie)
+		rec := httptest.NewRecorder()
+		env.server.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("want status 200, got %d", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "<app-editor") {
+			t.Errorf("body does not contain app-editor element")
 		}
 	})
 }
