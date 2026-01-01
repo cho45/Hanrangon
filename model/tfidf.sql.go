@@ -9,6 +9,56 @@ import (
 	"context"
 )
 
+const deleteRelatedEntriesByEntryID = `-- name: DeleteRelatedEntriesByEntryID :exec
+DELETE FROM related_entries WHERE entry_id = ?
+`
+
+func (q *Queries) DeleteRelatedEntriesByEntryID(ctx context.Context, entryID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteRelatedEntriesByEntryID, entryID)
+	return err
+}
+
+const deleteTFIDFByEntryID = `-- name: DeleteTFIDFByEntryID :exec
+DELETE FROM tfidf WHERE entry_id = ?
+`
+
+func (q *Queries) DeleteTFIDFByEntryID(ctx context.Context, entryID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteTFIDFByEntryID, entryID)
+	return err
+}
+
+const insertRelatedEntry = `-- name: InsertRelatedEntry :exec
+INSERT INTO related_entries (entry_id, related_entry_id, score)
+VALUES (?, ?, ?)
+`
+
+type InsertRelatedEntryParams struct {
+	EntryID        int64   `json:"entry_id"`
+	RelatedEntryID int64   `json:"related_entry_id"`
+	Score          float64 `json:"score"`
+}
+
+func (q *Queries) InsertRelatedEntry(ctx context.Context, arg InsertRelatedEntryParams) error {
+	_, err := q.db.ExecContext(ctx, insertRelatedEntry, arg.EntryID, arg.RelatedEntryID, arg.Score)
+	return err
+}
+
+const insertTFIDF = `-- name: InsertTFIDF :exec
+INSERT INTO tfidf (entry_id, term, term_count, tfidf, tfidf_n)
+VALUES (?, ?, ?, 0.0, 0.0)
+`
+
+type InsertTFIDFParams struct {
+	EntryID   int64  `json:"entry_id"`
+	Term      string `json:"term"`
+	TermCount int64  `json:"term_count"`
+}
+
+func (q *Queries) InsertTFIDF(ctx context.Context, arg InsertTFIDFParams) error {
+	_, err := q.db.ExecContext(ctx, insertTFIDF, arg.EntryID, arg.Term, arg.TermCount)
+	return err
+}
+
 const listRelatedEntries = `-- name: ListRelatedEntries :many
 SELECT related_entry_id, score
 FROM related_entries

@@ -14,6 +14,8 @@ type Querier interface {
 	CountEntriesByDate(ctx context.Context, date string) (int64, error)
 	CountPendingJobs(ctx context.Context) (int64, error)
 	CreateEntry(ctx context.Context, arg CreateEntryParams) (Entry, error)
+	DeleteRelatedEntriesByEntryID(ctx context.Context, entryID int64) error
+	DeleteTFIDFByEntryID(ctx context.Context, entryID int64) error
 	EnqueueJob(ctx context.Context, arg EnqueueJobParams) (Job, error)
 	FindNextJob(ctx context.Context, runAfter time.Time) (Job, error)
 	GetEntryById(ctx context.Context, id int64) (GetEntryByIdRow, error)
@@ -24,6 +26,8 @@ type Querier interface {
 	GetOrCreateJobType(ctx context.Context, name string) (JobType, error)
 	GetPrevEntry(ctx context.Context, createdAt time.Time) (GetPrevEntryRow, error)
 	GrabJob(ctx context.Context, arg GrabJobParams) error
+	InsertRelatedEntry(ctx context.Context, arg InsertRelatedEntryParams) error
+	InsertTFIDF(ctx context.Context, arg InsertTFIDFParams) error
 	ListAllEntriesForSitemap(ctx context.Context) ([]ListAllEntriesForSitemapRow, error)
 	ListArchiveMonths(ctx context.Context) ([]ListArchiveMonthsRow, error)
 	// Note: sqlite3 driver converts DATE to time.Time by default, which is undesirable for

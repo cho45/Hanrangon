@@ -10,11 +10,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cho45/hanrangon/jobqueue"
+	"github.com/cho45/hanrangon/model"
 	"github.com/labstack/echo/v4"
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func setupTestDB(t *testing.T) (*sql.DB, *sql.DB) {
+func setupTestDB(t *testing.T) (*sql.DB, *sql.DB, *sql.DB) {
 	t.Helper()
 
 	// Main DB
@@ -31,7 +33,7 @@ func setupTestDB(t *testing.T) (*sql.DB, *sql.DB) {
 	}
 
 	// TFIDF DB
-	tfidfDB, err := sql.Open("sqlite3", ":memory:")
+	tfidfDB, err := sql.Open("sqlite3_with_math_functions", ":memory:")
 	if err != nil {
 		t.Fatalf("failed to open memory tfidf db: %v", err)
 	}
@@ -43,34 +45,55 @@ func setupTestDB(t *testing.T) (*sql.DB, *sql.DB) {
 		t.Fatalf("failed to apply tfidf schema: %v", err)
 	}
 
-	return db, tfidfDB
+	// Worker DB
+	workerDB, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("failed to open memory worker db: %v", err)
+	}
+	workerSchema, err := os.ReadFile("db/schema/worker.sql")
+	if err != nil {
+		t.Fatalf("failed to read worker schema: %v", err)
+	}
+	if _, err := workerDB.Exec(string(workerSchema)); err != nil {
+		t.Fatalf("failed to apply worker schema: %v", err)
+	}
+
+	return db, tfidfDB, workerDB
 }
 
 type testEnv struct {
-	db      *sql.DB
-	tfidfDB *sql.DB
-	server  *echo.Echo
+	db       *sql.DB
+	tfidfDB  *sql.DB
+	workerDB *sql.DB
+	server   *echo.Echo
 }
 
 func (env *testEnv) close() {
 	env.db.Close()
 	env.tfidfDB.Close()
+	env.workerDB.Close()
 }
 
 func setupTest(t *testing.T) *testEnv {
 	t.Helper()
-	db, tfidfDB := setupTestDB(t)
+	db, tfidfDB, workerDB := setupTestDB(t)
 	config := &Config{
 		StaticDir:     "static",
 		Username:      "testuser",
 		Password:      "testpass",
 		SessionSecret: "testsecret",
 	}
-	e := NewServer(config, db, tfidfDB)
+
+	// Create job queue for testing
+	registry := jobqueue.NewRegistry()
+	queue := jobqueue.NewQueue(workerDB, model.New(workerDB), registry)
+
+	e := NewServer(config, db, tfidfDB, workerDB, queue)
 	return &testEnv{
-		db:      db,
-		tfidfDB: tfidfDB,
-		server:  e,
+		db:       db,
+		tfidfDB:  tfidfDB,
+		workerDB: workerDB,
+		server:   e,
 	}
 }
 

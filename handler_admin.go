@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/cho45/hanrangon/formatter"
+	"github.com/cho45/hanrangon/jobs"
 	"github.com/cho45/hanrangon/model"
 	"github.com/cho45/hanrangon/view"
 	"github.com/gorilla/sessions"
@@ -175,6 +178,14 @@ func (app *App) HandleApiEdit(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create entry").SetInternal(err)
 		}
 		resEntry = model.Entry(row)
+	}
+
+	// TF-IDF再計算ジョブをエンキュー
+	err = app.jobQueue.Enqueue(context.Background(), "RecalculateTFIDF",
+		jobs.RecalculateTFIDFArg{EntryID: resEntry.ID},
+		fmt.Sprintf("recalc-tfidf-%d", resEntry.ID))
+	if err != nil {
+		log.Printf("Failed to enqueue TF-IDF job: %v", err)
 	}
 
 	return c.JSON(http.StatusOK, EditResponse{

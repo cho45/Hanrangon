@@ -9,6 +9,7 @@ import (
 	"github.com/cho45/hanrangon/jobqueue"
 	"github.com/cho45/hanrangon/jobs"
 	"github.com/cho45/hanrangon/model"
+	"github.com/cho45/hanrangon/tfidf"
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
@@ -33,7 +34,7 @@ func main() {
 		log.Fatalf("failed to ping db: %v", err)
 	}
 
-	tfidfDB, err := sql.Open("sqlite3", config.TFIDFDBPath)
+	tfidfDB, err := sql.Open("sqlite3_with_math_functions", config.TFIDFDBPath)
 	if err != nil {
 		log.Fatalf("failed to open tfidf db: %v", err)
 	}
@@ -55,17 +56,25 @@ func main() {
 	registry := jobqueue.NewRegistry()
 	registry.Register(jobs.NewSimpleJob())
 
+	// TF-IDF calculator and similarity calculator
+	calc, err := tfidf.NewCalculator(tfidfDB, model.New(tfidfDB))
+	if err != nil {
+		log.Fatalf("failed to create tfidf calculator: %v", err)
+	}
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, model.New(tfidfDB))
+	registry.Register(jobs.NewRecalculateTFIDFJob(model.New(db), calc, sim))
+
 	queue := jobqueue.NewQueue(workerDB, model.New(workerDB), registry)
 	queue.Start(context.Background())
 
-	e := NewServer(config, db, tfidfDB, workerDB)
+	e := NewServer(config, db, tfidfDB, workerDB, queue)
 
 	// Start server
 	e.Logger.Fatal(e.Start(":5555"))
 }
 
-func NewServer(config *Config, db *sql.DB, tfidfDB *sql.DB, workerDB *sql.DB) *echo.Echo {
-	app := NewApp(config, db, tfidfDB, workerDB)
+func NewServer(config *Config, db *sql.DB, tfidfDB *sql.DB, workerDB *sql.DB, queue *jobqueue.Queue) *echo.Echo {
+	app := NewApp(config, db, tfidfDB, workerDB, queue)
 
 	e := echo.New()
 	e.HideBanner = true

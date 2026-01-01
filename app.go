@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/cho45/hanrangon/jobqueue"
 	"github.com/cho45/hanrangon/model"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
@@ -17,10 +18,11 @@ type App struct {
 	tfidfDB       *sql.DB
 	workerQueries *model.Queries
 	workerDB      *sql.DB
+	jobQueue      *jobqueue.Queue
 	config        *Config
 }
 
-func NewApp(config *Config, db *sql.DB, tfidfDB *sql.DB, workerDB *sql.DB) *App {
+func NewApp(config *Config, db *sql.DB, tfidfDB *sql.DB, workerDB *sql.DB, queue *jobqueue.Queue) *App {
 	return &App{
 		queries:       model.New(db),
 		db:            db,
@@ -28,6 +30,7 @@ func NewApp(config *Config, db *sql.DB, tfidfDB *sql.DB, workerDB *sql.DB) *App 
 		tfidfDB:       tfidfDB,
 		workerQueries: model.New(workerDB),
 		workerDB:      workerDB,
+		jobQueue:      queue,
 		config:        config,
 	}
 }

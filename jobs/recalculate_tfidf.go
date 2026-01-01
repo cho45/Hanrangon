@@ -1,0 +1,73 @@
+package jobs
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+
+	"github.com/cho45/hanrangon/model"
+	"github.com/cho45/hanrangon/tfidf"
+)
+
+// RecalculateTFIDFJob handles TF-IDF recalculation for entries
+type RecalculateTFIDFJob struct {
+	dataQueries *model.Queries
+	calculator  *tfidf.Calculator
+	similarity  *tfidf.SimilarityCalculator
+}
+
+// RecalculateTFIDFArg is the argument for RecalculateTFIDFJob
+type RecalculateTFIDFArg struct {
+	EntryID int64 `json:"entry_id"`
+}
+
+// NewRecalculateTFIDFJob creates a new RecalculateTFIDFJob
+func NewRecalculateTFIDFJob(dataQueries *model.Queries, calculator *tfidf.Calculator, similarity *tfidf.SimilarityCalculator) *RecalculateTFIDFJob {
+	return &RecalculateTFIDFJob{
+		dataQueries: dataQueries,
+		calculator:  calculator,
+		similarity:  similarity,
+	}
+}
+
+// Name returns the job name
+func (j *RecalculateTFIDFJob) Name() string {
+	return "RecalculateTFIDF"
+}
+
+// Execute executes the TF-IDF recalculation job
+func (j *RecalculateTFIDFJob) Execute(ctx context.Context, arg json.RawMessage) error {
+	var params RecalculateTFIDFArg
+	if err := json.Unmarshal(arg, &params); err != nil {
+		return fmt.Errorf("failed to unmarshal job arg: %w", err)
+	}
+
+	log.Printf("RecalculateTFIDF job started for entry %d", params.EntryID)
+
+	// Get entry from database
+	entry, err := j.dataQueries.GetEntryById(ctx, params.EntryID)
+	if err != nil {
+		return fmt.Errorf("failed to get entry: %w", err)
+	}
+
+	// Step 1: Extract terms and update TF-IDF data
+	if err := j.calculator.UpdateTFIDF(ctx, params.EntryID, entry.Title, entry.Body); err != nil {
+		return fmt.Errorf("failed to update tfidf: %w", err)
+	}
+
+	// Step 2: Recalculate TF-IDF values for all entries
+	// Note: We recalculate for all entries to ensure global statistics (IDF) are up-to-date
+	// This is necessary because IDF depends on the total number of entries and term frequencies
+	if err := j.calculator.RecalculateTFIDFValues(ctx, []int64{}); err != nil {
+		return fmt.Errorf("failed to recalculate tfidf values: %w", err)
+	}
+
+	// Step 3: Calculate similar entries for this entry
+	if err := j.similarity.CalculateSimilarEntries(ctx, []int64{params.EntryID}); err != nil {
+		return fmt.Errorf("failed to calculate similar entries: %w", err)
+	}
+
+	log.Printf("RecalculateTFIDF job completed for entry %d", params.EntryID)
+	return nil
+}

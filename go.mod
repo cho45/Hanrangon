@@ -15,6 +15,10 @@ require (
 	github.com/cho45/xatena-go v0.0.0-20250711122401-413f434d6e12 // indirect
 	github.com/gorilla/context v1.1.2 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
+	github.com/ikawaha/kagome-dict v1.1.6 // indirect
+	github.com/ikawaha/kagome-dict/ipa v1.2.5 // indirect
+	github.com/ikawaha/kagome-dict/uni v1.2.5 // indirect
+	github.com/ikawaha/kagome/v2 v2.10.2 // indirect
 	github.com/labstack/gommon v0.4.2 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
