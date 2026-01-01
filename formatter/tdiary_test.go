@@ -14,7 +14,12 @@ func TestFormatTDiary(t *testing.T) {
 		{
 			name: "plain text",
 			body: "line1\nline2",
-			want: []string{"<p>line1</p>", "<p>line2</p>"},
+			want: []string{"<p>line1</p><p>line2</p>"},
+		},
+		{
+			name: "empty lines",
+			body: "line1\n\nline2",
+			want: []string{"<p>line1</p><p></p><p>line2</p>"},
 		},
 		{
 			name: "link",
@@ -52,6 +57,21 @@ OK}}`,
 			name: "my link",
 			body: `{{my "20250101#p1", "Label"}}`,
 			want: []string{`<a href="/2025/01/01/1">Label</a>`},
+		},
+		{
+			name: "erb style and no space",
+			body: `<%=a"title|url"%>`,
+			want: []string{`<a href="url">title</a>`},
+		},
+		{
+			name: "erb style with space",
+			body: `<%= a "url" %>`,
+			want: []string{`<a href="url">url</a>`},
+		},
+		{
+			name: "erb style footnote",
+			body: `<%=fn"note"%>`,
+			want: []string{`<span title="note">*</span>`},
 		},
 	}
 

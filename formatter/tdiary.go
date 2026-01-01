@@ -7,15 +7,15 @@ import (
 )
 
 var (
-	reTDiaryPlugin = regexp.MustCompile(`(?s){{([\s\S]+?)}}`)
+	reTDiaryPlugin = regexp.MustCompile(`(?s)(?:{{|<%=)([\s\S]+?)(?:}}|%>)`)
 	// Basic regexes for internal parsing
 	reBqHeader     = regexp.MustCompile(`(?s)^bq <<(\w+)(?:, ['"]([^'"']+)["'])?(?:, ['"]([^'"']+)["'])?`)
 	reUlLongHeader = regexp.MustCompile(`(?s)^(ul|ol) <<(\w+)`)
 	// Simplified to avoid backreferences
-	reA         = regexp.MustCompile(`(?s)^a (?:'|")(?:([^|]+)\|)?(.+?)(?:'|")`)
-	reUlOlShort = regexp.MustCompile(`(?s)^(ul|ol) (?:'|")(.+?)(?:'|")`)
-	reFn        = regexp.MustCompile(`(?s)^fn (?:'|")(.+?)(?:'|")`)
-	reMy        = regexp.MustCompile(`(?s)^my (?:'|")(\d{4})(\d{2})(\d{2})#p(\d+)(?:'|"), (?:'|")([^'"+]+)(?:'|")`)
+	reA         = regexp.MustCompile(`(?s)a\s*(?:'|")(?:([^|]+)\|)?(.+?)(?:'|")`)
+	reUlOlShort = regexp.MustCompile(`(?s)(ul|ol)\s*(?:'|")(.+?)(?:'|")`)
+	reFn        = regexp.MustCompile(`(?s)fn\s*(?:'|")(.+?)(?:'|")`)
+	reMy        = regexp.MustCompile(`(?s)my\s*(?:'|")(\d{4})(\d{2})(\d{2})#p(\d+)(?:'|"),\s*(?:'|")([^'"]+)(?:'|")`)
 )
 
 func FormatTDiary(body string) string {
@@ -107,13 +107,13 @@ func FormatTDiary(body string) string {
 		return match // fallback
 	})
 
-	// Wrap lines in <p> tags
+	// Wrap every line in <p> tags, including empty ones, matching original Perl logic
 	lines := strings.Split(res, "\n")
-	var paragraphs []string
+	var sb strings.Builder
 	for _, line := range lines {
-		if strings.TrimSpace(line) != "" {
-			paragraphs = append(paragraphs, "<p>"+line+"</p>")
-		}
+		sb.WriteString("<p>")
+		sb.WriteString(line)
+		sb.WriteString("</p>")
 	}
-	return strings.Join(paragraphs, "\n")
+	return sb.String()
 }
