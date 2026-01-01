@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/labstack/echo/v4"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -44,13 +45,35 @@ func setupTestDB(t *testing.T) (*sql.DB, *sql.DB) {
 	return db, tfidfDB
 }
 
-func TestHandleIndex(t *testing.T) {
+type testEnv struct {
+	db      *sql.DB
+	tfidfDB *sql.DB
+	server  *echo.Echo
+}
+
+func (env *testEnv) close() {
+	env.db.Close()
+	env.tfidfDB.Close()
+}
+
+func setupTest(t *testing.T) *testEnv {
+	t.Helper()
 	db, tfidfDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
+	config := &Config{StaticDir: "static"}
+	e := NewServer(config, db, tfidfDB)
+	return &testEnv{
+		db:      db,
+		tfidfDB: tfidfDB,
+		server:  e,
+	}
+}
+
+func TestHandleIndex(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
 
 	// Insert test data
-	_, err := db.Exec(`
+	_, err := env.db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
 		VALUES 
 		('Test Entry 1', 'Body 1', '<p>Formatted Body 1</p>', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
@@ -60,12 +83,10 @@ func TestHandleIndex(t *testing.T) {
 		t.Fatalf("failed to insert test data: %v", err)
 	}
 
-	config := &Config{StaticDir: "static"}
-	e := NewServer(config, db, tfidfDB)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 
-	e.ServeHTTP(rec, req)
+	env.server.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("want status 200, got %d", rec.Code)
@@ -81,11 +102,10 @@ func TestHandleIndex(t *testing.T) {
 }
 
 func TestHandleEntry(t *testing.T) {
-	db, tfidfDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
+	env := setupTest(t)
+	defer env.close()
 
-	_, err := db.Exec(`
+	_, err := env.db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
 		VALUES 
 		('Test Entry 1', 'Body 1', '<p>Formatted Body 1</p>', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
@@ -95,13 +115,10 @@ func TestHandleEntry(t *testing.T) {
 		t.Fatalf("failed to insert test data: %v", err)
 	}
 
-	config := &Config{StaticDir: "static"}
-	e := NewServer(config, db, tfidfDB)
-
 	t.Run("Existing entry", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/2025/01/01/1", nil)
 		rec := httptest.NewRecorder()
-		e.ServeHTTP(rec, req)
+		env.server.ServeHTTP(rec, req)
 
 		if rec.Code != http.StatusOK {
 			t.Errorf("want status 200, got %d", rec.Code)
@@ -120,7 +137,7 @@ func TestHandleEntry(t *testing.T) {
 	t.Run("Non-existing entry", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/2025/01/01/999", nil)
 		rec := httptest.NewRecorder()
-		e.ServeHTTP(rec, req)
+		env.server.ServeHTTP(rec, req)
 
 		if rec.Code != http.StatusNotFound {
 			t.Errorf("want status 404, got %d", rec.Code)
@@ -129,11 +146,10 @@ func TestHandleEntry(t *testing.T) {
 }
 
 func TestHandleArchive(t *testing.T) {
-	db, tfidfDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
+	env := setupTest(t)
+	defer env.close()
 
-	_, err := db.Exec(`
+	_, err := env.db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
 		VALUES 
 		('Entry 1', 'Body 1', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
@@ -144,11 +160,9 @@ func TestHandleArchive(t *testing.T) {
 		t.Fatalf("failed to insert test data: %v", err)
 	}
 
-	config := &Config{StaticDir: "static"}
-	e := NewServer(config, db, tfidfDB)
 	req := httptest.NewRequest(http.MethodGet, "/archive", nil)
 	rec := httptest.NewRecorder()
-	e.ServeHTTP(rec, req)
+	env.server.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("want status 200, got %d", rec.Code)
@@ -168,11 +182,10 @@ func TestHandleArchive(t *testing.T) {
 }
 
 func TestHandleDateArchive(t *testing.T) {
-	db, tfidfDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
+	env := setupTest(t)
+	defer env.close()
 
-	_, err := db.Exec(`
+	_, err := env.db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
 		VALUES 
 		('Entry 2025-01-01', 'Body', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
@@ -183,9 +196,6 @@ func TestHandleDateArchive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to insert test data: %v", err)
 	}
-
-	config := &Config{StaticDir: "static"}
-	e := NewServer(config, db, tfidfDB)
 
 	tests := []struct {
 		path       string
@@ -214,7 +224,7 @@ func TestHandleDateArchive(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
 			rec := httptest.NewRecorder()
 
-			e.ServeHTTP(rec, req)
+			env.server.ServeHTTP(rec, req)
 
 			if rec.Code != http.StatusOK {
 				t.Errorf("want status 200, got %d", rec.Code)
@@ -236,11 +246,10 @@ func TestHandleDateArchive(t *testing.T) {
 }
 
 func TestHandleCategory(t *testing.T) {
-	db, tfidfDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
+	env := setupTest(t)
+	defer env.close()
 
-	_, err := db.Exec(`
+	_, err := env.db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
 		VALUES 
 		('[test] Tagged Entry', 'Body', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
@@ -250,12 +259,10 @@ func TestHandleCategory(t *testing.T) {
 		t.Fatalf("failed to insert test data: %v", err)
 	}
 
-	config := &Config{StaticDir: "static"} // Mock config
-	e := NewServer(config, db, tfidfDB)
 	req := httptest.NewRequest(http.MethodGet, "/test/", nil)
 	rec := httptest.NewRecorder()
 
-	e.ServeHTTP(rec, req)
+	env.server.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("want status 200, got %d", rec.Code)
@@ -276,11 +283,10 @@ func TestHandleCategory(t *testing.T) {
 }
 
 func TestHandleFeed(t *testing.T) {
-	db, tfidfDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
+	env := setupTest(t)
+	defer env.close()
 
-	_, err := db.Exec(`
+	_, err := env.db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
 		VALUES 
 		('Feed Entry 1', 'Body', '<p>Body</p>', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00')
@@ -289,12 +295,10 @@ func TestHandleFeed(t *testing.T) {
 		t.Fatalf("failed to insert test data: %v", err)
 	}
 
-	config := &Config{StaticDir: "static"}
-	e := NewServer(config, db, tfidfDB)
 	req := httptest.NewRequest(http.MethodGet, "/feed", nil)
 	rec := httptest.NewRecorder()
 
-	e.ServeHTTP(rec, req)
+	env.server.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("want status 200, got %d", rec.Code)
@@ -315,11 +319,10 @@ func TestHandleFeed(t *testing.T) {
 }
 
 func TestHandleSitemap(t *testing.T) {
-	db, tfidfDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
+	env := setupTest(t)
+	defer env.close()
 
-	_, err := db.Exec(`
+	_, err := env.db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
 		VALUES 
 		('Sitemap Entry 1', 'Body', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00')
@@ -328,12 +331,10 @@ func TestHandleSitemap(t *testing.T) {
 		t.Fatalf("failed to insert test data: %v", err)
 	}
 
-	config := &Config{StaticDir: "static"}
-	e := NewServer(config, db, tfidfDB)
 	req := httptest.NewRequest(http.MethodGet, "/sitemap.xml", nil)
 	rec := httptest.NewRecorder()
 
-	e.ServeHTTP(rec, req)
+	env.server.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("want status 200, got %d", rec.Code)
@@ -354,12 +355,11 @@ func TestHandleSitemap(t *testing.T) {
 }
 
 func TestHandleApiSimilar(t *testing.T) {
-	db, tfidfDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
+	env := setupTest(t)
+	defer env.close()
 
 	// Insert entries into main DB
-	_, err := db.Exec(`
+	_, err := env.db.Exec(`
 		INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at)
 		VALUES 
 		(1, 'Target Entry', 'Body 1', '<p>Body 1</p>', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
@@ -370,7 +370,7 @@ func TestHandleApiSimilar(t *testing.T) {
 	}
 
 	// Insert relationship into TFIDF DB
-	_, err = tfidfDB.Exec(`
+	_, err = env.tfidfDB.Exec(`
 		INSERT INTO related_entries (entry_id, related_entry_id, score)
 		VALUES (1, 2, 0.95)
 	`)
@@ -378,11 +378,9 @@ func TestHandleApiSimilar(t *testing.T) {
 		t.Fatalf("failed to insert related_entries: %v", err)
 	}
 
-	config := &Config{StaticDir: "static"}
-	e := NewServer(config, db, tfidfDB)
 	req := httptest.NewRequest(http.MethodGet, "/api/similar?id=1", nil)
 	rec := httptest.NewRecorder()
-	e.ServeHTTP(rec, req)
+	env.server.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("want status 200, got %d", rec.Code)
