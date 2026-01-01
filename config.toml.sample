@@ -3,7 +3,9 @@
 data_db_path = "var/db/data.db"
 images_db_path = "var/db/images.db"
 tfidf_db_path = "var/db/tfidf.db"
+worker_db_path = "var/db/worker.db"
 static_dir = "static"
+upload_dir = "static/images/entry"
 
 # Authentication
 username = "admin"

@@ -17,6 +17,7 @@ type Config struct {
 	Username      string `toml:"username"`
 	Password      string `toml:"password"`
 	SessionSecret string `toml:"session_secret"`
+	UploadDir     string `toml:"upload_dir"`
 }
 
 func LoadConfig() *Config {
@@ -31,6 +32,7 @@ func LoadConfig() *Config {
 		TFIDFDBPath:   filepath.Join(varDir, "db", "tfidf.db"),
 		WorkerDBPath:  filepath.Join(varDir, "db", "worker.db"),
 		StaticDir:     staticDir,
+		UploadDir:     filepath.Join(staticDir, "images", "entry"),
 		SessionSecret: "change-me-please", // Default secret
 	}
 	// 1. Load from TOML (mandatory)
@@ -58,6 +60,9 @@ func LoadConfig() *Config {
 	}
 	if env := os.Getenv("HANRANGON_STATIC_DIR"); env != "" {
 		cfg.StaticDir = env
+	}
+	if env := os.Getenv("HANRANGON_UPLOAD_DIR"); env != "" {
+		cfg.UploadDir = env
 	}
 
 	return cfg

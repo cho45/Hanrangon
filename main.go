@@ -131,6 +131,7 @@ func NewServer(config *Config, db *sql.DB, tfidfDB *sql.DB, workerDB *sql.DB, qu
 	// Admin API
 
 	e.POST("/api/edit", app.HandleApiEdit, app.RequireAuth)
+	e.POST("/api/upload/image", app.HandleApiUploadImage, app.RequireAuth)
 
 	e.GET("/api/edit/progress", app.HandleApiEditProgress, app.RequireAuth)
 

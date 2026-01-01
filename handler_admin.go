@@ -5,8 +5,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -17,6 +21,7 @@ import (
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
+	"golang.org/x/text/unicode/norm"
 )
 
 type EditRequest struct {
@@ -223,5 +228,44 @@ func (app *App) HandleApiEdit(c echo.Context) error {
 	return c.JSON(http.StatusOK, EditResponse{
 		ID:       resEntry.ID,
 		Location: "/" + resEntry.Path,
+	})
+}
+
+func (app *App) HandleApiUploadImage(c echo.Context) error {
+	file, err := c.FormFile("file")
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Missing file").SetInternal(err)
+	}
+
+	src, err := file.Open()
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	now := time.Now()
+	// Normalize filename to NFC and add timestamp prefix
+	filename := fmt.Sprintf("%s-%s", now.Format("20060102150405"), norm.NFC.String(file.Filename))
+
+	destPath := filepath.Join(app.config.UploadDir, filename)
+
+	// Ensure directory exists
+	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create upload directory").SetInternal(err)
+	}
+
+	dst, err := os.Create(destPath)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create destination file").SetInternal(err)
+	}
+	defer dst.Close()
+
+	if _, err = io.Copy(dst, src); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to save file").SetInternal(err)
+	}
+
+	// URL-escape the filename for the response
+	return c.JSON(http.StatusOK, map[string]string{
+		"uploaded": fmt.Sprintf("/images/entry/%s", url.PathEscape(filename)),
 	})
 }

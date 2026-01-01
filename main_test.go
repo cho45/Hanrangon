@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -61,24 +64,18 @@ func setupTestDB(t *testing.T) (*sql.DB, *sql.DB, *sql.DB) {
 	return db, tfidfDB, workerDB
 }
 
-type testEnv struct {
-	db       *sql.DB
-	tfidfDB  *sql.DB
-	workerDB *sql.DB
-	server   *echo.Echo
-}
-
-func (env *testEnv) close() {
-	env.db.Close()
-	env.tfidfDB.Close()
-	env.workerDB.Close()
-}
-
 func setupTest(t *testing.T) *testEnv {
 	t.Helper()
 	db, tfidfDB, workerDB := setupTestDB(t)
+
+	tmpDir, err := os.MkdirTemp("", "hanrangon-upload-test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+
 	config := &Config{
 		StaticDir:     "static",
+		UploadDir:     tmpDir,
 		Username:      "testuser",
 		Password:      "testpass",
 		SessionSecret: "testsecret",
@@ -90,11 +87,27 @@ func setupTest(t *testing.T) *testEnv {
 
 	e := NewServer(config, db, tfidfDB, workerDB, queue)
 	return &testEnv{
-		db:       db,
-		tfidfDB:  tfidfDB,
-		workerDB: workerDB,
-		server:   e,
+		db:        db,
+		tfidfDB:   tfidfDB,
+		workerDB:  workerDB,
+		server:    e,
+		uploadDir: tmpDir,
 	}
+}
+
+type testEnv struct {
+	db        *sql.DB
+	tfidfDB   *sql.DB
+	workerDB  *sql.DB
+	server    *echo.Echo
+	uploadDir string
+}
+
+func (env *testEnv) close() {
+	env.db.Close()
+	env.tfidfDB.Close()
+	env.workerDB.Close()
+	os.RemoveAll(env.uploadDir)
 }
 
 func (env *testEnv) login(t *testing.T) string {
@@ -570,4 +583,73 @@ func TestHandleEdit(t *testing.T) {
 			t.Errorf("body does not contain app-editor element")
 		}
 	})
+}
+
+func TestHandleApiUploadImage(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	cookie := env.login(t)
+
+	// Prepare multipart form file
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	// Filename with non-ASCII characters to test normalization
+	filename := "テスト画像.jpg"
+	part, err := writer.CreateFormFile("file", filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = part.Write([]byte("fake-image-content"))
+	writer.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/upload/image", body)
+	req.Header.Set(echo.HeaderContentType, writer.FormDataContentType())
+	req.Header.Set("Cookie", cookie)
+	rec := httptest.NewRecorder()
+
+	env.server.ServeHTTP(rec, req)
+
+	// Verify status code
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify response JSON
+	var res map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+
+	uploadedURL, ok := res["uploaded"]
+	if !ok {
+		t.Fatal("response missing 'uploaded' key")
+	}
+
+	if !strings.HasPrefix(uploadedURL, "/images/entry/") {
+		t.Errorf("unexpected uploaded URL prefix: %s", uploadedURL)
+	}
+
+	// Verify file existence on disk
+	files, err := os.ReadDir(env.uploadDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 {
+		t.Errorf("expected 1 file in upload dir, got %d", len(files))
+	}
+
+	// Check if filename contains the original name
+	if !strings.Contains(files[0].Name(), filename) {
+		t.Errorf("filename %s does not contain expected part %s", files[0].Name(), filename)
+	}
+
+	// Verify content
+	content, err := os.ReadFile(filepath.Join(env.uploadDir, files[0].Name()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(content) != "fake-image-content" {
+		t.Errorf("unexpected file content: %s", string(content))
+	}
 }
