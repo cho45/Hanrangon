@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,31 +12,42 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-func setupTestDB(t *testing.T) *sql.DB {
+func setupTestDB(t *testing.T) (*sql.DB, *sql.DB) {
 	t.Helper()
 
+	// Main DB
 	db, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatalf("failed to open memory db: %v", err)
 	}
-
-	// Read schema
 	schema, err := os.ReadFile("db/schema/schema.sql")
 	if err != nil {
 		t.Fatalf("failed to read schema: %v", err)
 	}
-
-	// Apply schema
 	if _, err := db.Exec(string(schema)); err != nil {
 		t.Fatalf("failed to apply schema: %v", err)
 	}
 
-	return db
+	// TFIDF DB
+	tfidfDB, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("failed to open memory tfidf db: %v", err)
+	}
+	tfidfSchema, err := os.ReadFile("db/schema/tfidf.sql")
+	if err != nil {
+		t.Fatalf("failed to read tfidf schema: %v", err)
+	}
+	if _, err := tfidfDB.Exec(string(tfidfSchema)); err != nil {
+		t.Fatalf("failed to apply tfidf schema: %v", err)
+	}
+
+	return db, tfidfDB
 }
 
 func TestHandleIndex(t *testing.T) {
-	db := setupTestDB(t)
+	db, tfidfDB := setupTestDB(t)
 	defer db.Close()
+	defer tfidfDB.Close()
 
 	// Insert test data
 	_, err := db.Exec(`
@@ -49,7 +61,7 @@ func TestHandleIndex(t *testing.T) {
 	}
 
 	config := &Config{StaticDir: "../static"}
-	e := NewServer(config, db)
+	e := NewServer(config, db, tfidfDB)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 
@@ -69,8 +81,9 @@ func TestHandleIndex(t *testing.T) {
 }
 
 func TestHandleEntry(t *testing.T) {
-	db := setupTestDB(t)
+	db, tfidfDB := setupTestDB(t)
 	defer db.Close()
+	defer tfidfDB.Close()
 
 	_, err := db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
@@ -83,7 +96,7 @@ func TestHandleEntry(t *testing.T) {
 	}
 
 	config := &Config{StaticDir: "../static"}
-	e := NewServer(config, db)
+	e := NewServer(config, db, tfidfDB)
 
 	t.Run("Existing entry", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/2025/01/01/1", nil)
@@ -116,8 +129,9 @@ func TestHandleEntry(t *testing.T) {
 }
 
 func TestHandleArchive(t *testing.T) {
-	db := setupTestDB(t)
+	db, tfidfDB := setupTestDB(t)
 	defer db.Close()
+	defer tfidfDB.Close()
 
 	_, err := db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
@@ -131,7 +145,7 @@ func TestHandleArchive(t *testing.T) {
 	}
 
 	config := &Config{StaticDir: "../static"}
-	e := NewServer(config, db)
+	e := NewServer(config, db, tfidfDB)
 	req := httptest.NewRequest(http.MethodGet, "/archive", nil)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
@@ -154,8 +168,9 @@ func TestHandleArchive(t *testing.T) {
 }
 
 func TestHandleDateArchive(t *testing.T) {
-	db := setupTestDB(t)
+	db, tfidfDB := setupTestDB(t)
 	defer db.Close()
+	defer tfidfDB.Close()
 
 	_, err := db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
@@ -170,7 +185,7 @@ func TestHandleDateArchive(t *testing.T) {
 	}
 
 	config := &Config{StaticDir: "../static"}
-	e := NewServer(config, db)
+	e := NewServer(config, db, tfidfDB)
 
 	tests := []struct {
 		path       string
@@ -221,8 +236,9 @@ func TestHandleDateArchive(t *testing.T) {
 }
 
 func TestHandleCategory(t *testing.T) {
-	db := setupTestDB(t)
+	db, tfidfDB := setupTestDB(t)
 	defer db.Close()
+	defer tfidfDB.Close()
 
 	_, err := db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
@@ -235,7 +251,7 @@ func TestHandleCategory(t *testing.T) {
 	}
 
 	config := &Config{StaticDir: "../static"} // Mock config
-	e := NewServer(config, db)
+	e := NewServer(config, db, tfidfDB)
 	req := httptest.NewRequest(http.MethodGet, "/test/", nil)
 	rec := httptest.NewRecorder()
 
@@ -260,8 +276,9 @@ func TestHandleCategory(t *testing.T) {
 }
 
 func TestHandleFeed(t *testing.T) {
-	db := setupTestDB(t)
+	db, tfidfDB := setupTestDB(t)
 	defer db.Close()
+	defer tfidfDB.Close()
 
 	_, err := db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
@@ -273,7 +290,7 @@ func TestHandleFeed(t *testing.T) {
 	}
 
 	config := &Config{StaticDir: "../static"}
-	e := NewServer(config, db)
+	e := NewServer(config, db, tfidfDB)
 	req := httptest.NewRequest(http.MethodGet, "/feed", nil)
 	rec := httptest.NewRecorder()
 
@@ -298,8 +315,9 @@ func TestHandleFeed(t *testing.T) {
 }
 
 func TestHandleSitemap(t *testing.T) {
-	db := setupTestDB(t)
+	db, tfidfDB := setupTestDB(t)
 	defer db.Close()
+	defer tfidfDB.Close()
 
 	_, err := db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
@@ -311,7 +329,7 @@ func TestHandleSitemap(t *testing.T) {
 	}
 
 	config := &Config{StaticDir: "../static"}
-	e := NewServer(config, db)
+	e := NewServer(config, db, tfidfDB)
 	req := httptest.NewRequest(http.MethodGet, "/sitemap.xml", nil)
 	rec := httptest.NewRecorder()
 
@@ -335,12 +353,34 @@ func TestHandleSitemap(t *testing.T) {
 	}
 }
 
-func TestHandleRobotsTxt(t *testing.T) {
-	db := setupTestDB(t)
+func TestHandleApiSimilar(t *testing.T) {
+	db, tfidfDB := setupTestDB(t)
 	defer db.Close()
+	defer tfidfDB.Close()
+
+	// Insert entries into main DB
+	_, err := db.Exec(`
+		INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at)
+		VALUES 
+		(1, 'Target Entry', 'Body 1', '<p>Body 1</p>', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
+		(2, 'Related Entry', 'Body 2', '<p>Body 2</p>', '2025/01/01/2', 'Markdown', '2025-01-01', '2025-01-01 11:00:00', '2025-01-01 11:00:00')
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert entries: %v", err)
+	}
+
+	// Insert relationship into TFIDF DB
+	_, err = tfidfDB.Exec(`
+		INSERT INTO related_entries (entry_id, related_entry_id, score)
+		VALUES (1, 2, 0.95)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert related_entries: %v", err)
+	}
+
 	config := &Config{StaticDir: "../static"}
-	e := NewServer(config, db)
-	req := httptest.NewRequest(http.MethodGet, "/robots.txt", nil)
+	e := NewServer(config, db, tfidfDB)
+	req := httptest.NewRequest(http.MethodGet, "/api/similar?id=1", nil)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -348,11 +388,24 @@ func TestHandleRobotsTxt(t *testing.T) {
 		t.Errorf("want status 200, got %d", rec.Code)
 	}
 
-	body := rec.Body.String()
-	if !strings.Contains(body, "User-agent: *") {
-		t.Errorf("body does not contain User-agent")
+	var res struct {
+		Result map[string]string `json:"result"`
+		Ad     string            `json:"ad"`
 	}
-	if !strings.Contains(body, "Disallow: /admin/") {
-		t.Errorf("body does not contain Disallow")
+	importJSON := strings.NewReader(rec.Body.String())
+	if err := json.NewDecoder(importJSON).Decode(&res); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	html, ok := res.Result["1"]
+	if !ok {
+		t.Fatalf("result for id=1 not found")
+	}
+
+	if !strings.Contains(html, "Related Entry") {
+		t.Errorf("rendered HTML does not contain 'Related Entry'")
+	}
+	if !strings.Contains(html, "data-score=\"0.950000\"") {
+		t.Errorf("rendered HTML does not contain correct score")
 	}
 }

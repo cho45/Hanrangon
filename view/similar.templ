@@ -1,0 +1,37 @@
+package view
+
+import (
+	"fmt"
+	"github.com/cho45/hanrangon/model"
+)
+
+type SimilarEntry struct {
+	model.Entry
+	Score float64
+}
+
+templ SimilarEntries(entries []SimilarEntry) {
+	if len(entries) > 0 {
+		<h3>関連エントリー</h3>
+		for _, e := range entries {
+			<ul>
+				<li data-id={ fmt.Sprintf("%d", e.ID) }>
+					<a href={ templ.SafeURL("/" + e.Path) } data-score={ fmt.Sprintf("%f", e.Score) }>
+						{{ cleanTitle, _ := ParseTitle(e.Title) }}
+						<b>
+							if cleanTitle != "" {
+								{ cleanTitle }
+							} else {
+								✖
+							}
+						</b>
+						<time data-epoch={ fmt.Sprintf("%d", e.CreatedAt.Unix()) } datetime={ e.CreatedAt.Format("2006-01-02T15:04:05Z") } itemprop="datePublished">
+							{ e.CreatedAt.Format("15:04") }
+						</time>
+						<span class="summary">{ Summary(e.FormattedBody, 200) }</span>
+					</a>
+				</li>
+			</ul>
+		}
+	}
+}

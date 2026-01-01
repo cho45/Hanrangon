@@ -2,11 +2,13 @@ package view
 
 import (
 	"regexp"
+	"strings"
 
 	"github.com/cho45/hanrangon/model"
 )
 
-var titleTagRegexp = regexp.MustCompile(`\s*\[([^]]+)\]\s*`)
+var titleTagRegexp = regexp.MustCompile(`\s*\[([^\]]+)\]\s*`)
+var htmlTagRegexp = regexp.MustCompile(`<[^>]*>`)
 
 func IsSameDay(t1Str, t2Str string) bool {
 	return t1Str == t2Str
@@ -21,7 +23,19 @@ func ParseTitle(rawTitle string) (string, []string) {
 		}
 		return ""
 	})
-	return cleanTitle, tags
+	return strings.TrimSpace(cleanTitle), tags
+}
+
+func Summary(html string, length int) string {
+	text := htmlTagRegexp.ReplaceAllString(html, "")
+	text = strings.ReplaceAll(text, "\n", " ")
+	text = strings.ReplaceAll(text, "\r", "")
+	text = strings.TrimSpace(text)
+	runes := []rune(text)
+	if len(runes) > length {
+		return string(runes[:length]) + "..."
+	}
+	return string(runes)
 }
 
 type ArchiveYear struct {

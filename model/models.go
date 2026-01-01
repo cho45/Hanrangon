@@ -5,6 +5,7 @@
 package model
 
 import (
+	"database/sql"
 	"time"
 )
 
@@ -20,6 +21,17 @@ type Entry struct {
 	ModifiedAt    time.Time `json:"modified_at"`
 }
 
+type Exif struct {
+	Uri         string         `json:"uri"`
+	OriginalUri sql.NullString `json:"original_uri"`
+	Model       sql.NullString `json:"model"`
+	Make        sql.NullString `json:"make"`
+	Focallength sql.NullString `json:"focallength"`
+	Fnumber     sql.NullString `json:"fnumber"`
+	Iso         sql.NullString `json:"iso"`
+	Speed       sql.NullString `json:"speed"`
+}
+
 type Image struct {
 	ID      int64  `json:"id"`
 	Uri     string `json:"uri"`
@@ -30,4 +42,20 @@ type Image struct {
 type Ngram struct {
 	ImageID int64  `json:"image_id"`
 	Word    []byte `json:"word"`
+}
+
+type RelatedEntry struct {
+	ID             int64   `json:"id"`
+	EntryID        int64   `json:"entry_id"`
+	RelatedEntryID int64   `json:"related_entry_id"`
+	Score          float64 `json:"score"`
+}
+
+type Tfidf struct {
+	ID        int64   `json:"id"`
+	Term      string  `json:"term"`
+	EntryID   int64   `json:"entry_id"`
+	TermCount int64   `json:"term_count"`
+	Tfidf     float64 `json:"tfidf"`
+	TfidfN    float64 `json:"tfidf_n"`
 }

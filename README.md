@@ -30,7 +30,7 @@ templ generate
 ### 3. Run Server
 
 ```bash
-go run main.go
+go run .
 ```
 
 Server listens on http://localhost:5555

@@ -1,7 +1,9 @@
 package view
 
 import (
+	"fmt"
 	"strings"
+
 	"github.com/cho45/hanrangon/model"
 )
 
@@ -95,11 +97,19 @@ templ Layout(title string, content templ.Component) {
 
 templ EntryList(entries []model.Entry, nextPage string) {
 	<div class="entries">
+		{{
+			var ids []string
+			for _, e := range entries {
+				ids = append(ids, fmt.Sprintf("id=%d", e.ID))
+			}
+			similarURL := "/api/similar?" + strings.Join(ids, "&")
+		}}
+		<link rel="preload" id="preload-similar-entries" href={ templ.SafeURL(similarURL) } as="fetch" crossorigin="anonymous"/>
 		for i, e := range entries {
 			if i == 0 || !IsSameDay(entries[i-1].Date, e.Date) {
 				<div class="date"><a href={ templ.SafeURL("/" + strings.ReplaceAll(e.Date, "-", "/") + "/") }>{ strings.Replace(strings.Replace(e.Date, "-", "年 ", 1), "-", "月 ", 1) + "日" }</a></div>
 			}
-			<article>
+			<article data-id={ fmt.Sprintf("%d", e.ID) }>
 				<header>
 					{{ cleanTitle, tags := ParseTitle(e.Title) }}
 					<h2><a href={ templ.SafeURL("/" + e.Path) }>{ cleanTitle }</a></h2>
@@ -114,6 +124,7 @@ templ EntryList(entries []model.Entry, nextPage string) {
 				<div class="content">
 					@templ.Raw(e.FormattedBody)
 				</div>
+				<div class="content similar-entries"></div>
 				<footer>
 					<ul class="meta">
 						<li><a href={ templ.SafeURL("/" + e.Path) } rel="bookmark" title="Permalink">Permalink</a></li>
@@ -132,8 +143,9 @@ templ EntryList(entries []model.Entry, nextPage string) {
 
 templ EntryDetail(entry model.Entry, prev, next *model.Entry) {
 	<div class="entries">
+		<link rel="preload" id="preload-similar-entries" href={ templ.SafeURL(fmt.Sprintf("/api/similar?id=%d", entry.ID)) } as="fetch" crossorigin="anonymous"/>
 		<div class="date"><a href={ templ.SafeURL("/" + strings.ReplaceAll(entry.Date, "-", "/") + "/") }>{ strings.Replace(strings.Replace(entry.Date, "-", "年 ", 1), "-", "月 ", 1) + "日" }</a></div>
-		<article>
+		<article data-id={ fmt.Sprintf("%d", entry.ID) }>
 			<header>
 				{{ cleanTitle, tags := ParseTitle(entry.Title) }}
 				<h2><a href={ templ.SafeURL("/" + entry.Path) }>{ cleanTitle }</a></h2>
@@ -148,6 +160,7 @@ templ EntryDetail(entry model.Entry, prev, next *model.Entry) {
 			<div class="content">
 				@templ.Raw(entry.FormattedBody)
 			</div>
+			<div class="content similar-entries"></div>
 			<footer>
 				<ul class="meta">
 					<li><a href={ templ.SafeURL("/" + entry.Path) } rel="bookmark" title="Permalink">Permalink</a></li>

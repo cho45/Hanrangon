@@ -12,3 +12,14 @@ CREATE TABLE entries (
 CREATE INDEX index_date ON entries (date, path);
 CREATE INDEX index_path ON entries (path);
 CREATE INDEX index_created_at ON entries (created_at);
+
+CREATE TABLE exif (
+	uri TEXT PRIMARY KEY,
+	original_uri TEXT,
+	model TEXT,
+	make TEXT,
+	focallength TEXT,
+	fnumber TEXT,
+	iso TEXT,
+	speed TEXT
+);

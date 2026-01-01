@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
 	"path/filepath"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,8 +21,10 @@ import (
 )
 
 type App struct {
-	queries *model.Queries
-	db      *sql.DB
+	queries      *model.Queries
+	db           *sql.DB
+	tfidfQueries *model.Queries
+	tfidfDB      *sql.DB
 }
 
 func main() {
@@ -35,16 +40,24 @@ func main() {
 		log.Fatalf("failed to ping db: %v", err)
 	}
 
-	e := NewServer(config, db)
+	tfidfDB, err := sql.Open("sqlite", config.TFIDFDBPath)
+	if err != nil {
+		log.Fatalf("failed to open tfidf db: %v", err)
+	}
+	defer tfidfDB.Close()
+
+	e := NewServer(config, db, tfidfDB)
 
 	// Start server
 	e.Logger.Fatal(e.Start(":5555"))
 }
 
-func NewServer(config *Config, db *sql.DB) *echo.Echo {
+func NewServer(config *Config, db *sql.DB, tfidfDB *sql.DB) *echo.Echo {
 	app := &App{
-		queries: model.New(db),
-		db:      db,
+		queries:      model.New(db),
+		db:           db,
+		tfidfQueries: model.New(tfidfDB),
+		tfidfDB:      tfidfDB,
 	}
 
 	e := echo.New()
@@ -76,9 +89,74 @@ func NewServer(config *Config, db *sql.DB) *echo.Echo {
 	e.GET("/sitemap.xml", app.HandleSitemap)
 	e.GET("/robots.txt", app.HandleRobotsTxt)
 
+	e.GET("/api/similar", app.HandleApiSimilar)
+
 	return e
 }
 
+func (app *App) HandleApiSimilar(c echo.Context) error {
+	ctx := c.Request().Context()
+	idsParam := c.QueryParams()["id"]
+
+	result := make(map[string]string)
+
+	for _, idStr := range idsParam {
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			continue
+		}
+
+		// 1. Get related entries from tfidfDB
+		relatedRows, err := app.tfidfQueries.ListRelatedEntries(ctx, id)
+		if err != nil {
+			continue
+		}
+
+		if len(relatedRows) == 0 {
+			continue
+		}
+
+		relatedIDs := make([]int64, len(relatedRows))
+		scoreMap := make(map[int64]float64)
+		for i, r := range relatedRows {
+			relatedIDs[i] = r.RelatedEntryID
+			scoreMap[r.RelatedEntryID] = r.Score
+		}
+
+		// 2. Get entry details from main DB
+		entries, err := app.queries.ListEntriesByIds(ctx, relatedIDs)
+		if err != nil {
+			continue
+		}
+
+		// 3. Prepare data for view
+		similarEntries := make([]view.SimilarEntry, 0, len(entries))
+		for _, e := range entries {
+			similarEntries = append(similarEntries, view.SimilarEntry{
+				Entry: e,
+				Score: scoreMap[e.ID],
+			})
+		}
+
+		// Sort by score descending
+		sort.Slice(similarEntries, func(i, j int) bool {
+			return similarEntries[i].Score > similarEntries[j].Score
+		})
+
+		// 4. Render to string
+		var buf bytes.Buffer
+		if err := view.SimilarEntries(similarEntries).Render(ctx, &buf); err != nil {
+			continue
+		}
+
+		result[idStr] = buf.String()
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"result": result,
+		"ad":     "",
+	})
+}
 func (app *App) HandleRootParam(c echo.Context) error {
 	param := c.Param("param")
 	if regexp.MustCompile(`^\d{4}`).MatchString(param) {

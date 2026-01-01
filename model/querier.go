@@ -18,7 +18,9 @@ type Querier interface {
 	ListArchiveMonths(ctx context.Context) ([]ListArchiveMonthsRow, error)
 	ListEntries(ctx context.Context, arg ListEntriesParams) ([]Entry, error)
 	ListEntriesByCategory(ctx context.Context, arg ListEntriesByCategoryParams) ([]Entry, error)
+	ListEntriesByIds(ctx context.Context, ids []int64) ([]Entry, error)
 	ListEntriesByYearMonthDay(ctx context.Context, arg ListEntriesByYearMonthDayParams) ([]Entry, error)
+	ListRelatedEntries(ctx context.Context, entryID int64) ([]ListRelatedEntriesRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

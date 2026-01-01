@@ -8,6 +8,7 @@ import (
 type Config struct {
 	DataDBPath   string
 	ImagesDBPath string
+	TFIDFDBPath  string
 	StaticDir    string
 }
 
@@ -20,6 +21,7 @@ func LoadConfig() *Config {
 	cfg := &Config{
 		DataDBPath:   filepath.Join(varDir, "db", "data.db"),
 		ImagesDBPath: filepath.Join(varDir, "db", "images.db"),
+		TFIDFDBPath:  filepath.Join(varDir, "db", "tfidf.db"),
 		StaticDir:    staticDir,
 	}
 
@@ -28,6 +30,9 @@ func LoadConfig() *Config {
 	}
 	if env := os.Getenv("HANRANGON_DB_IMAGES"); env != "" {
 		cfg.ImagesDBPath = env
+	}
+	if env := os.Getenv("HANRANGON_DB_TFIDF"); env != "" {
+		cfg.TFIDFDBPath = env
 	}
 	if env := os.Getenv("HANRANGON_STATIC_DIR"); env != "" {
 		cfg.StaticDir = env
