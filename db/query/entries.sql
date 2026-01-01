@@ -1,30 +1,30 @@
 -- name: ListEntries :many
-SELECT * FROM entries
-WHERE date <= ?
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
+WHERE date <= sqlc.arg(target_date)
 ORDER BY date DESC, created_at ASC
-LIMIT ?;
+LIMIT sqlc.arg('limit');
 
 -- name: CountEntries :one
 SELECT count(*) FROM entries;
 
 -- name: GetEntryByPath :one
-SELECT * FROM entries
-WHERE path = ? LIMIT 1;
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
+WHERE path = sqlc.arg(path) LIMIT 1;
 
 -- name: ListEntriesByYearMonthDay :many
-SELECT * FROM entries
-WHERE ? <= date AND date < ?
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
+WHERE CAST(sqlc.arg(start_date) AS TEXT) <= date AND date < CAST(sqlc.arg(end_date) AS TEXT)
 ORDER BY created_at;
 
 -- name: GetPrevEntry :one
-SELECT * FROM entries
-WHERE created_at < ?
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
+WHERE created_at < sqlc.arg(created_at)
 ORDER BY created_at DESC
 LIMIT 1;
 
 -- name: GetNextEntry :one
-SELECT * FROM entries
-WHERE created_at > ?
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
+WHERE created_at > sqlc.arg(created_at)
 ORDER BY created_at ASC
 LIMIT 1;
 
@@ -38,13 +38,13 @@ GROUP BY strftime('%Y-%m', date)
 ORDER BY date DESC;
 
 -- name: ListEntriesByCategory :many
-SELECT * FROM entries
-WHERE title LIKE ? AND date <= ?
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
+WHERE title LIKE sqlc.arg(title) AND date <= sqlc.arg(target_date)
 ORDER BY date DESC, created_at ASC
-LIMIT ?;
+LIMIT sqlc.arg('limit');
 
 -- name: ListEntriesByIds :many
-SELECT * FROM entries
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
 WHERE id IN (sqlc.slice('ids'));
 
 -- name: ListAllEntriesForSitemap :many

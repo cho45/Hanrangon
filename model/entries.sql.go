@@ -23,13 +23,25 @@ func (q *Queries) CountEntries(ctx context.Context) (int64, error) {
 }
 
 const getEntryByPath = `-- name: GetEntryByPath :one
-SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at FROM entries
-WHERE path = ? LIMIT 1
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
+WHERE path = ?1 LIMIT 1
 `
 
-func (q *Queries) GetEntryByPath(ctx context.Context, path string) (Entry, error) {
+type GetEntryByPathRow struct {
+	ID            int64     `json:"id"`
+	Title         string    `json:"title"`
+	Body          string    `json:"body"`
+	FormattedBody string    `json:"formatted_body"`
+	Path          string    `json:"path"`
+	Format        string    `json:"format"`
+	Date          string    `json:"date"`
+	CreatedAt     time.Time `json:"created_at"`
+	ModifiedAt    time.Time `json:"modified_at"`
+}
+
+func (q *Queries) GetEntryByPath(ctx context.Context, path string) (GetEntryByPathRow, error) {
 	row := q.db.QueryRowContext(ctx, getEntryByPath, path)
-	var i Entry
+	var i GetEntryByPathRow
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
@@ -45,15 +57,27 @@ func (q *Queries) GetEntryByPath(ctx context.Context, path string) (Entry, error
 }
 
 const getNextEntry = `-- name: GetNextEntry :one
-SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at FROM entries
-WHERE created_at > ?
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
+WHERE created_at > ?1
 ORDER BY created_at ASC
 LIMIT 1
 `
 
-func (q *Queries) GetNextEntry(ctx context.Context, createdAt time.Time) (Entry, error) {
+type GetNextEntryRow struct {
+	ID            int64     `json:"id"`
+	Title         string    `json:"title"`
+	Body          string    `json:"body"`
+	FormattedBody string    `json:"formatted_body"`
+	Path          string    `json:"path"`
+	Format        string    `json:"format"`
+	Date          string    `json:"date"`
+	CreatedAt     time.Time `json:"created_at"`
+	ModifiedAt    time.Time `json:"modified_at"`
+}
+
+func (q *Queries) GetNextEntry(ctx context.Context, createdAt time.Time) (GetNextEntryRow, error) {
 	row := q.db.QueryRowContext(ctx, getNextEntry, createdAt)
-	var i Entry
+	var i GetNextEntryRow
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
@@ -69,15 +93,27 @@ func (q *Queries) GetNextEntry(ctx context.Context, createdAt time.Time) (Entry,
 }
 
 const getPrevEntry = `-- name: GetPrevEntry :one
-SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at FROM entries
-WHERE created_at < ?
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
+WHERE created_at < ?1
 ORDER BY created_at DESC
 LIMIT 1
 `
 
-func (q *Queries) GetPrevEntry(ctx context.Context, createdAt time.Time) (Entry, error) {
+type GetPrevEntryRow struct {
+	ID            int64     `json:"id"`
+	Title         string    `json:"title"`
+	Body          string    `json:"body"`
+	FormattedBody string    `json:"formatted_body"`
+	Path          string    `json:"path"`
+	Format        string    `json:"format"`
+	Date          string    `json:"date"`
+	CreatedAt     time.Time `json:"created_at"`
+	ModifiedAt    time.Time `json:"modified_at"`
+}
+
+func (q *Queries) GetPrevEntry(ctx context.Context, createdAt time.Time) (GetPrevEntryRow, error) {
 	row := q.db.QueryRowContext(ctx, getPrevEntry, createdAt)
-	var i Entry
+	var i GetPrevEntryRow
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
@@ -165,26 +201,38 @@ func (q *Queries) ListArchiveMonths(ctx context.Context) ([]ListArchiveMonthsRow
 }
 
 const listEntries = `-- name: ListEntries :many
-SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at FROM entries
-WHERE date <= ?
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
+WHERE date <= ?1
 ORDER BY date DESC, created_at ASC
-LIMIT ?
+LIMIT ?2
 `
 
 type ListEntriesParams struct {
-	Date  string `json:"date"`
-	Limit int64  `json:"limit"`
+	TargetDate string `json:"target_date"`
+	Limit      int64  `json:"limit"`
 }
 
-func (q *Queries) ListEntries(ctx context.Context, arg ListEntriesParams) ([]Entry, error) {
-	rows, err := q.db.QueryContext(ctx, listEntries, arg.Date, arg.Limit)
+type ListEntriesRow struct {
+	ID            int64     `json:"id"`
+	Title         string    `json:"title"`
+	Body          string    `json:"body"`
+	FormattedBody string    `json:"formatted_body"`
+	Path          string    `json:"path"`
+	Format        string    `json:"format"`
+	Date          string    `json:"date"`
+	CreatedAt     time.Time `json:"created_at"`
+	ModifiedAt    time.Time `json:"modified_at"`
+}
+
+func (q *Queries) ListEntries(ctx context.Context, arg ListEntriesParams) ([]ListEntriesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listEntries, arg.TargetDate, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Entry
+	var items []ListEntriesRow
 	for rows.Next() {
-		var i Entry
+		var i ListEntriesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
@@ -210,27 +258,39 @@ func (q *Queries) ListEntries(ctx context.Context, arg ListEntriesParams) ([]Ent
 }
 
 const listEntriesByCategory = `-- name: ListEntriesByCategory :many
-SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at FROM entries
-WHERE title LIKE ? AND date <= ?
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
+WHERE title LIKE ?1 AND date <= ?2
 ORDER BY date DESC, created_at ASC
-LIMIT ?
+LIMIT ?3
 `
 
 type ListEntriesByCategoryParams struct {
-	Title string `json:"title"`
-	Date  string `json:"date"`
-	Limit int64  `json:"limit"`
+	Title      string `json:"title"`
+	TargetDate string `json:"target_date"`
+	Limit      int64  `json:"limit"`
 }
 
-func (q *Queries) ListEntriesByCategory(ctx context.Context, arg ListEntriesByCategoryParams) ([]Entry, error) {
-	rows, err := q.db.QueryContext(ctx, listEntriesByCategory, arg.Title, arg.Date, arg.Limit)
+type ListEntriesByCategoryRow struct {
+	ID            int64     `json:"id"`
+	Title         string    `json:"title"`
+	Body          string    `json:"body"`
+	FormattedBody string    `json:"formatted_body"`
+	Path          string    `json:"path"`
+	Format        string    `json:"format"`
+	Date          string    `json:"date"`
+	CreatedAt     time.Time `json:"created_at"`
+	ModifiedAt    time.Time `json:"modified_at"`
+}
+
+func (q *Queries) ListEntriesByCategory(ctx context.Context, arg ListEntriesByCategoryParams) ([]ListEntriesByCategoryRow, error) {
+	rows, err := q.db.QueryContext(ctx, listEntriesByCategory, arg.Title, arg.TargetDate, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Entry
+	var items []ListEntriesByCategoryRow
 	for rows.Next() {
-		var i Entry
+		var i ListEntriesByCategoryRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
@@ -256,11 +316,23 @@ func (q *Queries) ListEntriesByCategory(ctx context.Context, arg ListEntriesByCa
 }
 
 const listEntriesByIds = `-- name: ListEntriesByIds :many
-SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at FROM entries
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
 WHERE id IN (/*SLICE:ids*/?)
 `
 
-func (q *Queries) ListEntriesByIds(ctx context.Context, ids []int64) ([]Entry, error) {
+type ListEntriesByIdsRow struct {
+	ID            int64     `json:"id"`
+	Title         string    `json:"title"`
+	Body          string    `json:"body"`
+	FormattedBody string    `json:"formatted_body"`
+	Path          string    `json:"path"`
+	Format        string    `json:"format"`
+	Date          string    `json:"date"`
+	CreatedAt     time.Time `json:"created_at"`
+	ModifiedAt    time.Time `json:"modified_at"`
+}
+
+func (q *Queries) ListEntriesByIds(ctx context.Context, ids []int64) ([]ListEntriesByIdsRow, error) {
 	query := listEntriesByIds
 	var queryParams []interface{}
 	if len(ids) > 0 {
@@ -276,9 +348,9 @@ func (q *Queries) ListEntriesByIds(ctx context.Context, ids []int64) ([]Entry, e
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Entry
+	var items []ListEntriesByIdsRow
 	for rows.Next() {
-		var i Entry
+		var i ListEntriesByIdsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
@@ -304,25 +376,37 @@ func (q *Queries) ListEntriesByIds(ctx context.Context, ids []int64) ([]Entry, e
 }
 
 const listEntriesByYearMonthDay = `-- name: ListEntriesByYearMonthDay :many
-SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at FROM entries
-WHERE ? <= date AND date < ?
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
+WHERE CAST(?1 AS TEXT) <= date AND date < CAST(?2 AS TEXT)
 ORDER BY created_at
 `
 
 type ListEntriesByYearMonthDayParams struct {
-	Date   string `json:"date"`
-	Date_2 string `json:"date_2"`
+	StartDate string `json:"start_date"`
+	EndDate   string `json:"end_date"`
 }
 
-func (q *Queries) ListEntriesByYearMonthDay(ctx context.Context, arg ListEntriesByYearMonthDayParams) ([]Entry, error) {
-	rows, err := q.db.QueryContext(ctx, listEntriesByYearMonthDay, arg.Date, arg.Date_2)
+type ListEntriesByYearMonthDayRow struct {
+	ID            int64     `json:"id"`
+	Title         string    `json:"title"`
+	Body          string    `json:"body"`
+	FormattedBody string    `json:"formatted_body"`
+	Path          string    `json:"path"`
+	Format        string    `json:"format"`
+	Date          string    `json:"date"`
+	CreatedAt     time.Time `json:"created_at"`
+	ModifiedAt    time.Time `json:"modified_at"`
+}
+
+func (q *Queries) ListEntriesByYearMonthDay(ctx context.Context, arg ListEntriesByYearMonthDayParams) ([]ListEntriesByYearMonthDayRow, error) {
+	rows, err := q.db.QueryContext(ctx, listEntriesByYearMonthDay, arg.StartDate, arg.EndDate)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Entry
+	var items []ListEntriesByYearMonthDayRow
 	for rows.Next() {
-		var i Entry
+		var i ListEntriesByYearMonthDayRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,

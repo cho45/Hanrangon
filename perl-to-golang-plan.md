@@ -15,7 +15,6 @@ Nogag (Perl/PSGI) プロジェクトを、**軽量・モダン・シングルバ
 | :--- | :--- | :--- |
 | **言語** | Go (Golang) | 省メモリ、シングルバイナリ、並行処理の容易さ。 |
 | **Webフレームワーク** | `labstack/echo` または標準 `net/http` | 軽量かつ必要十分な機能。 |
-| **DBドライバ** | `modernc.org/sqlite` | CGO不要 (Pure Go) なため、クロスコンパイルが容易でポータブル。 |
 | **ORM / Query Builder** | `sqlc` | SQLファイルから型安全なGoコードを生成。実行時オーバーヘッドが皆無。 |
 | **テンプレート** | `a-h/templ` | Goコードとしてコンパイルされる型安全なテンプレート。高速かつ堅牢。 |
 | **ジョブキュー** | Go Native (Goroutine + SQLite) | `TheSchwartz` (Perl) を廃止し、アプリ内蔵の軽量キューシステムを実装。 |
@@ -54,7 +53,6 @@ Nogag (Perl/PSGI) プロジェクトを、**軽量・モダン・シングルバ
 
 ### 6. 外部ランタイム (Node.js)
 *   **MathJax / Syntax Highlight:**
-    *   Syntax Highlight は `chroma` (Pure Go) で置換し、Node.js依存を排除可能か検討。
     *   MathJax (数式) は代替が難しいため、Node.jsスクリプト (`script/postprocess-js-daemon.js` のロジックの一部) を「CLIツール」として再構築。
     *   Goから `exec.Command` で都度実行する形に変更し、メモリ常駐デーモンを撤廃。
     *   サーバーには `node` バイナリだけあれば良い（`npm install` 不要な単一スクリプトにするのが望ましい）。

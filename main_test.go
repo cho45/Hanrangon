@@ -9,14 +9,14 @@ import (
 	"strings"
 	"testing"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func setupTestDB(t *testing.T) (*sql.DB, *sql.DB) {
 	t.Helper()
 
 	// Main DB
-	db, err := sql.Open("sqlite", ":memory:")
+	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatalf("failed to open memory db: %v", err)
 	}
@@ -29,7 +29,7 @@ func setupTestDB(t *testing.T) (*sql.DB, *sql.DB) {
 	}
 
 	// TFIDF DB
-	tfidfDB, err := sql.Open("sqlite", ":memory:")
+	tfidfDB, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatalf("failed to open memory tfidf db: %v", err)
 	}

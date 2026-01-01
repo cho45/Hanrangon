@@ -11,15 +11,15 @@ import (
 
 type Querier interface {
 	CountEntries(ctx context.Context) (int64, error)
-	GetEntryByPath(ctx context.Context, path string) (Entry, error)
-	GetNextEntry(ctx context.Context, createdAt time.Time) (Entry, error)
-	GetPrevEntry(ctx context.Context, createdAt time.Time) (Entry, error)
+	GetEntryByPath(ctx context.Context, path string) (GetEntryByPathRow, error)
+	GetNextEntry(ctx context.Context, createdAt time.Time) (GetNextEntryRow, error)
+	GetPrevEntry(ctx context.Context, createdAt time.Time) (GetPrevEntryRow, error)
 	ListAllEntriesForSitemap(ctx context.Context) ([]ListAllEntriesForSitemapRow, error)
 	ListArchiveMonths(ctx context.Context) ([]ListArchiveMonthsRow, error)
-	ListEntries(ctx context.Context, arg ListEntriesParams) ([]Entry, error)
-	ListEntriesByCategory(ctx context.Context, arg ListEntriesByCategoryParams) ([]Entry, error)
-	ListEntriesByIds(ctx context.Context, ids []int64) ([]Entry, error)
-	ListEntriesByYearMonthDay(ctx context.Context, arg ListEntriesByYearMonthDayParams) ([]Entry, error)
+	ListEntries(ctx context.Context, arg ListEntriesParams) ([]ListEntriesRow, error)
+	ListEntriesByCategory(ctx context.Context, arg ListEntriesByCategoryParams) ([]ListEntriesByCategoryRow, error)
+	ListEntriesByIds(ctx context.Context, ids []int64) ([]ListEntriesByIdsRow, error)
+	ListEntriesByYearMonthDay(ctx context.Context, arg ListEntriesByYearMonthDayParams) ([]ListEntriesByYearMonthDayRow, error)
 	ListRelatedEntries(ctx context.Context, entryID int64) ([]ListRelatedEntriesRow, error)
 }
 

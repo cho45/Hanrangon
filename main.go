@@ -17,7 +17,7 @@ import (
 	"github.com/cho45/hanrangon/view"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	_ "modernc.org/sqlite"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type App struct {
@@ -30,7 +30,7 @@ type App struct {
 func main() {
 	config := LoadConfig()
 
-	db, err := sql.Open("sqlite", config.DataDBPath)
+	db, err := sql.Open("sqlite3", config.DataDBPath)
 	if err != nil {
 		log.Fatalf("failed to open db: %v", err)
 	}
@@ -40,7 +40,7 @@ func main() {
 		log.Fatalf("failed to ping db: %v", err)
 	}
 
-	tfidfDB, err := sql.Open("sqlite", config.TFIDFDBPath)
+	tfidfDB, err := sql.Open("sqlite3", config.TFIDFDBPath)
 	if err != nil {
 		log.Fatalf("failed to open tfidf db: %v", err)
 	}
@@ -94,72 +94,9 @@ func NewServer(config *Config, db *sql.DB, tfidfDB *sql.DB) *echo.Echo {
 	return e
 }
 
-func (app *App) HandleApiSimilar(c echo.Context) error {
-	ctx := c.Request().Context()
-	idsParam := c.QueryParams()["id"]
-
-	result := make(map[string]string)
-
-	for _, idStr := range idsParam {
-		id, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-			continue
-		}
-
-		// 1. Get related entries from tfidfDB
-		relatedRows, err := app.tfidfQueries.ListRelatedEntries(ctx, id)
-		if err != nil {
-			continue
-		}
-
-		if len(relatedRows) == 0 {
-			continue
-		}
-
-		relatedIDs := make([]int64, len(relatedRows))
-		scoreMap := make(map[int64]float64)
-		for i, r := range relatedRows {
-			relatedIDs[i] = r.RelatedEntryID
-			scoreMap[r.RelatedEntryID] = r.Score
-		}
-
-		// 2. Get entry details from main DB
-		entries, err := app.queries.ListEntriesByIds(ctx, relatedIDs)
-		if err != nil {
-			continue
-		}
-
-		// 3. Prepare data for view
-		similarEntries := make([]view.SimilarEntry, 0, len(entries))
-		for _, e := range entries {
-			similarEntries = append(similarEntries, view.SimilarEntry{
-				Entry: e,
-				Score: scoreMap[e.ID],
-			})
-		}
-
-		// Sort by score descending
-		sort.Slice(similarEntries, func(i, j int) bool {
-			return similarEntries[i].Score > similarEntries[j].Score
-		})
-
-		// 4. Render to string
-		var buf bytes.Buffer
-		if err := view.SimilarEntries(similarEntries).Render(ctx, &buf); err != nil {
-			continue
-		}
-
-		result[idStr] = buf.String()
-	}
-
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"result": result,
-		"ad":     "",
-	})
-}
 func (app *App) HandleRootParam(c echo.Context) error {
 	param := c.Param("param")
-	if regexp.MustCompile(`^\d{4}`).MatchString(param) {
+	if regexp.MustCompile(`^\d{4}$`).MatchString(param) {
 		// It's a year archive
 		c.SetParamNames("yyyy")
 		c.SetParamValues(param)
@@ -169,92 +106,6 @@ func (app *App) HandleRootParam(c echo.Context) error {
 	c.SetParamNames("category")
 	c.SetParamValues(param)
 	return app.HandleCategory(c)
-}
-
-func (app *App) HandleFeed(c echo.Context) error {
-	ctx := c.Request().Context()
-
-	entries, err := app.queries.ListEntries(ctx, model.ListEntriesParams{
-		Date:  time.Now().Format("2006-01-02"),
-		Limit: 20,
-	})
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
-	}
-
-	updated := time.Now()
-	if len(entries) > 0 {
-		updated = entries[0].ModifiedAt
-	}
-
-	c.Response().Header().Set(echo.HeaderContentType, "application/atom+xml; charset=utf-8")
-	return view.Feed(entries, updated).Render(ctx, c.Response())
-}
-
-func (app *App) HandleSitemap(c echo.Context) error {
-	ctx := c.Request().Context()
-
-	entries, err := app.queries.ListAllEntriesForSitemap(ctx)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
-	}
-
-	c.Response().Header().Set(echo.HeaderContentType, "application/xml; charset=utf-8")
-	return view.Sitemap(entries).Render(ctx, c.Response())
-}
-
-func (app *App) HandleRobotsTxt(c echo.Context) error {
-	// Static content for robots.txt
-	content := `User-agent: *
-Disallow: /admin/
-Disallow: /login
-Disallow: /edit
-Disallow: /api/
-Sitemap: https://lowreal.net/sitemap.xml
-`
-	return c.String(http.StatusOK, content)
-}
-
-func (app *App) HandleCategory(c echo.Context) error {
-	ctx := c.Request().Context()
-	category := c.Param("category")
-
-	// ページネーションパラメータの取得
-	dateStr := c.Param("date")
-	limit := 10 // Default limit
-
-	var targetDate time.Time
-	if dateStr != "" {
-		var err error
-		targetDate, err = time.Parse("20060102", dateStr)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, "Invalid date format").SetInternal(err)
-		}
-	} else {
-		targetDate = time.Now()
-	}
-
-	fetchLimit := limit + 1
-
-	entries, err := app.queries.ListEntriesByCategory(ctx, model.ListEntriesByCategoryParams{
-		Title: fmt.Sprintf("%%[%s]%%", category),
-		Date:  targetDate.Format("2006-01-02"),
-		Limit: int64(fetchLimit),
-	})
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
-	}
-
-	var nextPage string
-	if len(entries) > limit {
-		lastEntry := entries[len(entries)-1]
-		entries = entries[:limit]
-
-		// Date is already "YYYY-MM-DD" string
-		nextDate := strings.ReplaceAll(lastEntry.Date, "-", "")
-		nextPage = fmt.Sprintf("/%s/.page/%s/%d", category, nextDate, limit)
-	}
-	return view.Index(entries, nextPage).Render(ctx, c.Response())
 }
 
 func (app *App) HandleDateArchive(c echo.Context) error {
@@ -291,16 +142,17 @@ func (app *App) HandleDateArchive(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid date format").SetInternal(err)
 	}
 
-	startStr := start.Format("2006-01-02")
-	endStr := end.Format("2006-01-02")
-	fmt.Printf("HandleDateArchive: start=%s, end=%s\n", startStr, endStr)
-
-	entries, err := app.queries.ListEntriesByYearMonthDay(ctx, model.ListEntriesByYearMonthDayParams{
-		Date:   startStr,
-		Date_2: endStr,
+	rows, err := app.queries.ListEntriesByYearMonthDay(ctx, model.ListEntriesByYearMonthDayParams{
+		StartDate: start.Format("2006-01-02"),
+		EndDate:   end.Format("2006-01-02"),
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
+	}
+
+	entries := make([]model.Entry, len(rows))
+	for i, r := range rows {
+		entries[i] = model.Entry(r)
 	}
 
 	return view.Index(entries, "").Render(ctx, c.Response())
@@ -339,25 +191,31 @@ func (app *App) HandleIndex(c echo.Context) error {
 	fetchLimit := limit + 1
 
 	// 記事を取得
-	entries, err := app.queries.ListEntries(ctx, model.ListEntriesParams{
-		Date:  targetDate.Format("2006-01-02"),
-		Limit: int64(fetchLimit),
+	rows, err := app.queries.ListEntries(ctx, model.ListEntriesParams{
+		TargetDate: targetDate.Format("2006-01-02"),
+		Limit:      int64(fetchLimit),
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
 	}
 
 	var nextPage string
-	if len(entries) > limit {
+	if len(rows) > limit {
 		// 次ページがある場合
-		lastEntry := entries[len(entries)-1]
+		lastRow := rows[len(rows)-1]
 		// 表示用からは削除
-		entries = entries[:limit]
+		rows = rows[:limit]
 
 		// 次ページのURLを生成 (例: /.page/20251230/10)
-		nextDate := strings.ReplaceAll(lastEntry.Date, "-", "")
+		nextDate := strings.ReplaceAll(lastRow.Date, "-", "")
 		nextPage = fmt.Sprintf("/.page/%s/%d", nextDate, limit)
 	}
+
+	entries := make([]model.Entry, len(rows))
+	for i, r := range rows {
+		entries[i] = model.Entry(r)
+	}
+
 	// HTMLレンダリング
 	return view.Index(entries, nextPage).Render(ctx, c.Response())
 }
@@ -371,7 +229,7 @@ func (app *App) HandleEntry(c echo.Context) error {
 
 	path := fmt.Sprintf("%s/%s/%s/%s", yyyy, mm, dd, n)
 
-	entry, err := app.queries.GetEntryByPath(ctx, path)
+	row, err := app.queries.GetEntryByPath(ctx, path)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
@@ -379,23 +237,188 @@ func (app *App) HandleEntry(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entry").SetInternal(err)
 	}
 
-	prev, err := app.queries.GetPrevEntry(ctx, entry.CreatedAt)
+	entry := model.Entry(row)
+
+	prevRow, err := app.queries.GetPrevEntry(ctx, entry.CreatedAt)
 	if err != nil && err != sql.ErrNoRows {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch prev entry").SetInternal(err)
 	}
 	var prevPtr *model.Entry
 	if err == nil {
-		prevPtr = &prev
+		p := model.Entry(prevRow)
+		prevPtr = &p
 	}
 
-	next, err := app.queries.GetNextEntry(ctx, entry.CreatedAt)
+	nextRow, err := app.queries.GetNextEntry(ctx, entry.CreatedAt)
 	if err != nil && err != sql.ErrNoRows {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch next entry").SetInternal(err)
 	}
 	var nextPtr *model.Entry
 	if err == nil {
-		nextPtr = &next
+		n := model.Entry(nextRow)
+		nextPtr = &n
 	}
 
 	return view.Entry(entry, prevPtr, nextPtr).Render(ctx, c.Response())
+}
+
+func (app *App) HandleCategory(c echo.Context) error {
+	ctx := c.Request().Context()
+	category := c.Param("category")
+
+	// ページネーションパラメータの取得
+	dateStr := c.Param("date")
+	limit := 10 // Default limit
+
+	var targetDate time.Time
+	if dateStr != "" {
+		var err error
+		targetDate, err = time.Parse("20060102", dateStr)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "Invalid date format").SetInternal(err)
+		}
+	} else {
+		targetDate = time.Now()
+	}
+
+	fetchLimit := limit + 1
+
+	rows, err := app.queries.ListEntriesByCategory(ctx, model.ListEntriesByCategoryParams{
+		Title:      fmt.Sprintf("%%[%s]%%", category),
+		TargetDate: targetDate.Format("2006-01-02"),
+		Limit:      int64(fetchLimit),
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
+	}
+
+	var nextPage string
+	if len(rows) > limit {
+		lastRow := rows[len(rows)-1]
+		rows = rows[:limit]
+
+		nextDate := strings.ReplaceAll(lastRow.Date, "-", "")
+		nextPage = fmt.Sprintf("/%s/.page/%s/%d", category, nextDate, limit)
+	}
+
+	entries := make([]model.Entry, len(rows))
+	for i, r := range rows {
+		entries[i] = model.Entry(r)
+	}
+
+	return view.Index(entries, nextPage).Render(ctx, c.Response())
+}
+
+func (app *App) HandleFeed(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	rows, err := app.queries.ListEntries(ctx, model.ListEntriesParams{
+		TargetDate: time.Now().Format("2006-01-02"),
+		Limit:      20,
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
+	}
+
+	entries := make([]model.Entry, len(rows))
+	for i, r := range rows {
+		entries[i] = model.Entry(r)
+	}
+
+	updated := time.Now()
+	if len(entries) > 0 {
+		updated = entries[0].ModifiedAt
+	}
+
+	c.Response().Header().Set(echo.HeaderContentType, "application/atom+xml; charset=utf-8")
+	return view.Feed(entries, updated).Render(ctx, c.Response())
+}
+
+func (app *App) HandleSitemap(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	entries, err := app.queries.ListAllEntriesForSitemap(ctx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
+	}
+
+	c.Response().Header().Set(echo.HeaderContentType, "application/xml; charset=utf-8")
+	return view.Sitemap(entries).Render(ctx, c.Response())
+}
+
+func (app *App) HandleRobotsTxt(c echo.Context) error {
+	// Static content for robots.txt
+	content := `User-agent: *
+Disallow: /admin/
+Disallow: /login
+Disallow: /edit
+Disallow: /api/
+Sitemap: https://lowreal.net/sitemap.xml
+`
+	return c.String(http.StatusOK, content)
+}
+
+func (app *App) HandleApiSimilar(c echo.Context) error {
+	ctx := c.Request().Context()
+	idsParam := c.QueryParams()["id"]
+
+	result := make(map[string]string)
+
+	for _, idStr := range idsParam {
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			continue
+		}
+
+		// 1. Get related entries from tfidfDB
+		relatedRows, err := app.tfidfQueries.ListRelatedEntries(ctx, id)
+		if err != nil {
+			continue
+		}
+
+		if len(relatedRows) == 0 {
+			continue
+		}
+
+		relatedIDs := make([]int64, len(relatedRows))
+		scoreMap := make(map[int64]float64)
+		for i, r := range relatedRows {
+			relatedIDs[i] = r.RelatedEntryID
+			scoreMap[r.RelatedEntryID] = r.Score
+		}
+
+		// 2. Get entry details from main DB
+		rows, err := app.queries.ListEntriesByIds(ctx, relatedIDs)
+		if err != nil {
+			continue
+		}
+
+		// 3. Prepare data for view
+		similarEntries := make([]view.SimilarEntry, 0, len(rows))
+		for _, r := range rows {
+			e := model.Entry(r)
+			similarEntries = append(similarEntries, view.SimilarEntry{
+				Entry: e,
+				Score: scoreMap[e.ID],
+			})
+		}
+
+		// Sort by score descending
+		sort.Slice(similarEntries, func(i, j int) bool {
+			return similarEntries[i].Score > similarEntries[j].Score
+		})
+
+		// 4. Render to string
+		var buf bytes.Buffer
+		if err := view.SimilarEntries(similarEntries).Render(ctx, &buf); err != nil {
+			continue
+		}
+
+		result[idStr] = buf.String()
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"result": result,
+		"ad":     "",
+	})
 }
