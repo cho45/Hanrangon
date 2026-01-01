@@ -1,22 +1,25 @@
 package main
 
 import (
+	"log"
 	"os"
 	"path/filepath"
+
+	"github.com/BurntSushi/toml"
 )
 
 type Config struct {
-	DataDBPath   string
-	ImagesDBPath string
-	TFIDFDBPath  string
-	StaticDir    string
+	DataDBPath   string `toml:"data_db_path"`
+	ImagesDBPath string `toml:"images_db_path"`
+	TFIDFDBPath  string `toml:"tfidf_db_path"`
+	StaticDir    string `toml:"static_dir"`
 }
 
 func LoadConfig() *Config {
-	// Default paths
+	// Default values
 	wd, _ := os.Getwd()
 	varDir := filepath.Join(wd, "var")
-	staticDir := filepath.Join(wd, "static") // Dev default
+	staticDir := filepath.Join(wd, "static")
 
 	cfg := &Config{
 		DataDBPath:   filepath.Join(varDir, "db", "data.db"),
@@ -25,6 +28,17 @@ func LoadConfig() *Config {
 		StaticDir:    staticDir,
 	}
 
+	// 1. Load from TOML (mandatory)
+	configPath := os.Getenv("HANRANGON_CONFIG")
+	if configPath == "" {
+		configPath = "config.toml"
+	}
+
+	if _, err := toml.DecodeFile(configPath, cfg); err != nil {
+		log.Fatalf("Fatal: failed to load config from %s: %v", configPath, err)
+	}
+
+	// 2. Override with individual environment variables (for backward compatibility)
 	if env := os.Getenv("HANRANGON_DB_DATA"); env != "" {
 		cfg.DataDBPath = env
 	}

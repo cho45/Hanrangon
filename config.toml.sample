@@ -1,0 +1,6 @@
+# Hanrangon Configuration Sample
+
+data_db_path = "var/db/data.db"
+images_db_path = "var/db/images.db"
+tfidf_db_path = "var/db/tfidf.db"
+static_dir = "static"
