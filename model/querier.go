@@ -12,11 +12,18 @@ import (
 type Querier interface {
 	CountEntries(ctx context.Context) (int64, error)
 	CountEntriesByDate(ctx context.Context, date string) (int64, error)
+	CountPendingJobs(ctx context.Context) (int64, error)
 	CreateEntry(ctx context.Context, arg CreateEntryParams) (Entry, error)
+	EnqueueJob(ctx context.Context, arg EnqueueJobParams) (Job, error)
+	FindNextJob(ctx context.Context, runAfter time.Time) (Job, error)
 	GetEntryById(ctx context.Context, id int64) (GetEntryByIdRow, error)
 	GetEntryByPath(ctx context.Context, path string) (GetEntryByPathRow, error)
+	GetJobByID(ctx context.Context, id int64) (Job, error)
+	GetJobTypeByID(ctx context.Context, id int64) (JobType, error)
 	GetNextEntry(ctx context.Context, createdAt time.Time) (GetNextEntryRow, error)
+	GetOrCreateJobType(ctx context.Context, name string) (JobType, error)
 	GetPrevEntry(ctx context.Context, createdAt time.Time) (GetPrevEntryRow, error)
+	GrabJob(ctx context.Context, arg GrabJobParams) error
 	ListAllEntriesForSitemap(ctx context.Context) ([]ListAllEntriesForSitemapRow, error)
 	ListArchiveMonths(ctx context.Context) ([]ListArchiveMonthsRow, error)
 	// Note: sqlite3 driver converts DATE to time.Time by default, which is undesirable for
@@ -30,6 +37,8 @@ type Querier interface {
 	ListEntriesByYearMonthDay(ctx context.Context, arg ListEntriesByYearMonthDayParams) ([]ListEntriesByYearMonthDayRow, error)
 	ListRelatedEntries(ctx context.Context, entryID int64) ([]ListRelatedEntriesRow, error)
 	ListUniqueDates(ctx context.Context, arg ListUniqueDatesParams) ([]string, error)
+	MarkJobCompleted(ctx context.Context, id int64) error
+	MarkJobFailed(ctx context.Context, arg MarkJobFailedParams) error
 	UpdateEntry(ctx context.Context, arg UpdateEntryParams) (Entry, error)
 }
 

@@ -12,6 +12,7 @@ type Config struct {
 	DataDBPath    string `toml:"data_db_path"`
 	ImagesDBPath  string `toml:"images_db_path"`
 	TFIDFDBPath   string `toml:"tfidf_db_path"`
+	WorkerDBPath  string `toml:"worker_db_path"`
 	StaticDir     string `toml:"static_dir"`
 	Username      string `toml:"username"`
 	Password      string `toml:"password"`
@@ -28,6 +29,7 @@ func LoadConfig() *Config {
 		DataDBPath:    filepath.Join(varDir, "db", "data.db"),
 		ImagesDBPath:  filepath.Join(varDir, "db", "images.db"),
 		TFIDFDBPath:   filepath.Join(varDir, "db", "tfidf.db"),
+		WorkerDBPath:  filepath.Join(varDir, "db", "worker.db"),
 		StaticDir:     staticDir,
 		SessionSecret: "change-me-please", // Default secret
 	}
@@ -50,6 +52,9 @@ func LoadConfig() *Config {
 	}
 	if env := os.Getenv("HANRANGON_DB_TFIDF"); env != "" {
 		cfg.TFIDFDBPath = env
+	}
+	if env := os.Getenv("HANRANGON_DB_WORKER"); env != "" {
+		cfg.WorkerDBPath = env
 	}
 	if env := os.Getenv("HANRANGON_STATIC_DIR"); env != "" {
 		cfg.StaticDir = env

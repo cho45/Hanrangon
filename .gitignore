@@ -18,3 +18,5 @@ var/
 # old reference
 Nogag
 config.toml
+Text-Xatena
+xatena-go

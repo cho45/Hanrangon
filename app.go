@@ -11,20 +11,24 @@ import (
 )
 
 type App struct {
-	queries      *model.Queries
-	db           *sql.DB
-	tfidfQueries *model.Queries
-	tfidfDB      *sql.DB
-	config       *Config
+	queries       *model.Queries
+	db            *sql.DB
+	tfidfQueries  *model.Queries
+	tfidfDB       *sql.DB
+	workerQueries *model.Queries
+	workerDB      *sql.DB
+	config        *Config
 }
 
-func NewApp(config *Config, db *sql.DB, tfidfDB *sql.DB) *App {
+func NewApp(config *Config, db *sql.DB, tfidfDB *sql.DB, workerDB *sql.DB) *App {
 	return &App{
-		queries:      model.New(db),
-		db:           db,
-		tfidfQueries: model.New(tfidfDB),
-		tfidfDB:      tfidfDB,
-		config:       config,
+		queries:       model.New(db),
+		db:            db,
+		tfidfQueries:  model.New(tfidfDB),
+		tfidfDB:       tfidfDB,
+		workerQueries: model.New(workerDB),
+		workerDB:      workerDB,
+		config:        config,
 	}
 }
 

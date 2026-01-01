@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"path/filepath"
 
+	"github.com/cho45/hanrangon/jobqueue"
+	"github.com/cho45/hanrangon/jobs"
+	"github.com/cho45/hanrangon/model"
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
@@ -15,11 +19,15 @@ import (
 func main() {
 	config := LoadConfig()
 
+	// データベース接続
 	db, err := sql.Open("sqlite3", config.DataDBPath)
 	if err != nil {
 		log.Fatalf("failed to open db: %v", err)
 	}
 	defer db.Close()
+	db.SetMaxOpenConns(25)
+	db.Exec("PRAGMA journal_mode=WAL")
+	db.Exec("PRAGMA synchronous=NORMAL")
 
 	if err := db.Ping(); err != nil {
 		log.Fatalf("failed to ping db: %v", err)
@@ -30,15 +38,34 @@ func main() {
 		log.Fatalf("failed to open tfidf db: %v", err)
 	}
 	defer tfidfDB.Close()
+	tfidfDB.SetMaxOpenConns(25)
+	tfidfDB.Exec("PRAGMA journal_mode=WAL")
+	tfidfDB.Exec("PRAGMA synchronous=NORMAL")
 
-	e := NewServer(config, db, tfidfDB)
+	workerDB, err := sql.Open("sqlite3", config.WorkerDBPath)
+	if err != nil {
+		log.Fatalf("failed to open worker db: %v", err)
+	}
+	defer workerDB.Close()
+	workerDB.SetMaxOpenConns(25)
+	workerDB.Exec("PRAGMA journal_mode=WAL")
+	workerDB.Exec("PRAGMA synchronous=NORMAL")
+
+	// ジョブキュー起動
+	registry := jobqueue.NewRegistry()
+	registry.Register(jobs.NewSimpleJob())
+
+	queue := jobqueue.NewQueue(workerDB, model.New(workerDB), registry)
+	queue.Start(context.Background())
+
+	e := NewServer(config, db, tfidfDB, workerDB)
 
 	// Start server
 	e.Logger.Fatal(e.Start(":5555"))
 }
 
-func NewServer(config *Config, db *sql.DB, tfidfDB *sql.DB) *echo.Echo {
-	app := NewApp(config, db, tfidfDB)
+func NewServer(config *Config, db *sql.DB, tfidfDB *sql.DB, workerDB *sql.DB) *echo.Echo {
+	app := NewApp(config, db, tfidfDB, workerDB)
 
 	e := echo.New()
 	e.HideBanner = true

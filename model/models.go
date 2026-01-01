@@ -39,6 +39,25 @@ type Image struct {
 	Sig     []byte `json:"sig"`
 }
 
+type Job struct {
+	ID           int64          `json:"id"`
+	JobTypeID    int64          `json:"job_type_id"`
+	Arg          string         `json:"arg"`
+	Uniqkey      sql.NullString `json:"uniqkey"`
+	RetryCount   int64          `json:"retry_count"`
+	MaxRetries   int64          `json:"max_retries"`
+	CreatedAt    time.Time      `json:"created_at"`
+	RunAfter     time.Time      `json:"run_after"`
+	GrabbedAt    sql.NullTime   `json:"grabbed_at"`
+	Status       string         `json:"status"`
+	ErrorMessage sql.NullString `json:"error_message"`
+}
+
+type JobType struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
 type Ngram struct {
 	ImageID int64  `json:"image_id"`
 	Word    []byte `json:"word"`

@@ -12,7 +12,7 @@ goimports -w path/to/file.go
 ```
 
 ### 2. Testing
-`modernc.org/sqlite` のインメモリモード (`:memory:`) を使用して統合テストを行う。スキーマファイルは `db/schema/` から読み込む。
+インメモリモード (`:memory:`) を使用して統合テストを行う。スキーマファイルは `db/schema/` から読み込む。
 
 ```bash
 go test ./...
