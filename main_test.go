@@ -8,7 +8,9 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/cho45/hanrangon/model"
 	"github.com/labstack/echo/v4"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -436,4 +438,40 @@ func TestLoadConfig(t *testing.T) {
 	if cfg.StaticDir != "from_env_static" {
 		t.Errorf("want from_env_static (override), got %s", cfg.StaticDir)
 	}
+}
+
+func TestHandleApiEdit(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	t.Run("Create new entry with auto path", func(t *testing.T) {
+		payload := `{"title":"New Entry", "body":"Hello <![CDATA[<b>world</b>]]>", "format":"HTML"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/edit", strings.NewReader(payload))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		env.server.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("want status 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+
+		var entry model.Entry
+		if err := json.Unmarshal(rec.Body.Bytes(), &entry); err != nil {
+			t.Fatalf("failed to unmarshal response: %v", err)
+		}
+
+		if entry.Title != "New Entry" {
+			t.Errorf("want New Entry, got %s", entry.Title)
+		}
+		// Check formatted body (CDATA should be escaped)
+		if entry.FormattedBody != "Hello &lt;b&gt;world&lt;/b&gt;" {
+			t.Errorf("formatted body not escaped: %s", entry.FormattedBody)
+		}
+		// Check path format YYYY/MM/DD/1
+		now := time.Now().Format("2006/01/02")
+		if !strings.HasPrefix(entry.Path, now) || !strings.HasSuffix(entry.Path, "/1") {
+			t.Errorf("unexpected path format: %s", entry.Path)
+		}
+	})
 }

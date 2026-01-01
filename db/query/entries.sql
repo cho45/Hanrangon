@@ -12,13 +12,16 @@ LIMIT sqlc.arg('limit');
 -- name: CountEntries :one
 SELECT count(*) FROM entries;
 
+-- name: CountEntriesByDate :one
+SELECT count(*) FROM entries WHERE CAST(date AS TEXT) = sqlc.arg(date);
+
 -- name: GetEntryByPath :one
 SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
 WHERE path = sqlc.arg(path) LIMIT 1;
 
 -- name: ListEntriesByYearMonthDay :many
 SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
-WHERE CAST(sqlc.arg(start_date) AS TEXT) <= date AND date < CAST(sqlc.arg(end_date) AS TEXT)
+WHERE CAST(sqlc.arg(start_date) AS TEXT) <= CAST(date AS TEXT) AND CAST(date AS TEXT) < CAST(sqlc.arg(end_date) AS TEXT)
 ORDER BY created_at;
 
 -- name: GetPrevEntry :one
@@ -66,3 +69,26 @@ ORDER BY date DESC, created_at ASC;
 -- name: ListAllEntriesForSitemap :many
 SELECT path, modified_at FROM entries
 ORDER BY date DESC;
+
+-- name: CreateEntry :one
+INSERT INTO entries (
+    title, body, formatted_body, path, format, date, created_at, modified_at
+) VALUES (
+    sqlc.arg(title), sqlc.arg(body), sqlc.arg(formatted_body), sqlc.arg(path), sqlc.arg(format), sqlc.arg(date), sqlc.arg(created_at), sqlc.arg(modified_at)
+) RETURNING *;
+
+-- name: UpdateEntry :one
+UPDATE entries SET
+    title = sqlc.arg(title),
+    body = sqlc.arg(body),
+    formatted_body = sqlc.arg(formatted_body),
+    path = sqlc.arg(path),
+    format = sqlc.arg(format),
+    date = sqlc.arg(date),
+    modified_at = sqlc.arg(modified_at)
+WHERE id = sqlc.arg(id)
+RETURNING *;
+
+-- name: GetEntryById :one
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
+WHERE id = sqlc.arg(id) LIMIT 1;

@@ -22,6 +22,96 @@ func (q *Queries) CountEntries(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countEntriesByDate = `-- name: CountEntriesByDate :one
+SELECT count(*) FROM entries WHERE CAST(date AS TEXT) = ?1
+`
+
+func (q *Queries) CountEntriesByDate(ctx context.Context, date string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countEntriesByDate, date)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const createEntry = `-- name: CreateEntry :one
+INSERT INTO entries (
+    title, body, formatted_body, path, format, date, created_at, modified_at
+) VALUES (
+    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8
+) RETURNING id, title, body, formatted_body, path, format, date, created_at, modified_at
+`
+
+type CreateEntryParams struct {
+	Title         string    `json:"title"`
+	Body          string    `json:"body"`
+	FormattedBody string    `json:"formatted_body"`
+	Path          string    `json:"path"`
+	Format        string    `json:"format"`
+	Date          string    `json:"date"`
+	CreatedAt     time.Time `json:"created_at"`
+	ModifiedAt    time.Time `json:"modified_at"`
+}
+
+func (q *Queries) CreateEntry(ctx context.Context, arg CreateEntryParams) (Entry, error) {
+	row := q.db.QueryRowContext(ctx, createEntry,
+		arg.Title,
+		arg.Body,
+		arg.FormattedBody,
+		arg.Path,
+		arg.Format,
+		arg.Date,
+		arg.CreatedAt,
+		arg.ModifiedAt,
+	)
+	var i Entry
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Body,
+		&i.FormattedBody,
+		&i.Path,
+		&i.Format,
+		&i.Date,
+		&i.CreatedAt,
+		&i.ModifiedAt,
+	)
+	return i, err
+}
+
+const getEntryById = `-- name: GetEntryById :one
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
+WHERE id = ?1 LIMIT 1
+`
+
+type GetEntryByIdRow struct {
+	ID            int64     `json:"id"`
+	Title         string    `json:"title"`
+	Body          string    `json:"body"`
+	FormattedBody string    `json:"formatted_body"`
+	Path          string    `json:"path"`
+	Format        string    `json:"format"`
+	Date          string    `json:"date"`
+	CreatedAt     time.Time `json:"created_at"`
+	ModifiedAt    time.Time `json:"modified_at"`
+}
+
+func (q *Queries) GetEntryById(ctx context.Context, id int64) (GetEntryByIdRow, error) {
+	row := q.db.QueryRowContext(ctx, getEntryById, id)
+	var i GetEntryByIdRow
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Body,
+		&i.FormattedBody,
+		&i.Path,
+		&i.Format,
+		&i.Date,
+		&i.CreatedAt,
+		&i.ModifiedAt,
+	)
+	return i, err
+}
+
 const getEntryByPath = `-- name: GetEntryByPath :one
 SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
 WHERE path = ?1 LIMIT 1
@@ -443,7 +533,7 @@ func (q *Queries) ListEntriesByIds(ctx context.Context, ids []int64) ([]ListEntr
 
 const listEntriesByYearMonthDay = `-- name: ListEntriesByYearMonthDay :many
 SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at FROM entries
-WHERE CAST(?1 AS TEXT) <= date AND date < CAST(?2 AS TEXT)
+WHERE CAST(?1 AS TEXT) <= CAST(date AS TEXT) AND CAST(date AS TEXT) < CAST(?2 AS TEXT)
 ORDER BY created_at
 `
 
@@ -530,4 +620,54 @@ func (q *Queries) ListUniqueDates(ctx context.Context, arg ListUniqueDatesParams
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateEntry = `-- name: UpdateEntry :one
+UPDATE entries SET
+    title = ?1,
+    body = ?2,
+    formatted_body = ?3,
+    path = ?4,
+    format = ?5,
+    date = ?6,
+    modified_at = ?7
+WHERE id = ?8
+RETURNING id, title, body, formatted_body, path, format, date, created_at, modified_at
+`
+
+type UpdateEntryParams struct {
+	Title         string    `json:"title"`
+	Body          string    `json:"body"`
+	FormattedBody string    `json:"formatted_body"`
+	Path          string    `json:"path"`
+	Format        string    `json:"format"`
+	Date          string    `json:"date"`
+	ModifiedAt    time.Time `json:"modified_at"`
+	ID            int64     `json:"id"`
+}
+
+func (q *Queries) UpdateEntry(ctx context.Context, arg UpdateEntryParams) (Entry, error) {
+	row := q.db.QueryRowContext(ctx, updateEntry,
+		arg.Title,
+		arg.Body,
+		arg.FormattedBody,
+		arg.Path,
+		arg.Format,
+		arg.Date,
+		arg.ModifiedAt,
+		arg.ID,
+	)
+	var i Entry
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Body,
+		&i.FormattedBody,
+		&i.Path,
+		&i.Format,
+		&i.Date,
+		&i.CreatedAt,
+		&i.ModifiedAt,
+	)
+	return i, err
 }

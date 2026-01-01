@@ -80,6 +80,7 @@ func NewServer(config *Config, db *sql.DB, tfidfDB *sql.DB) *echo.Echo {
 	e.GET("/robots.txt", app.HandleRobotsTxt)
 
 	e.GET("/api/similar", app.HandleApiSimilar)
+	e.POST("/api/edit", app.HandleApiEdit)
 
 	return e
 }

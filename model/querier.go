@@ -11,6 +11,9 @@ import (
 
 type Querier interface {
 	CountEntries(ctx context.Context) (int64, error)
+	CountEntriesByDate(ctx context.Context, date string) (int64, error)
+	CreateEntry(ctx context.Context, arg CreateEntryParams) (Entry, error)
+	GetEntryById(ctx context.Context, id int64) (GetEntryByIdRow, error)
 	GetEntryByPath(ctx context.Context, path string) (GetEntryByPathRow, error)
 	GetNextEntry(ctx context.Context, createdAt time.Time) (GetNextEntryRow, error)
 	GetPrevEntry(ctx context.Context, createdAt time.Time) (GetPrevEntryRow, error)
@@ -27,6 +30,7 @@ type Querier interface {
 	ListEntriesByYearMonthDay(ctx context.Context, arg ListEntriesByYearMonthDayParams) ([]ListEntriesByYearMonthDayRow, error)
 	ListRelatedEntries(ctx context.Context, entryID int64) ([]ListRelatedEntriesRow, error)
 	ListUniqueDates(ctx context.Context, arg ListUniqueDatesParams) ([]string, error)
+	UpdateEntry(ctx context.Context, arg UpdateEntryParams) (Entry, error)
 }
 
 var _ Querier = (*Queries)(nil)
