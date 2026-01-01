@@ -6,6 +6,7 @@ package model
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
@@ -14,8 +15,10 @@ type Querier interface {
 	CountEntriesByDate(ctx context.Context, date string) (int64, error)
 	CountPendingJobs(ctx context.Context) (int64, error)
 	CreateEntry(ctx context.Context, arg CreateEntryParams) (Entry, error)
+	CreateTrackback(ctx context.Context, arg CreateTrackbackParams) error
 	DeleteRelatedEntriesByEntryID(ctx context.Context, entryID int64) error
 	DeleteTFIDFByEntryID(ctx context.Context, entryID int64) error
+	DeleteTrackbacksBySourceEntryId(ctx context.Context, trackbackEntryID sql.NullInt64) error
 	EnqueueJob(ctx context.Context, arg EnqueueJobParams) (Job, error)
 	FindNextJob(ctx context.Context, runAfter time.Time) (Job, error)
 	GetEntryById(ctx context.Context, id int64) (GetEntryByIdRow, error)
@@ -41,6 +44,7 @@ type Querier interface {
 	ListEntriesByIds(ctx context.Context, ids []int64) ([]ListEntriesByIdsRow, error)
 	ListEntriesByYearMonthDay(ctx context.Context, arg ListEntriesByYearMonthDayParams) ([]ListEntriesByYearMonthDayRow, error)
 	ListRelatedEntries(ctx context.Context, entryID int64) ([]ListRelatedEntriesRow, error)
+	ListTrackbackEntries(ctx context.Context, entryID sql.NullInt64) ([]ListTrackbackEntriesRow, error)
 	ListUniqueDates(ctx context.Context, arg ListUniqueDatesParams) ([]string, error)
 	MarkJobCompleted(ctx context.Context, id int64) error
 	MarkJobFailed(ctx context.Context, arg MarkJobFailedParams) error

@@ -225,6 +225,14 @@ func (app *App) HandleApiEdit(c echo.Context) error {
 		log.Printf("Failed to enqueue TF-IDF job: %v", err)
 	}
 
+	// Trackback更新ジョブをエンキュー
+	err = app.jobQueue.Enqueue(context.Background(), "UpdateTrackbacks",
+		jobs.UpdateTrackbacksArg{EntryID: resEntry.ID},
+		fmt.Sprintf("update-trackbacks-%d", resEntry.ID))
+	if err != nil {
+		log.Printf("Failed to enqueue Trackback job: %v", err)
+	}
+
 	return c.JSON(http.StatusOK, EditResponse{
 		ID:       resEntry.ID,
 		Location: "/" + resEntry.Path,

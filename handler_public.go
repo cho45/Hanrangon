@@ -187,13 +187,27 @@ func (app *App) HandleEntry(c echo.Context) error {
 		Status:        row.Status,
 	}
 
+	trackbacks, err := app.queries.ListTrackbackEntries(ctx, sql.NullInt64{Int64: entry.ID, Valid: true})
+	if err != nil && err != sql.ErrNoRows {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch trackbacks").SetInternal(err)
+	}
+
 	prevRow, err := app.queries.GetPrevEntry(ctx, entry.CreatedAt)
 	if err != nil && err != sql.ErrNoRows {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch prev entry").SetInternal(err)
 	}
 	var prevPtr *model.Entry
 	if err == nil {
-		p := model.Entry(prevRow)
+		p := model.Entry{
+			ID:         prevRow.ID,
+			Title:      prevRow.Title,
+			CreatedAt:  prevRow.CreatedAt,
+			Path:       prevRow.Path,
+			Date:       prevRow.Date,
+			ModifiedAt: prevRow.ModifiedAt,
+			PublishAt:  prevRow.PublishAt,
+			Status:     prevRow.Status,
+		}
 		prevPtr = &p
 	}
 
@@ -203,11 +217,20 @@ func (app *App) HandleEntry(c echo.Context) error {
 	}
 	var nextPtr *model.Entry
 	if err == nil {
-		n := model.Entry(nextRow)
+		n := model.Entry{
+			ID:         nextRow.ID,
+			Title:      nextRow.Title,
+			CreatedAt:  nextRow.CreatedAt,
+			Path:       nextRow.Path,
+			Date:       nextRow.Date,
+			ModifiedAt: nextRow.ModifiedAt,
+			PublishAt:  nextRow.PublishAt,
+			Status:     nextRow.Status,
+		}
 		nextPtr = &n
 	}
 
-	return view.Entry(entry, prevPtr, nextPtr, app.IsAuth(c)).Render(ctx, c.Response())
+	return view.Entry(entry, trackbacks, prevPtr, nextPtr, app.IsAuth(c)).Render(ctx, c.Response())
 }
 
 func (app *App) HandleCategory(c echo.Context) error {

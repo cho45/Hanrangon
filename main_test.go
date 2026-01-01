@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"mime/multipart"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/cho45/hanrangon/jobqueue"
+	"github.com/cho45/hanrangon/jobs"
 	"github.com/cho45/hanrangon/model"
 	"github.com/labstack/echo/v4"
 	_ "github.com/mattn/go-sqlite3"
@@ -651,5 +653,56 @@ func TestHandleApiUploadImage(t *testing.T) {
 	}
 	if string(content) != "fake-image-content" {
 		t.Errorf("unexpected file content: %s", string(content))
+	}
+}
+
+func TestUpdateTrackbacksJob(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	// 1. Create target entry
+	_, err := env.db.Exec(`
+		INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at, status)
+		VALUES (100, 'Target', 'Body', 'Formatted', '2026/01/01/1', 'Markdown', '2026-01-01', '2026-01-01 10:00:00', '2026-01-01 10:00:00', 'public')
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Create source entry that links to target
+	// Use the default BaseURL: http://localhost:5555
+	link := "http://localhost:5555/2026/01/01/1"
+	_, err = env.db.Exec(`
+		INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at, status)
+		VALUES (101, 'Source', 'Links to Target', 'Links to <a href="` + link + `">Target</a>', '2026/01/02/1', 'Markdown', '2026-01-02', '2026-01-02 10:00:00', '2026-01-02 10:00:00', 'public')
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	job := jobs.NewUpdateTrackbacksJob(model.New(env.db), "http://localhost:5555")
+	arg, _ := json.Marshal(jobs.UpdateTrackbacksArg{EntryID: 101})
+
+	if err := job.Execute(context.Background(), arg); err != nil {
+		t.Fatalf("job execution failed: %v", err)
+	}
+
+	// 3. Verify trackback was created
+	rows, err := env.db.Query("SELECT entry_id, trackback_entry_id FROM trackbacks")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		t.Fatal("no trackback record found")
+	}
+	var entryID, trackbackEntryID int64
+	rows.Scan(&entryID, &trackbackEntryID)
+
+	if entryID != 100 {
+		t.Errorf("expected entry_id 100, got %d", entryID)
+	}
+	if trackbackEntryID != 101 {
+		t.Errorf("expected trackback_entry_id 101, got %d", trackbackEntryID)
 	}
 }

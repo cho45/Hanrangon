@@ -194,27 +194,78 @@ templ EntryList(entries []model.Entry, nextPage string, isAuth bool) {
 	</div>
 }
 
-templ EntryDetail(entry model.Entry, prev, next *model.Entry, isAuth bool) {
+templ EntryDetail(entry model.Entry, trackbacks []model.ListTrackbackEntriesRow, prev, next *model.Entry, isAuth bool) {
+
 	<div class="entries">
+
 		<link rel="preload" id="preload-similar-entries" href={ templ.SafeURL(fmt.Sprintf("/api/similar?id=%d", entry.ID)) } as="fetch" crossorigin="anonymous"/>
+
 		<div class="date"><a href={ templ.SafeURL(datePath(entry.Date)) }>{ formatDate(entry.Date) }</a></div>
+
 		@Article(entry, isAuth, true)
+
+
+
+		if len(trackbacks) > 0 {
+
+			<div class="trackbacks">
+
+				<h3>この記事への言及</h3>
+
+				<ul>
+
+					for _, t := range trackbacks {
+
+						<li>
+
+							<a href={ templ.SafeURL("/" + t.Path) }>{ t.Title }</a>
+
+							<span class="date">({ formatDate(t.Date) })</span>
+
+						</li>
+
+					}
+
+				</ul>
+
+			</div>
+
+		}
+
 	</div>
+
+
 
 	<div class="pager">
+
 		if next != nil {
+
 			<a href={ templ.SafeURL("/" + next.Path) } rel="prev"> { next.Title } &#x25B6;</a>
+
 		}
+
 		if prev != nil {
+
 			<a href={ templ.SafeURL("/" + prev.Path) } rel="next">&#x25C0; { prev.Title }</a>
+
 		}
+
 	</div>
+
 }
+
+
 
 templ Index(entries []model.Entry, nextPage string, isAuth bool) {
+
 	@Layout("氾濫原", isAuth, EntryList(entries, nextPage, isAuth))
+
 }
 
-templ Entry(entry model.Entry, prev, next *model.Entry, isAuth bool) {
-	@Layout(entry.Title + " - 氾濫原", isAuth, EntryDetail(entry, prev, next, isAuth))
+
+
+templ Entry(entry model.Entry, trackbacks []model.ListTrackbackEntriesRow, prev, next *model.Entry, isAuth bool) {
+
+	@Layout(entry.Title + " - 氾濫原", isAuth, EntryDetail(entry, trackbacks, prev, next, isAuth))
+
 }
