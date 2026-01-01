@@ -10,6 +10,8 @@ func Format(body string, format string) (string, error) {
 		return FormatHTML(body), nil
 	case "Hatena":
 		return FormatHatena(body)
+	case "tDiary":
+		return FormatTDiary(body), nil
 	default:
 		// Unknown format, fallback to plain HTML or error
 		return "", fmt.Errorf("unsupported format: %s", format)
