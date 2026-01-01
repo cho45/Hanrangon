@@ -2,17 +2,14 @@ package view
 
 import (
 	"regexp"
-	"time"
 
 	"github.com/cho45/hanrangon/model"
 )
 
 var titleTagRegexp = regexp.MustCompile(`\s*\[([^]]+)\]\s*`)
 
-func IsSameDay(t1, t2 time.Time) bool {
-	y1, m1, d1 := t1.Date()
-	y2, m2, d2 := t2.Date()
-	return y1 == y2 && m1 == m2 && d1 == d2
+func IsSameDay(t1Str, t2Str string) bool {
+	return t1Str == t2Str
 }
 
 func ParseTitle(rawTitle string) (string, []string) {

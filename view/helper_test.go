@@ -2,38 +2,25 @@ package view
 
 import (
 	"testing"
-	"time"
 )
 
 func TestIsSameDay(t *testing.T) {
 	tests := []struct {
 		name string
-		t1   time.Time
-		t2   time.Time
+		t1   string
+		t2   string
 		want bool
 	}{
 		{
 			name: "Same day",
-			t1:   time.Date(2025, 12, 30, 10, 0, 0, 0, time.UTC),
-			t2:   time.Date(2025, 12, 30, 23, 59, 59, 0, time.UTC),
+			t1:   "2025-12-30",
+			t2:   "2025-12-30",
 			want: true,
 		},
 		{
 			name: "Different day",
-			t1:   time.Date(2025, 12, 30, 23, 59, 59, 0, time.UTC),
-			t2:   time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC),
-			want: false,
-		},
-		{
-			name: "Different month",
-			t1:   time.Date(2025, 12, 30, 0, 0, 0, 0, time.UTC),
-			t2:   time.Date(2025, 11, 30, 0, 0, 0, 0, time.UTC),
-			want: false,
-		},
-		{
-			name: "Different year",
-			t1:   time.Date(2025, 12, 30, 0, 0, 0, 0, time.UTC),
-			t2:   time.Date(2024, 12, 30, 0, 0, 0, 0, time.UTC),
+			t1:   "2025-12-30",
+			t2:   "2025-12-31",
 			want: false,
 		},
 	}

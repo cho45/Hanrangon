@@ -171,8 +171,8 @@ LIMIT ?
 `
 
 type ListEntriesParams struct {
-	Date  time.Time `json:"date"`
-	Limit int64     `json:"limit"`
+	Date  string `json:"date"`
+	Limit int64  `json:"limit"`
 }
 
 func (q *Queries) ListEntries(ctx context.Context, arg ListEntriesParams) ([]Entry, error) {
@@ -216,9 +216,9 @@ LIMIT ?
 `
 
 type ListEntriesByCategoryParams struct {
-	Title string    `json:"title"`
-	Date  time.Time `json:"date"`
-	Limit int64     `json:"limit"`
+	Title string `json:"title"`
+	Date  string `json:"date"`
+	Limit int64  `json:"limit"`
 }
 
 func (q *Queries) ListEntriesByCategory(ctx context.Context, arg ListEntriesByCategoryParams) ([]Entry, error) {
@@ -256,17 +256,17 @@ func (q *Queries) ListEntriesByCategory(ctx context.Context, arg ListEntriesByCa
 
 const listEntriesByYearMonthDay = `-- name: ListEntriesByYearMonthDay :many
 SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at FROM entries
-WHERE CAST(? AS TEXT) <= date AND date < CAST(? AS TEXT)
+WHERE ? <= date AND date < ?
 ORDER BY created_at
 `
 
 type ListEntriesByYearMonthDayParams struct {
-	Column1 string `json:"column_1"`
-	Column2 string `json:"column_2"`
+	Date   string `json:"date"`
+	Date_2 string `json:"date_2"`
 }
 
 func (q *Queries) ListEntriesByYearMonthDay(ctx context.Context, arg ListEntriesByYearMonthDayParams) ([]Entry, error) {
-	rows, err := q.db.QueryContext(ctx, listEntriesByYearMonthDay, arg.Column1, arg.Column2)
+	rows, err := q.db.QueryContext(ctx, listEntriesByYearMonthDay, arg.Date, arg.Date_2)
 	if err != nil {
 		return nil, err
 	}

@@ -15,7 +15,7 @@ type Entry struct {
 	FormattedBody string    `json:"formatted_body"`
 	Path          string    `json:"path"`
 	Format        string    `json:"format"`
-	Date          time.Time `json:"date"`
+	Date          string    `json:"date"`
 	CreatedAt     time.Time `json:"created_at"`
 	ModifiedAt    time.Time `json:"modified_at"`
 }

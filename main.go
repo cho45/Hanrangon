@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/cho45/hanrangon/model"
@@ -20,10 +23,9 @@ type App struct {
 }
 
 func main() {
-	// 既存の data.db を参照 (開発用)
-	dbPath := "../data.db"
+	config := LoadConfig()
 
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open("sqlite", config.DataDBPath)
 	if err != nil {
 		log.Fatalf("failed to open db: %v", err)
 	}
@@ -33,13 +35,13 @@ func main() {
 		log.Fatalf("failed to ping db: %v", err)
 	}
 
-	e := NewServer(db)
+	e := NewServer(config, db)
 
 	// Start server
 	e.Logger.Fatal(e.Start(":5555"))
 }
 
-func NewServer(db *sql.DB) *echo.Echo {
+func NewServer(config *Config, db *sql.DB) *echo.Echo {
 	app := &App{
 		queries: model.New(db),
 		db:      db,
@@ -52,9 +54,9 @@ func NewServer(db *sql.DB) *echo.Echo {
 	e.Use(middleware.Recover())
 
 	// Static files
-	e.Static("/css", "../static/css")
-	e.Static("/js", "../static/js")
-	e.Static("/images", "../static/images")
+	e.Static("/css", filepath.Join(config.StaticDir, "css"))
+	e.Static("/js", filepath.Join(config.StaticDir, "js"))
+	e.Static("/images", filepath.Join(config.StaticDir, "images"))
 
 	// Routes
 	e.GET("/", app.HandleIndex)
@@ -62,13 +64,12 @@ func NewServer(db *sql.DB) *echo.Echo {
 	e.GET("/archive", app.HandleArchive)
 
 	// Date archives (order matters vs /:yyyy/:mm/:dd/:n)
-	e.GET("/:yyyy/", app.HandleDateArchive)
+	e.GET("/:param/", app.HandleRootParam) // Year archive OR Category
 	e.GET("/:yyyy/:mm/", app.HandleDateArchive)
 	e.GET("/:yyyy/:mm/:dd/", app.HandleDateArchive)
 
 	e.GET("/:yyyy/:mm/:dd/:n", app.HandleEntry)
 
-	e.GET("/:category/", app.HandleCategory)
 	e.GET("/:category/.page/:date/:limit", app.HandleCategory)
 
 	e.GET("/feed", app.HandleFeed)
@@ -78,11 +79,25 @@ func NewServer(db *sql.DB) *echo.Echo {
 	return e
 }
 
+func (app *App) HandleRootParam(c echo.Context) error {
+	param := c.Param("param")
+	if regexp.MustCompile(`^\d{4}`).MatchString(param) {
+		// It's a year archive
+		c.SetParamNames("yyyy")
+		c.SetParamValues(param)
+		return app.HandleDateArchive(c)
+	}
+	// It's a category
+	c.SetParamNames("category")
+	c.SetParamValues(param)
+	return app.HandleCategory(c)
+}
+
 func (app *App) HandleFeed(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	entries, err := app.queries.ListEntries(ctx, model.ListEntriesParams{
-		Date:  time.Now(),
+		Date:  time.Now().Format("2006-01-02"),
 		Limit: 20,
 	})
 	if err != nil {
@@ -145,7 +160,7 @@ func (app *App) HandleCategory(c echo.Context) error {
 
 	entries, err := app.queries.ListEntriesByCategory(ctx, model.ListEntriesByCategoryParams{
 		Title: fmt.Sprintf("%%[%s]%%", category),
-		Date:  targetDate,
+		Date:  targetDate.Format("2006-01-02"),
 		Limit: int64(fetchLimit),
 	})
 	if err != nil {
@@ -157,10 +172,10 @@ func (app *App) HandleCategory(c echo.Context) error {
 		lastEntry := entries[len(entries)-1]
 		entries = entries[:limit]
 
-		nextDate := lastEntry.Date.Format("20060102")
+		// Date is already "YYYY-MM-DD" string
+		nextDate := strings.ReplaceAll(lastEntry.Date, "-", "")
 		nextPage = fmt.Sprintf("/%s/.page/%s/%d", category, nextDate, limit)
 	}
-
 	return view.Index(entries, nextPage).Render(ctx, c.Response())
 }
 
@@ -198,9 +213,13 @@ func (app *App) HandleDateArchive(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid date format").SetInternal(err)
 	}
 
+	startStr := start.Format("2006-01-02")
+	endStr := end.Format("2006-01-02")
+	fmt.Printf("HandleDateArchive: start=%s, end=%s\n", startStr, endStr)
+
 	entries, err := app.queries.ListEntriesByYearMonthDay(ctx, model.ListEntriesByYearMonthDayParams{
-		Column1: start.Format("2006-01-02"),
-		Column2: end.Format("2006-01-02"),
+		Date:   startStr,
+		Date_2: endStr,
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
@@ -243,7 +262,7 @@ func (app *App) HandleIndex(c echo.Context) error {
 
 	// 記事を取得
 	entries, err := app.queries.ListEntries(ctx, model.ListEntriesParams{
-		Date:  targetDate,
+		Date:  targetDate.Format("2006-01-02"),
 		Limit: int64(fetchLimit),
 	})
 	if err != nil {
@@ -258,10 +277,9 @@ func (app *App) HandleIndex(c echo.Context) error {
 		entries = entries[:limit]
 
 		// 次ページのURLを生成 (例: /.page/20251230/10)
-		nextDate := lastEntry.Date.Format("20060102")
+		nextDate := strings.ReplaceAll(lastEntry.Date, "-", "")
 		nextPage = fmt.Sprintf("/.page/%s/%d", nextDate, limit)
 	}
-
 	// HTMLレンダリング
 	return view.Index(entries, nextPage).Render(ctx, c.Response())
 }

@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cho45/hanrangon/model"
-	"github.com/labstack/echo/v4"
 	_ "modernc.org/sqlite"
 )
 
@@ -40,8 +38,6 @@ func TestHandleIndex(t *testing.T) {
 	defer db.Close()
 
 	// Insert test data
-	queries := model.New(db)
-
 	_, err := db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
 		VALUES 
@@ -52,19 +48,12 @@ func TestHandleIndex(t *testing.T) {
 		t.Fatalf("failed to insert test data: %v", err)
 	}
 
-	app := &App{
-		queries: queries,
-		db:      db,
-	}
-
-	e := echo.New()
+	config := &Config{StaticDir: "../static"}
+	e := NewServer(config, db)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
 
-	if err := app.HandleIndex(c); err != nil {
-		t.Errorf("HandleIndex returned error: %v", err)
-	}
+	e.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("want status 200, got %d", rec.Code)
@@ -83,8 +72,6 @@ func TestHandleEntry(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	queries := model.New(db)
-
 	_, err := db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
 		VALUES 
@@ -95,24 +82,13 @@ func TestHandleEntry(t *testing.T) {
 		t.Fatalf("failed to insert test data: %v", err)
 	}
 
-	app := &App{
-		queries: queries,
-		db:      db,
-	}
-
-	e := echo.New()
+	config := &Config{StaticDir: "../static"}
+	e := NewServer(config, db)
 
 	t.Run("Existing entry", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/2025/01/01/1", nil)
 		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
-		c.SetPath("/:yyyy/:mm/:dd/:n")
-		c.SetParamNames("yyyy", "mm", "dd", "n")
-		c.SetParamValues("2025", "01", "01", "1")
-
-		if err := app.HandleEntry(c); err != nil {
-			t.Errorf("HandleEntry returned error: %v", err)
-		}
+		e.ServeHTTP(rec, req)
 
 		if rec.Code != http.StatusOK {
 			t.Errorf("want status 200, got %d", rec.Code)
@@ -131,19 +107,10 @@ func TestHandleEntry(t *testing.T) {
 	t.Run("Non-existing entry", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/2025/01/01/999", nil)
 		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
-		c.SetPath("/:yyyy/:mm/:dd/:n")
-		c.SetParamNames("yyyy", "mm", "dd", "n")
-		c.SetParamValues("2025", "01", "01", "999")
+		e.ServeHTTP(rec, req)
 
-		err := app.HandleEntry(c)
-		if err == nil {
-			t.Error("HandleEntry should return error for non-existing entry")
-		}
-
-		httpErr, ok := err.(*echo.HTTPError)
-		if !ok || httpErr.Code != http.StatusNotFound {
-			t.Errorf("want 404 Not Found, got %v", err)
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("want status 404, got %d", rec.Code)
 		}
 	})
 }
@@ -151,8 +118,6 @@ func TestHandleEntry(t *testing.T) {
 func TestHandleArchive(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
-
-	queries := model.New(db)
 
 	_, err := db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
@@ -165,19 +130,11 @@ func TestHandleArchive(t *testing.T) {
 		t.Fatalf("failed to insert test data: %v", err)
 	}
 
-	app := &App{
-		queries: queries,
-		db:      db,
-	}
-
-	e := echo.New()
+	config := &Config{StaticDir: "../static"}
+	e := NewServer(config, db)
 	req := httptest.NewRequest(http.MethodGet, "/archive", nil)
 	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-
-	if err := app.HandleArchive(c); err != nil {
-		t.Errorf("HandleArchive returned error: %v", err)
-	}
+	e.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("want status 200, got %d", rec.Code)
@@ -200,8 +157,6 @@ func TestHandleDateArchive(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	queries := model.New(db)
-
 	_, err := db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
 		VALUES 
@@ -214,16 +169,8 @@ func TestHandleDateArchive(t *testing.T) {
 		t.Fatalf("failed to insert test data: %v", err)
 	}
 
-	app := &App{
-		queries: queries,
-		db:      db,
-	}
-
-	e := echo.New()
-	// Register routes as in main()
-	e.GET("/:yyyy/", app.HandleDateArchive)
-	e.GET("/:yyyy/:mm/", app.HandleDateArchive)
-	e.GET("/:yyyy/:mm/:dd/", app.HandleDateArchive)
+	config := &Config{StaticDir: "../static"}
+	e := NewServer(config, db)
 
 	tests := []struct {
 		path       string
@@ -248,269 +195,164 @@ func TestHandleDateArchive(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-
 		t.Run(tt.path, func(t *testing.T) {
-
 			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
-
 			rec := httptest.NewRecorder()
 
 			e.ServeHTTP(rec, req)
 
 			if rec.Code != http.StatusOK {
-
 				t.Errorf("want status 200, got %d", rec.Code)
-
 			}
 
 			body := rec.Body.String()
-
 			for _, title := range tt.wantTitles {
-
 				if !strings.Contains(body, title) {
-
 					t.Errorf("path %s: body does not contain '%s'", tt.path, title)
-
 				}
-
 			}
-
 			for _, title := range tt.notTitles {
-
 				if strings.Contains(body, title) {
-
 					t.Errorf("path %s: body SHOULD NOT contain '%s'", tt.path, title)
-
 				}
-
 			}
-
 		})
-
 	}
-
 }
 
 func TestHandleCategory(t *testing.T) {
-
 	db := setupTestDB(t)
-
 	defer db.Close()
 
 	_, err := db.Exec(`
-
-	
-
-	
-
-			INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
-
-			VALUES 
-
-			('[test] Tagged Entry', 'Body', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
-
-			('Normal Entry', 'Body', '', '2025/01/02/1', 'Markdown', '2025-01-02', '2025-01-02 10:00:00', '2025-01-02 10:00:00')
-
-		`)
-
+		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
+		VALUES 
+		('[test] Tagged Entry', 'Body', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
+		('Normal Entry', 'Body', '', '2025/01/02/1', 'Markdown', '2025-01-02', '2025-01-02 10:00:00', '2025-01-02 10:00:00')
+	`)
 	if err != nil {
-
 		t.Fatalf("failed to insert test data: %v", err)
-
 	}
 
-	e := NewServer(db)
-
+	config := &Config{StaticDir: "../static"} // Mock config
+	e := NewServer(config, db)
 	req := httptest.NewRequest(http.MethodGet, "/test/", nil)
-
 	rec := httptest.NewRecorder()
 
 	e.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-
 		t.Errorf("want status 200, got %d", rec.Code)
-
 	}
 
 	body := rec.Body.String()
-
 	// ParseTitle separates tags, so we look for the tag link and the clean title
-
 	// Structure: <a href="/test/"><span itemprop="keywords">test</span></a>
-
 	if !strings.Contains(body, "<span itemprop=\"keywords\">test</span></a>") {
-
 		t.Errorf("body does not contain tag link for 'test'")
-
 	}
-
 	if !strings.Contains(body, "Tagged Entry") {
-
 		t.Errorf("body does not contain clean title 'Tagged Entry'")
-
 	}
-
 	if strings.Contains(body, "Normal Entry") {
-
 		t.Errorf("body SHOULD NOT contain normal entry")
-
 	}
-
 }
 
 func TestHandleFeed(t *testing.T) {
-
 	db := setupTestDB(t)
-
 	defer db.Close()
 
 	_, err := db.Exec(`
-
-				INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
-
-				VALUES 
-
-				('Feed Entry 1', 'Body', '<p>Body</p>', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00')
-
-			`)
-
+		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
+		VALUES 
+		('Feed Entry 1', 'Body', '<p>Body</p>', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00')
+	`)
 	if err != nil {
-
 		t.Fatalf("failed to insert test data: %v", err)
-
 	}
 
-	e := NewServer(db)
-
+	config := &Config{StaticDir: "../static"}
+	e := NewServer(config, db)
 	req := httptest.NewRequest(http.MethodGet, "/feed", nil)
-
 	rec := httptest.NewRecorder()
 
 	e.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-
 		t.Errorf("want status 200, got %d", rec.Code)
-
 	}
 
 	contentType := rec.Header().Get("Content-Type")
-
 	if !strings.Contains(contentType, "application/atom+xml") {
-
 		t.Errorf("want Content-Type application/atom+xml, got %s", contentType)
-
 	}
 
 	body := rec.Body.String()
-
 	if !strings.Contains(body, "<feed xmlns=\"http://www.w3.org/2005/Atom\">") {
-
 		t.Errorf("body does not contain atom feed tag")
-
 	}
-
 	if !strings.Contains(body, "<title>Feed Entry 1</title>") {
-
 		t.Errorf("body does not contain entry title")
-
 	}
-
 }
 
 func TestHandleSitemap(t *testing.T) {
-
 	db := setupTestDB(t)
-
 	defer db.Close()
 
 	_, err := db.Exec(`
-
-			INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
-
-			VALUES 
-
-			('Sitemap Entry 1', 'Body', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00')
-
-		`)
-
+		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
+		VALUES 
+		('Sitemap Entry 1', 'Body', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00')
+	`)
 	if err != nil {
-
 		t.Fatalf("failed to insert test data: %v", err)
-
 	}
 
-	e := NewServer(db)
-
+	config := &Config{StaticDir: "../static"}
+	e := NewServer(config, db)
 	req := httptest.NewRequest(http.MethodGet, "/sitemap.xml", nil)
-
 	rec := httptest.NewRecorder()
 
 	e.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-
 		t.Errorf("want status 200, got %d", rec.Code)
-
 	}
 
 	contentType := rec.Header().Get("Content-Type")
-
 	if !strings.Contains(contentType, "application/xml") {
-
 		t.Errorf("want Content-Type application/xml, got %s", contentType)
-
 	}
 
 	body := rec.Body.String()
-
 	if !strings.Contains(body, "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">") {
-
 		t.Errorf("body does not contain urlset tag")
-
 	}
-
 	if !strings.Contains(body, "<loc>https://lowreal.net/2025/01/01/1</loc>") {
-
 		t.Errorf("body does not contain entry location")
-
 	}
-
 }
 
 func TestHandleRobotsTxt(t *testing.T) {
-
 	db := setupTestDB(t)
-
 	defer db.Close()
-
-	e := NewServer(db)
-
+	config := &Config{StaticDir: "../static"}
+	e := NewServer(config, db)
 	req := httptest.NewRequest(http.MethodGet, "/robots.txt", nil)
-
 	rec := httptest.NewRecorder()
-
 	e.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-
 		t.Errorf("want status 200, got %d", rec.Code)
-
 	}
 
 	body := rec.Body.String()
-
 	if !strings.Contains(body, "User-agent: *") {
-
 		t.Errorf("body does not contain User-agent")
-
 	}
-
 	if !strings.Contains(body, "Disallow: /admin/") {
-
 		t.Errorf("body does not contain Disallow")
-
 	}
-
 }

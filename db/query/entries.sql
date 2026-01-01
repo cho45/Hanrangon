@@ -13,7 +13,7 @@ WHERE path = ? LIMIT 1;
 
 -- name: ListEntriesByYearMonthDay :many
 SELECT * FROM entries
-WHERE CAST(? AS TEXT) <= date AND date < CAST(? AS TEXT)
+WHERE ? <= date AND date < ?
 ORDER BY created_at;
 
 -- name: GetPrevEntry :one

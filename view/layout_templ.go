@@ -6,6 +6,8 @@ package view
 //lint:file-ignore SA4006 This context is only used if a nested component is present.
 
 import (
+	"strings"
+
 	"github.com/a-h/templ"
 	templruntime "github.com/a-h/templ/runtime"
 	"github.com/cho45/hanrangon/model"
@@ -39,7 +41,7 @@ func Layout(title string, content templ.Component) templ.Component {
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 13, Col: 16}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 14, Col: 16}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {
@@ -93,9 +95,9 @@ func EntryList(entries []model.Entry, nextPage string) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var4 templ.SafeURL
-				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(e.Date.Format("/2006/01/02/")))
+				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/" + strings.ReplaceAll(e.Date, "-", "/") + "/"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 99, Col: 76}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 100, Col: 95}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
@@ -106,9 +108,9 @@ func EntryList(entries []model.Entry, nextPage string) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var5 string
-				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(e.Date.Format("2006年 01月 02日"))
+				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(strings.Replace(strings.Replace(e.Date, "-", "年 ", 1), "-", "月 ", 1) + "日")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 99, Col: 117}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 100, Col: 180}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 				if templ_7745c5c3_Err != nil {
@@ -131,7 +133,7 @@ func EntryList(entries []model.Entry, nextPage string) templ.Component {
 			var templ_7745c5c3_Var6 templ.SafeURL
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/" + e.Path))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 104, Col: 46}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 105, Col: 46}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
@@ -144,7 +146,7 @@ func EntryList(entries []model.Entry, nextPage string) templ.Component {
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(cleanTitle)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 104, Col: 61}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 105, Col: 61}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
@@ -162,7 +164,7 @@ func EntryList(entries []model.Entry, nextPage string) templ.Component {
 				var templ_7745c5c3_Var8 templ.SafeURL
 				templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/" + tag + "/"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 107, Col: 47}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 108, Col: 47}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 				if templ_7745c5c3_Err != nil {
@@ -175,7 +177,7 @@ func EntryList(entries []model.Entry, nextPage string) templ.Component {
 				var templ_7745c5c3_Var9 string
 				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(tag)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 107, Col: 81}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 108, Col: 81}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 				if templ_7745c5c3_Err != nil {
@@ -193,7 +195,7 @@ func EntryList(entries []model.Entry, nextPage string) templ.Component {
 			var templ_7745c5c3_Var10 string
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(e.CreatedAt.Format("2006-01-02T15:04:05Z07:00"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 110, Col: 70}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 111, Col: 70}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 			if templ_7745c5c3_Err != nil {
@@ -206,7 +208,7 @@ func EntryList(entries []model.Entry, nextPage string) templ.Component {
 			var templ_7745c5c3_Var11 string
 			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(e.CreatedAt.Format("15:04"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 110, Col: 102}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 111, Col: 102}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 			if templ_7745c5c3_Err != nil {
@@ -227,7 +229,7 @@ func EntryList(entries []model.Entry, nextPage string) templ.Component {
 			var templ_7745c5c3_Var12 templ.SafeURL
 			templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/" + e.Path))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 118, Col: 47}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 119, Col: 47}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 			if templ_7745c5c3_Err != nil {
@@ -250,7 +252,7 @@ func EntryList(entries []model.Entry, nextPage string) templ.Component {
 			var templ_7745c5c3_Var13 templ.SafeURL
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(nextPage))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 127, Col: 36}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 128, Col: 36}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 			if templ_7745c5c3_Err != nil {
@@ -295,9 +297,9 @@ func EntryDetail(entry model.Entry, prev, next *model.Entry) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var15 templ.SafeURL
-		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(entry.Date.Format("/2006/01/02/")))
+		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/" + strings.ReplaceAll(entry.Date, "-", "/") + "/"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 134, Col: 78}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 135, Col: 97}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 		if templ_7745c5c3_Err != nil {
@@ -308,9 +310,9 @@ func EntryDetail(entry model.Entry, prev, next *model.Entry) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var16 string
-		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(entry.Date.Format("2006年 01月 02日"))
+		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(strings.Replace(strings.Replace(entry.Date, "-", "年 ", 1), "-", "月 ", 1) + "日")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 134, Col: 123}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 135, Col: 186}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 		if templ_7745c5c3_Err != nil {
@@ -328,7 +330,7 @@ func EntryDetail(entry model.Entry, prev, next *model.Entry) templ.Component {
 		var templ_7745c5c3_Var17 templ.SafeURL
 		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/" + entry.Path))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 138, Col: 49}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 139, Col: 49}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 		if templ_7745c5c3_Err != nil {
@@ -341,7 +343,7 @@ func EntryDetail(entry model.Entry, prev, next *model.Entry) templ.Component {
 		var templ_7745c5c3_Var18 string
 		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(cleanTitle)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 138, Col: 64}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 139, Col: 64}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 		if templ_7745c5c3_Err != nil {
@@ -359,7 +361,7 @@ func EntryDetail(entry model.Entry, prev, next *model.Entry) templ.Component {
 			var templ_7745c5c3_Var19 templ.SafeURL
 			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/" + tag + "/"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 141, Col: 46}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 142, Col: 46}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 			if templ_7745c5c3_Err != nil {
@@ -372,7 +374,7 @@ func EntryDetail(entry model.Entry, prev, next *model.Entry) templ.Component {
 			var templ_7745c5c3_Var20 string
 			templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(tag)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 141, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 142, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 			if templ_7745c5c3_Err != nil {
@@ -390,7 +392,7 @@ func EntryDetail(entry model.Entry, prev, next *model.Entry) templ.Component {
 		var templ_7745c5c3_Var21 string
 		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(entry.CreatedAt.Format("2006-01-02T15:04:05Z07:00"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 144, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 145, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 		if templ_7745c5c3_Err != nil {
@@ -403,7 +405,7 @@ func EntryDetail(entry model.Entry, prev, next *model.Entry) templ.Component {
 		var templ_7745c5c3_Var22 string
 		templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(entry.CreatedAt.Format("15:04"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 144, Col: 109}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 145, Col: 109}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 		if templ_7745c5c3_Err != nil {
@@ -424,7 +426,7 @@ func EntryDetail(entry model.Entry, prev, next *model.Entry) templ.Component {
 		var templ_7745c5c3_Var23 templ.SafeURL
 		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/" + entry.Path))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 152, Col: 50}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 153, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 		if templ_7745c5c3_Err != nil {
@@ -442,7 +444,7 @@ func EntryDetail(entry model.Entry, prev, next *model.Entry) templ.Component {
 			var templ_7745c5c3_Var24 templ.SafeURL
 			templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/" + next.Path))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 160, Col: 43}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 161, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 			if templ_7745c5c3_Err != nil {
@@ -455,7 +457,7 @@ func EntryDetail(entry model.Entry, prev, next *model.Entry) templ.Component {
 			var templ_7745c5c3_Var25 string
 			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(next.Title)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 160, Col: 70}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 161, Col: 70}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 			if templ_7745c5c3_Err != nil {
@@ -474,7 +476,7 @@ func EntryDetail(entry model.Entry, prev, next *model.Entry) templ.Component {
 			var templ_7745c5c3_Var26 templ.SafeURL
 			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/" + prev.Path))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 163, Col: 43}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 164, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 			if templ_7745c5c3_Err != nil {
@@ -487,7 +489,7 @@ func EntryDetail(entry model.Entry, prev, next *model.Entry) templ.Component {
 			var templ_7745c5c3_Var27 string
 			templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(prev.Title)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 163, Col: 78}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 164, Col: 78}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 			if templ_7745c5c3_Err != nil {
