@@ -126,7 +126,7 @@ func (app *App) HandleApiEdit(c echo.Context) error {
 	}
 
 	if req.Format == "" {
-		req.Format = "HTML" // Default
+		req.Format = "Hatena" // Default
 	}
 
 	if req.Status == "" {
