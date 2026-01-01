@@ -42,3 +42,7 @@ SELECT * FROM entries
 WHERE title LIKE ? AND date <= ?
 ORDER BY date DESC, created_at ASC
 LIMIT ?;
+
+-- name: ListAllEntriesForSitemap :many
+SELECT path, modified_at FROM entries
+ORDER BY date DESC;

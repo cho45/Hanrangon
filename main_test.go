@@ -418,3 +418,99 @@ func TestHandleFeed(t *testing.T) {
 	}
 
 }
+
+func TestHandleSitemap(t *testing.T) {
+
+	db := setupTestDB(t)
+
+	defer db.Close()
+
+	_, err := db.Exec(`
+
+			INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
+
+			VALUES 
+
+			('Sitemap Entry 1', 'Body', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00')
+
+		`)
+
+	if err != nil {
+
+		t.Fatalf("failed to insert test data: %v", err)
+
+	}
+
+	e := NewServer(db)
+
+	req := httptest.NewRequest(http.MethodGet, "/sitemap.xml", nil)
+
+	rec := httptest.NewRecorder()
+
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+
+		t.Errorf("want status 200, got %d", rec.Code)
+
+	}
+
+	contentType := rec.Header().Get("Content-Type")
+
+	if !strings.Contains(contentType, "application/xml") {
+
+		t.Errorf("want Content-Type application/xml, got %s", contentType)
+
+	}
+
+	body := rec.Body.String()
+
+	if !strings.Contains(body, "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">") {
+
+		t.Errorf("body does not contain urlset tag")
+
+	}
+
+	if !strings.Contains(body, "<loc>https://lowreal.net/2025/01/01/1</loc>") {
+
+		t.Errorf("body does not contain entry location")
+
+	}
+
+}
+
+func TestHandleRobotsTxt(t *testing.T) {
+
+	db := setupTestDB(t)
+
+	defer db.Close()
+
+	e := NewServer(db)
+
+	req := httptest.NewRequest(http.MethodGet, "/robots.txt", nil)
+
+	rec := httptest.NewRecorder()
+
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+
+		t.Errorf("want status 200, got %d", rec.Code)
+
+	}
+
+	body := rec.Body.String()
+
+	if !strings.Contains(body, "User-agent: *") {
+
+		t.Errorf("body does not contain User-agent")
+
+	}
+
+	if !strings.Contains(body, "Disallow: /admin/") {
+
+		t.Errorf("body does not contain Disallow")
+
+	}
+
+}

@@ -91,6 +91,39 @@ func (q *Queries) GetPrevEntry(ctx context.Context, createdAt time.Time) (Entry,
 	return i, err
 }
 
+const listAllEntriesForSitemap = `-- name: ListAllEntriesForSitemap :many
+SELECT path, modified_at FROM entries
+ORDER BY date DESC
+`
+
+type ListAllEntriesForSitemapRow struct {
+	Path       string    `json:"path"`
+	ModifiedAt time.Time `json:"modified_at"`
+}
+
+func (q *Queries) ListAllEntriesForSitemap(ctx context.Context) ([]ListAllEntriesForSitemapRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAllEntriesForSitemap)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAllEntriesForSitemapRow
+	for rows.Next() {
+		var i ListAllEntriesForSitemapRow
+		if err := rows.Scan(&i.Path, &i.ModifiedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listArchiveMonths = `-- name: ListArchiveMonths :many
 SELECT
 	strftime('%Y', date) as year,

@@ -72,6 +72,8 @@ func NewServer(db *sql.DB) *echo.Echo {
 	e.GET("/:category/.page/:date/:limit", app.HandleCategory)
 
 	e.GET("/feed", app.HandleFeed)
+	e.GET("/sitemap.xml", app.HandleSitemap)
+	e.GET("/robots.txt", app.HandleRobotsTxt)
 
 	return e
 }
@@ -94,6 +96,30 @@ func (app *App) HandleFeed(c echo.Context) error {
 
 	c.Response().Header().Set(echo.HeaderContentType, "application/atom+xml; charset=utf-8")
 	return view.Feed(entries, updated).Render(ctx, c.Response())
+}
+
+func (app *App) HandleSitemap(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	entries, err := app.queries.ListAllEntriesForSitemap(ctx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
+	}
+
+	c.Response().Header().Set(echo.HeaderContentType, "application/xml; charset=utf-8")
+	return view.Sitemap(entries).Render(ctx, c.Response())
+}
+
+func (app *App) HandleRobotsTxt(c echo.Context) error {
+	// Static content for robots.txt
+	content := `User-agent: *
+Disallow: /admin/
+Disallow: /login
+Disallow: /edit
+Disallow: /api/
+Sitemap: https://lowreal.net/sitemap.xml
+`
+	return c.String(http.StatusOK, content)
 }
 
 func (app *App) HandleCategory(c echo.Context) error {
