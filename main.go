@@ -61,9 +61,21 @@ func NewServer(config *Config, db *sql.DB, tfidfDB *sql.DB) *echo.Echo {
 	}
 
 	e := echo.New()
+	e.HideBanner = true
 
 	// Middleware
-	e.Use(middleware.Logger())
+	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
+		LogStatus:   true,
+		LogURI:      true,
+		LogMethod:   true,
+		LogLatency:  true,
+		LogRemoteIP: true,
+		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+			log.Printf("REQUEST: method=%s, uri=%s, status=%d, latency=%v, remote_ip=%s",
+				v.Method, v.URI, v.Status, v.Latency, v.RemoteIP)
+			return nil
+		},
+	}))
 	e.Use(middleware.Recover())
 
 	// Static files
