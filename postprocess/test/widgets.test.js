@@ -1,5 +1,7 @@
-import { describe, it } from 'node:test';
+import { describe, it, mock } from 'node:test';
 import assert from 'node:assert';
+import https from 'node:https';
+import { EventEmitter } from 'node:events';
 import { JSDOM } from 'jsdom';
 import { processWidgets } from '../lib/widgets.js';
 
@@ -111,6 +113,38 @@ describe('processWidgets', () => {
 
       // script タグの数が変わっていないことを確認
       assert.strictEqual(scriptsAfter, scriptsBefore, 'Non-Gist scripts should not be affected');
+    });
+
+    it('should expand GitHub Gist script', async () => {
+      const html = `
+        <div><script src="https://gist.github.com/cho45/12345.js"></script></div>
+      `;
+
+      const { window } = new JSDOM(html);
+      const dom = window.document.body;
+
+      const mockResponse = new EventEmitter();
+      mockResponse.statusCode = 200;
+      const mockRequest = new EventEmitter();
+      mockRequest.destroy = () => {};
+
+      mock.method(https, 'get', (url, options, callback) => {
+        callback(mockResponse);
+        setTimeout(() => {
+          mockResponse.emit('data', 'document.write(\'<div class="gist-content">Hello Gist</div>\')');
+          mockResponse.emit('end');
+        }, 10);
+        return mockRequest;
+      });
+
+      await processWidgets(dom);
+
+      const expanded = dom.querySelector('.gist-github-com-js');
+      assert(expanded, 'Should have expanded gist div');
+      assert.strictEqual(expanded.innerHTML, '<div class="gist-content">Hello Gist</div>');
+      assert(!dom.querySelector('script'), 'Original script should be removed');
+
+      mock.restoreAll();
     });
 
     // 注: 実際の Gist 展開のテストは統合テストで行う

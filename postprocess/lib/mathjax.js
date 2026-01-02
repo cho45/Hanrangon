@@ -50,17 +50,32 @@ export async function processMathJax(dom) {
 }
 
 /**
- * DOM ツリーから全テキストノードを取得
+ * DOM ツリーから全テキストノードを取得（特定のタグ内は除外）
  * @param {Node} node - ルートノード
  * @returns {Array<Text>} - テキストノードの配列
  */
 function getTextNodes(node) {
   const textNodes = [];
-  // NodeFilter.SHOW_TEXT = 4 (use numeric constant for JSDOM compatibility)
-  const walker = node.ownerDocument.createTreeWalker(
+  const doc = node.ownerDocument;
+  
+  // NodeFilter.SHOW_TEXT = 4
+  const walker = doc.createTreeWalker(
     node,
-    4, // NodeFilter.SHOW_TEXT
-    null,
+    4,
+    {
+      acceptNode: (n) => {
+        // pre, code, script, style 内のテキストは無視
+        let parent = n.parentNode;
+        while (parent && parent !== node) {
+          const tag = parent.tagName?.toLowerCase();
+          if (tag === 'pre' || tag === 'code' || tag === 'script' || tag === 'style') {
+            return 2; // NodeFilter.FILTER_REJECT
+          }
+          parent = parent.parentNode;
+        }
+        return 1; // NodeFilter.FILTER_ACCEPT
+      }
+    },
     false
   );
 

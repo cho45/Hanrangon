@@ -101,4 +101,13 @@ describe('processMathJax', () => {
     assert(displayResult.includes('mjx-container'), 'Display should have mjx-container');
     assert(displayResult.includes('display="true"'), 'Display should have display="true"');
   });
+
+  it('should not process math inside <code> or <pre> tags', async () => {
+    const html = '<p>Code: <code>\\(E=mc^2\\)</code> and Pre: <pre>$$x^2$$</pre></p>';
+    const result = await processMathJaxHTML(html);
+
+    assert(result.includes('\\(E=mc^2\\)'), 'Should keep LaTeX in code tag');
+    assert(result.includes('$$x^2$$'), 'Should keep LaTeX in pre tag');
+    assert(!result.includes('svg'), 'Should not contain SVG when math is only in code/pre');
+  });
 });
