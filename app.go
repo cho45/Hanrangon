@@ -26,11 +26,13 @@ type App struct {
 	tfidfDB       *sql.DB
 	workerQueries *model.Queries
 	workerDB      *sql.DB
+	imagesQueries *model.Queries
+	imagesDB      *sql.DB
 	jobQueue      *jobqueue.Queue
 	config        *Config
 }
 
-func NewApp(config *Config, db *sql.DB, tfidfDB *sql.DB, workerDB *sql.DB, queue *jobqueue.Queue) *App {
+func NewApp(config *Config, db *sql.DB, tfidfDB *sql.DB, workerDB *sql.DB, imagesDB *sql.DB, queue *jobqueue.Queue) *App {
 	return &App{
 		queries:       model.New(db),
 		db:            db,
@@ -38,6 +40,8 @@ func NewApp(config *Config, db *sql.DB, tfidfDB *sql.DB, workerDB *sql.DB, queue
 		tfidfDB:       tfidfDB,
 		workerQueries: model.New(workerDB),
 		workerDB:      workerDB,
+		imagesQueries: model.New(imagesDB),
+		imagesDB:      imagesDB,
 		jobQueue:      queue,
 		config:        config,
 	}

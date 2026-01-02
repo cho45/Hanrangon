@@ -389,48 +389,103 @@ func (app *App) HandleApiSimilar(c echo.Context) error {
 
 		// 1. Get related entries from tfidfDB
 		relatedRows, err := app.tfidfQueries.ListRelatedEntries(ctx, id)
-		if err != nil {
-			continue
-		}
 
-		if len(relatedRows) == 0 {
-			continue
-		}
+		if err == nil && len(relatedRows) > 0 {
+			relatedIDs := make([]int64, len(relatedRows))
+			scoreMap := make(map[int64]float64)
+			for i, r := range relatedRows {
+				relatedIDs[i] = r.RelatedEntryID
+				scoreMap[r.RelatedEntryID] = r.Score
+			}
 
-		relatedIDs := make([]int64, len(relatedRows))
-		scoreMap := make(map[int64]float64)
-		for i, r := range relatedRows {
-			relatedIDs[i] = r.RelatedEntryID
-			scoreMap[r.RelatedEntryID] = r.Score
-		}
+			// 2. Get entry details from main DB
+			rows, err := app.queries.ListEntriesByIds(ctx, relatedIDs)
+			if err != nil {
+				continue
+			}
 
-		// 2. Get entry details from main DB
-		rows, err := app.queries.ListEntriesByIds(ctx, relatedIDs)
-		if err != nil {
-			continue
-		}
+			// 3. Prepare data for view
+			similarEntries := make([]view.SimilarEntry, 0, len(rows))
+			for _, r := range rows {
+				e := model.Entry(r)
+				similarEntries = append(similarEntries, view.SimilarEntry{
+					Entry: e,
+					Score: scoreMap[e.ID],
+				})
+			}
 
-		// 3. Prepare data for view
-		similarEntries := make([]view.SimilarEntry, 0, len(rows))
-		for _, r := range rows {
-			e := model.Entry(r)
-			similarEntries = append(similarEntries, view.SimilarEntry{
-				Entry: e,
-				Score: scoreMap[e.ID],
+			// Sort by score descending
+			sort.Slice(similarEntries, func(i, j int) bool {
+				return similarEntries[i].Score > similarEntries[j].Score
 			})
-		}
 
-		// Sort by score descending
-		sort.Slice(similarEntries, func(i, j int) bool {
-			return similarEntries[i].Score > similarEntries[j].Score
-		})
+			// 4. Render to string
+			var buf bytes.Buffer
+			if err := view.SimilarEntries(similarEntries).Render(ctx, &buf); err != nil {
+				continue
+			}
 
-		// 4. Render to string
-		var buf bytes.Buffer
-		if err := view.SimilarEntries(similarEntries).Render(ctx, &buf); err != nil {
+			result[idStr] = buf.String()
 			continue
 		}
 
+		// Fallback: Similar Images
+		images, err := app.imagesQueries.ListImagesByEntryID(ctx, id)
+		if err != nil || len(images) == 0 {
+			continue
+		}
+
+		var candidates []model.ListSimilarImagesRow
+		for _, img := range images {
+			sims, err := app.imagesQueries.ListSimilarImages(ctx, model.ListSimilarImagesParams{
+				ImageID: img.ID,
+				Limit:   3,
+			})
+			if err == nil {
+				candidates = append(candidates, sims...)
+			}
+		}
+
+		if len(candidates) == 0 {
+			continue
+		}
+
+		// Fetch entries
+		var entryIDs []int64
+		entryIDMap := make(map[int64]bool)
+		for _, c := range candidates {
+			if !entryIDMap[c.EntryID] {
+				entryIDs = append(entryIDs, c.EntryID)
+				entryIDMap[c.EntryID] = true
+			}
+		}
+
+		entries, err := app.queries.ListEntriesByIds(ctx, entryIDs)
+		if err != nil {
+			continue
+		}
+
+		entryMap := make(map[int64]model.Entry)
+		for _, e := range entries {
+			entryMap[e.ID] = model.Entry(e)
+		}
+
+		var viewImages []view.SimilarImage
+		for _, c := range candidates {
+			if e, ok := entryMap[c.EntryID]; ok {
+				viewImages = append(viewImages, view.SimilarImage{
+					URI:       c.Uri,
+					EntryPath: e.Path,
+					Score:     c.Score,
+				})
+			}
+		}
+
+		// Render SimilarImages
+		var buf bytes.Buffer
+		if err := view.SimilarImages(viewImages).Render(ctx, &buf); err != nil {
+			continue
+		}
 		result[idStr] = buf.String()
 	}
 

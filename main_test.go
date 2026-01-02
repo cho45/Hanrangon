@@ -21,7 +21,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func setupTestDB(t *testing.T) (*sql.DB, *sql.DB, *sql.DB) {
+func setupTestDB(t *testing.T) (*sql.DB, *sql.DB, *sql.DB, *sql.DB) {
 	t.Helper()
 
 	// Main DB
@@ -63,12 +63,25 @@ func setupTestDB(t *testing.T) (*sql.DB, *sql.DB, *sql.DB) {
 		t.Fatalf("failed to apply worker schema: %v", err)
 	}
 
-	return db, tfidfDB, workerDB
+	// Images DB
+	imagesDB, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("failed to open memory images db: %v", err)
+	}
+	imagesSchema, err := os.ReadFile("db/schema/images.sql")
+	if err != nil {
+		t.Fatalf("failed to read images schema: %v", err)
+	}
+	if _, err := imagesDB.Exec(string(imagesSchema)); err != nil {
+		t.Fatalf("failed to apply images schema: %v", err)
+	}
+
+	return db, tfidfDB, workerDB, imagesDB
 }
 
 func setupTest(t *testing.T) *testEnv {
 	t.Helper()
-	db, tfidfDB, workerDB := setupTestDB(t)
+	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
 
 	tmpDir, err := os.MkdirTemp("", "hanrangon-upload-test")
 	if err != nil {
@@ -87,11 +100,12 @@ func setupTest(t *testing.T) *testEnv {
 	registry := jobqueue.NewRegistry()
 	queue := jobqueue.NewQueue(workerDB, model.New(workerDB), registry)
 
-	e := NewServer(config, db, tfidfDB, workerDB, queue)
+	e := NewServer(config, db, tfidfDB, workerDB, imagesDB, queue)
 	return &testEnv{
 		db:        db,
 		tfidfDB:   tfidfDB,
 		workerDB:  workerDB,
+		imagesDB:  imagesDB,
 		server:    e,
 		uploadDir: tmpDir,
 	}
@@ -101,6 +115,7 @@ type testEnv struct {
 	db        *sql.DB
 	tfidfDB   *sql.DB
 	workerDB  *sql.DB
+	imagesDB  *sql.DB
 	server    *echo.Echo
 	uploadDir string
 }
@@ -109,6 +124,7 @@ func (env *testEnv) close() {
 	env.db.Close()
 	env.tfidfDB.Close()
 	env.workerDB.Close()
+	env.imagesDB.Close()
 	os.RemoveAll(env.uploadDir)
 }
 
@@ -414,57 +430,124 @@ func TestHandleSitemap(t *testing.T) {
 }
 
 func TestHandleApiSimilar(t *testing.T) {
-	env := setupTest(t)
-	defer env.close()
+	t.Run("TFIDF related", func(t *testing.T) {
+		env := setupTest(t)
+		defer env.close()
 
-	// Insert entries into main DB
-	_, err := env.db.Exec(`
-		INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at)
-		VALUES 
-		(1, 'Target Entry', 'Body 1', '<p>Body 1</p>', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
-		(2, 'Related Entry', 'Body 2', '<p>Body 2</p>', '2025/01/01/2', 'Markdown', '2025-01-01', '2025-01-01 11:00:00', '2025-01-01 11:00:00')
-	`)
-	if err != nil {
-		t.Fatalf("failed to insert entries: %v", err)
-	}
+		// Insert entries into main DB
+		_, err := env.db.Exec(`
+			INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at)
+			VALUES 
+			(1, 'Target Entry', 'Body 1', '<p>Body 1</p>', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
+			(2, 'Related Entry', 'Body 2', '<p>Body 2</p>', '2025/01/01/2', 'Markdown', '2025-01-01', '2025-01-01 11:00:00', '2025-01-01 11:00:00')
+		`)
+		if err != nil {
+			t.Fatalf("failed to insert entries: %v", err)
+		}
 
-	// Insert relationship into TFIDF DB
-	_, err = env.tfidfDB.Exec(`
-		INSERT INTO related_entries (entry_id, related_entry_id, score)
-		VALUES (1, 2, 0.95)
-	`)
-	if err != nil {
-		t.Fatalf("failed to insert related_entries: %v", err)
-	}
+		// Insert relationship into TFIDF DB
+		_, err = env.tfidfDB.Exec(`
+			INSERT INTO related_entries (entry_id, related_entry_id, score)
+			VALUES (1, 2, 0.95)
+		`)
+		if err != nil {
+			t.Fatalf("failed to insert related_entries: %v", err)
+		}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/similar?id=1", nil)
-	rec := httptest.NewRecorder()
-	env.server.ServeHTTP(rec, req)
+		req := httptest.NewRequest(http.MethodGet, "/api/similar?id=1", nil)
+		rec := httptest.NewRecorder()
+		env.server.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("want status 200, got %d", rec.Code)
-	}
+		if rec.Code != http.StatusOK {
+			t.Errorf("want status 200, got %d", rec.Code)
+		}
 
-	var res struct {
-		Result map[string]string `json:"result"`
-		Ad     string            `json:"ad"`
-	}
-	importJSON := strings.NewReader(rec.Body.String())
-	if err := json.NewDecoder(importJSON).Decode(&res); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
+		var res struct {
+			Result map[string]string `json:"result"`
+			Ad     string            `json:"ad"`
+		}
+		importJSON := strings.NewReader(rec.Body.String())
+		if err := json.NewDecoder(importJSON).Decode(&res); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
 
-	html, ok := res.Result["1"]
-	if !ok {
-		t.Fatalf("result for id=1 not found")
-	}
+		html, ok := res.Result["1"]
+		if !ok {
+			t.Fatalf("result for id=1 not found")
+		}
 
-	if !strings.Contains(html, "Related Entry") {
-		t.Errorf("rendered HTML does not contain 'Related Entry'")
-	}
-	if !strings.Contains(html, "data-score=\"0.950000\"") {
-		t.Errorf("rendered HTML does not contain correct score")
-	}
+		if !strings.Contains(html, "Related Entry") {
+			t.Errorf("rendered HTML does not contain 'Related Entry'")
+		}
+		if !strings.Contains(html, "data-score=\"0.950000\"") {
+			t.Errorf("rendered HTML does not contain correct score")
+		}
+	})
+
+	t.Run("Image fallback", func(t *testing.T) {
+		env := setupTest(t)
+		defer env.close()
+
+		// Insert entries
+		_, err := env.db.Exec(`
+			INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at)
+			VALUES 
+			(3, 'Target Image Entry', 'Body 3', '', '2025/01/01/3', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
+			(4, 'Related Image Entry', 'Body 4', '', '2025/01/01/4', 'Markdown', '2025-01-01', '2025-01-01 11:00:00', '2025-01-01 11:00:00')
+		`)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Insert images
+		_, err = env.imagesDB.Exec(`
+			INSERT INTO images (id, uri, entry_id, sig) VALUES 
+			(1, 'http://example.com/img1.jpg', 3, ''),
+			(2, 'http://example.com/img2.jpg', 4, '')
+		`)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Insert ngrams (share "test" word)
+		_, err = env.imagesDB.Exec(`
+			INSERT INTO ngram (image_id, word) VALUES 
+			(1, 'test'),
+			(2, 'test')
+		`)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "/api/similar?id=3", nil)
+		rec := httptest.NewRecorder()
+		env.server.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("want status 200, got %d", rec.Code)
+		}
+
+		var res struct {
+			Result map[string]string `json:"result"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
+			t.Fatal(err)
+		}
+
+		html, ok := res.Result["3"]
+		if !ok {
+			t.Fatal("result for id=3 not found")
+		}
+
+		// Should verify that html contains the image or link to entry 4
+		// view/similar.templ: <a href="/2025/01/01/4"> <img src="http://example.com/img2.jpg" ... />
+		if !strings.Contains(html, "/2025/01/01/4") {
+			t.Error("rendered HTML does not contain link to related entry")
+		}
+		if !strings.Contains(html, "http://example.com/img2.jpg") {
+			t.Error("rendered HTML does not contain related image URI")
+		}
+	})
 }
 
 func TestLoadConfig(t *testing.T) {

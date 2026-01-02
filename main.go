@@ -30,6 +30,9 @@ func main() {
 	workerDB := mustOpenDB("sqlite3", config.WorkerDBPath)
 	defer workerDB.Close()
 
+	imagesDB := mustOpenDB("sqlite3", config.ImagesDBPath)
+	defer imagesDB.Close()
+
 	// ジョブキュー起動
 	registry := jobqueue.NewRegistry()
 	registry.Register(jobs.NewSimpleJob())
@@ -47,14 +50,14 @@ func main() {
 	queue := jobqueue.NewQueue(workerDB, model.New(workerDB), registry)
 	queue.Start(context.Background())
 
-	e := NewServer(config, db, tfidfDB, workerDB, queue)
+	e := NewServer(config, db, tfidfDB, workerDB, imagesDB, queue)
 
 	// Start server
 	e.Logger.Fatal(e.Start(config.Listen))
 }
 
-func NewServer(config *Config, db *sql.DB, tfidfDB *sql.DB, workerDB *sql.DB, queue *jobqueue.Queue) *echo.Echo {
-	app := NewApp(config, db, tfidfDB, workerDB, queue)
+func NewServer(config *Config, db *sql.DB, tfidfDB *sql.DB, workerDB *sql.DB, imagesDB *sql.DB, queue *jobqueue.Queue) *echo.Echo {
+	app := NewApp(config, db, tfidfDB, workerDB, imagesDB, queue)
 
 	e := echo.New()
 	e.HideBanner = true

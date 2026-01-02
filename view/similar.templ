@@ -10,6 +10,12 @@ type SimilarEntry struct {
 	Score float64
 }
 
+type SimilarImage struct {
+	URI       string
+	EntryPath string
+	Score     int64
+}
+
 templ SimilarEntries(entries []SimilarEntry) {
 	if len(entries) > 0 {
 		<h3>関連エントリー</h3>
@@ -33,5 +39,20 @@ templ SimilarEntries(entries []SimilarEntry) {
 				</li>
 			</ul>
 		}
+	}
+}
+
+templ SimilarImages(images []SimilarImage) {
+	if len(images) > 0 {
+		<h3>関連エントリー (画像)</h3>
+		<ul>
+			for _, img := range images {
+				<li>
+					<a href={ templ.SafeURL("/" + img.EntryPath) }>
+						<img src={ templ.SafeURL(img.URI) } style="max-width: 100px; max-height: 100px" />
+					</a>
+				</li>
+			}
+		</ul>
 	}
 }
