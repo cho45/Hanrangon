@@ -91,16 +91,24 @@ func (app *App) CheckCache(c echo.Context, lastMod time.Time, etag string) bool 
 	return false
 }
 
-// GenerateListETag generates a strong ETag for a list of items, including AppHash.
-func GenerateListETag(latestMod time.Time, count int, extra string) string {
-	s := fmt.Sprintf("%s-%d-%d-%s", AppHash, latestMod.UnixNano(), count, extra)
+// GenerateListETag generates a strong ETag for a list of items, including AppHash and auth status.
+func GenerateListETag(latestMod time.Time, count int, extra string, isAuth bool) string {
+	authPart := "public"
+	if isAuth {
+		authPart = "auth"
+	}
+	s := fmt.Sprintf("%s-%s-%d-%d-%s", AppHash, authPart, latestMod.UnixNano(), count, extra)
 	h := sha1.Sum([]byte(s))
 	return fmt.Sprintf(`"%x"`, h)
 }
 
-// GenerateEntryETag generates a strong ETag for a single entry, including AppHash.
-func GenerateEntryETag(id int64, mod time.Time) string {
-	s := fmt.Sprintf("%s-%d-%d", AppHash, id, mod.UnixNano())
+// GenerateEntryETag generates a strong ETag for a single entry, including AppHash and auth status.
+func GenerateEntryETag(id int64, mod time.Time, isAuth bool) string {
+	authPart := "public"
+	if isAuth {
+		authPart = "auth"
+	}
+	s := fmt.Sprintf("%s-%s-%d-%d", AppHash, authPart, id, mod.UnixNano())
 	h := sha1.Sum([]byte(s))
 	return fmt.Sprintf(`"%x"`, h)
 }

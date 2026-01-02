@@ -79,7 +79,7 @@ func (app *App) HandleDateArchive(c echo.Context) error {
 
 	if len(entries) > 0 {
 		latest := getLatestModTime(entries)
-		etag := GenerateListETag(latest, len(entries), yyyy+mm+dd)
+		etag := GenerateListETag(latest, len(entries), yyyy+mm+dd, app.IsAuth(c))
 		if app.CheckCache(c, latest, etag) {
 			return nil
 		}
@@ -154,7 +154,7 @@ func (app *App) HandleIndex(c echo.Context) error {
 
 	if len(entries) > 0 {
 		latest := getLatestModTime(entries)
-		etag := GenerateListETag(latest, len(entries), dateStr)
+		etag := GenerateListETag(latest, len(entries), dateStr, app.IsAuth(c))
 		if app.CheckCache(c, latest, etag) {
 			return nil
 		}
@@ -203,7 +203,7 @@ func (app *App) HandleEntry(c echo.Context) error {
 		Status:        row.Status,
 	}
 
-	etag := GenerateEntryETag(entry.ID, entry.ModifiedAt)
+	etag := GenerateEntryETag(entry.ID, entry.ModifiedAt, app.IsAuth(c))
 	if app.CheckCache(c, entry.ModifiedAt, etag) {
 		return nil
 	}
@@ -300,7 +300,7 @@ func (app *App) HandleCategory(c echo.Context) error {
 
 	if len(entries) > 0 {
 		latest := getLatestModTime(entries)
-		etag := GenerateListETag(latest, len(entries), category+dateStr)
+		etag := GenerateListETag(latest, len(entries), category+dateStr, app.IsAuth(c))
 		if app.CheckCache(c, latest, etag) {
 			return nil
 		}
@@ -328,7 +328,7 @@ func (app *App) HandleFeed(c echo.Context) error {
 	updated := time.Now()
 	if len(entries) > 0 {
 		updated = getLatestModTime(entries)
-		etag := GenerateListETag(updated, len(entries), "feed")
+		etag := GenerateListETag(updated, len(entries), "feed", app.IsAuth(c))
 		if app.CheckCache(c, updated, etag) {
 			return nil
 		}
@@ -353,7 +353,7 @@ func (app *App) HandleSitemap(c echo.Context) error {
 				latest = e.ModifiedAt
 			}
 		}
-		etag := GenerateListETag(latest, len(entries), "sitemap")
+		etag := GenerateListETag(latest, len(entries), "sitemap", app.IsAuth(c))
 		if app.CheckCache(c, latest, etag) {
 			return nil
 		}
