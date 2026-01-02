@@ -21,36 +21,14 @@ func main() {
 	config := LoadConfig()
 
 	// データベース接続
-	db, err := sql.Open("sqlite3", config.DataDBPath)
-	if err != nil {
-		log.Fatalf("failed to open db: %v", err)
-	}
+	db := mustOpenDB("sqlite3", config.DataDBPath)
 	defer db.Close()
-	db.SetMaxOpenConns(25)
-	db.Exec("PRAGMA journal_mode=WAL")
-	db.Exec("PRAGMA synchronous=NORMAL")
 
-	if err := db.Ping(); err != nil {
-		log.Fatalf("failed to ping db: %v", err)
-	}
-
-	tfidfDB, err := sql.Open("sqlite3_with_math_functions", config.TFIDFDBPath)
-	if err != nil {
-		log.Fatalf("failed to open tfidf db: %v", err)
-	}
+	tfidfDB := mustOpenDB("sqlite3_with_math_functions", config.TFIDFDBPath)
 	defer tfidfDB.Close()
-	tfidfDB.SetMaxOpenConns(25)
-	tfidfDB.Exec("PRAGMA journal_mode=WAL")
-	tfidfDB.Exec("PRAGMA synchronous=NORMAL")
 
-	workerDB, err := sql.Open("sqlite3", config.WorkerDBPath)
-	if err != nil {
-		log.Fatalf("failed to open worker db: %v", err)
-	}
+	workerDB := mustOpenDB("sqlite3", config.WorkerDBPath)
 	defer workerDB.Close()
-	workerDB.SetMaxOpenConns(25)
-	workerDB.Exec("PRAGMA journal_mode=WAL")
-	workerDB.Exec("PRAGMA synchronous=NORMAL")
 
 	// ジョブキュー起動
 	registry := jobqueue.NewRegistry()
@@ -138,5 +116,25 @@ func NewServer(config *Config, db *sql.DB, tfidfDB *sql.DB, workerDB *sql.DB, qu
 	e.GET("/api/edit/progress", app.HandleApiEditProgress, app.RequireAuth)
 
 	return e
+}
 
+func mustOpenDB(driver, path string) *sql.DB {
+	db, err := sql.Open(driver, path)
+	if err != nil {
+		log.Fatalf("failed to open db (%s): %v", path, err)
+	}
+
+	db.SetMaxOpenConns(25)
+	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
+		log.Printf("warn: failed to set WAL mode for %s: %v", path, err)
+	}
+	if _, err := db.Exec("PRAGMA synchronous=NORMAL"); err != nil {
+		log.Printf("warn: failed to set synchronous mode for %s: %v", path, err)
+	}
+
+	if err := db.Ping(); err != nil {
+		log.Fatalf("failed to ping db (%s): %v", path, err)
+	}
+
+	return db
 }
