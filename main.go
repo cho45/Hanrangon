@@ -50,7 +50,7 @@ func main() {
 	e := NewServer(config, db, tfidfDB, workerDB, queue)
 
 	// Start server
-	e.Logger.Fatal(e.Start(":5555"))
+	e.Logger.Fatal(e.Start(config.Listen))
 }
 
 func NewServer(config *Config, db *sql.DB, tfidfDB *sql.DB, workerDB *sql.DB, queue *jobqueue.Queue) *echo.Echo {

@@ -7,6 +7,10 @@ worker_db_path = "var/db/worker.db"
 static_dir = "static"
 upload_dir = "static/images/entry"
 
+# Network
+listen = ":5555"
+base_url = "http://localhost:5555"
+
 # Authentication
 username = "admin"
 password = "changeme"

@@ -20,6 +20,7 @@ type Config struct {
 	UploadDir       string `toml:"upload_dir"`
 	UploadURLPrefix string `toml:"upload_url_prefix"`
 	BaseURL         string `toml:"base_url"`
+	Listen          string `toml:"listen"`
 }
 
 func LoadConfig() *Config {
@@ -37,6 +38,7 @@ func LoadConfig() *Config {
 		UploadDir:       filepath.Join(staticDir, "images", "entry"),
 		UploadURLPrefix: "/images/entry/",
 		BaseURL:         "http://localhost:5555",
+		Listen:          ":5555",
 		SessionSecret:   "change-me-please", // Default secret
 	}
 	// 1. Load from TOML (mandatory)
@@ -73,6 +75,9 @@ func LoadConfig() *Config {
 	}
 	if env := os.Getenv("HANRANGON_BASE_URL"); env != "" {
 		cfg.BaseURL = env
+	}
+	if env := os.Getenv("HANRANGON_LISTEN"); env != "" {
+		cfg.Listen = env
 	}
 
 	return cfg
