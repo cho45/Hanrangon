@@ -25,6 +25,9 @@ xatena-go
 # Claude Code
 .claude/
 
+# Node modules
+postprocess/node_modules/
+
 # Development / Testing
 MathJax-demos-node/
 MathJax/
