@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"bytes"
@@ -16,7 +16,7 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-func (app *App) HandleRootParam(c echo.Context) error {
+func (app *AppImpl) HandleRootParam(c echo.Context) error {
 	param := c.Param("param")
 	if regexp.MustCompile(`^\d{4}$`).MatchString(param) {
 		// It's a year archive
@@ -30,7 +30,7 @@ func (app *App) HandleRootParam(c echo.Context) error {
 	return app.HandleCategory(c)
 }
 
-func (app *App) HandleDateArchive(c echo.Context) error {
+func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 	ctx := c.Request().Context()
 	yyyy := c.Param("yyyy")
 	mm := c.Param("mm")
@@ -88,7 +88,7 @@ func (app *App) HandleDateArchive(c echo.Context) error {
 	return view.Index(entries, "", app.IsAuth(c)).Render(ctx, c.Response())
 }
 
-func (app *App) HandleArchive(c echo.Context) error {
+func (app *AppImpl) HandleArchive(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	archives, err := app.queries.ListArchiveMonths(ctx)
@@ -99,7 +99,7 @@ func (app *App) HandleArchive(c echo.Context) error {
 	return view.Archive(view.ConvertArchives(archives), app.IsAuth(c)).Render(ctx, c.Response())
 }
 
-func (app *App) HandleIndex(c echo.Context) error {
+func (app *AppImpl) HandleIndex(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	// ページネーションパラメータの取得
@@ -164,7 +164,7 @@ func (app *App) HandleIndex(c echo.Context) error {
 	return view.Index(entries, nextPage, app.IsAuth(c)).Render(ctx, c.Response())
 }
 
-func (app *App) HandleEntry(c echo.Context) error {
+func (app *AppImpl) HandleEntry(c echo.Context) error {
 	ctx := c.Request().Context()
 	yyyy := c.Param("yyyy")
 	mm := c.Param("mm")
@@ -254,7 +254,7 @@ func (app *App) HandleEntry(c echo.Context) error {
 	return view.Entry(entry, trackbacks, prevPtr, nextPtr, app.IsAuth(c)).Render(ctx, c.Response())
 }
 
-func (app *App) HandleCategory(c echo.Context) error {
+func (app *AppImpl) HandleCategory(c echo.Context) error {
 	ctx := c.Request().Context()
 	category := c.Param("category")
 
@@ -309,7 +309,7 @@ func (app *App) HandleCategory(c echo.Context) error {
 	return view.Index(entries, nextPage, app.IsAuth(c)).Render(ctx, c.Response())
 }
 
-func (app *App) HandleFeed(c echo.Context) error {
+func (app *AppImpl) HandleFeed(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	rows, err := app.queries.ListEntries(ctx, model.ListEntriesParams{
@@ -338,7 +338,7 @@ func (app *App) HandleFeed(c echo.Context) error {
 	return view.Feed(entries, updated).Render(ctx, c.Response())
 }
 
-func (app *App) HandleSitemap(c echo.Context) error {
+func (app *AppImpl) HandleSitemap(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	entries, err := app.queries.ListAllEntriesForSitemap(ctx)
@@ -363,7 +363,7 @@ func (app *App) HandleSitemap(c echo.Context) error {
 	return view.Sitemap(entries).Render(ctx, c.Response())
 }
 
-func (app *App) HandleRobotsTxt(c echo.Context) error {
+func (app *AppImpl) HandleRobotsTxt(c echo.Context) error {
 	// Static content for robots.txt
 	content := `User-agent: *
 Disallow: /admin/
@@ -375,7 +375,7 @@ Sitemap: https://lowreal.net/sitemap.xml
 	return c.String(http.StatusOK, content)
 }
 
-func (app *App) HandleApiSimilar(c echo.Context) error {
+func (app *AppImpl) HandleApiSimilar(c echo.Context) error {
 	ctx := c.Request().Context()
 	idsParam := c.QueryParams()["id"]
 

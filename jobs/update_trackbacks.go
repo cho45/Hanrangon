@@ -8,18 +8,17 @@ import (
 	"net/url"
 	"regexp"
 
+	"github.com/cho45/hanrangon/app"
 	"github.com/cho45/hanrangon/model"
 )
 
 type UpdateTrackbacksJob struct {
-	queries *model.Queries
-	baseURL string
+	app app.App
 }
 
-func NewUpdateTrackbacksJob(queries *model.Queries, baseURL string) *UpdateTrackbacksJob {
+func NewUpdateTrackbacksJob(a app.App) *UpdateTrackbacksJob {
 	return &UpdateTrackbacksJob{
-		queries: queries,
-		baseURL: baseURL,
+		app: a,
 	}
 }
 
@@ -37,13 +36,13 @@ func (j *UpdateTrackbacksJob) Execute(ctx context.Context, arg json.RawMessage) 
 		return fmt.Errorf("failed to unmarshal arg: %w", err)
 	}
 
-	entry, err := j.queries.GetEntryById(ctx, a.EntryID)
+	entry, err := j.app.Queries().GetEntryById(ctx, a.EntryID)
 	if err != nil {
 		return err
 	}
 
 	// Extract paths from formatted body
-	u, err := url.Parse(j.baseURL)
+	u, err := url.Parse(j.app.Config().BaseURL)
 	if err != nil {
 		return err
 	}
@@ -64,19 +63,19 @@ func (j *UpdateTrackbacksJob) Execute(ctx context.Context, arg json.RawMessage) 
 
 	// Update trackbacks
 	// 1. Delete old ones where this entry is the source (trackback_entry_id)
-	if err := j.queries.DeleteTrackbacksBySourceEntryId(ctx, sql.NullInt64{Int64: a.EntryID, Valid: true}); err != nil {
+	if err := j.app.Queries().DeleteTrackbacksBySourceEntryId(ctx, sql.NullInt64{Int64: a.EntryID, Valid: true}); err != nil {
 		return err
 	}
 
 	// 2. Insert new ones
 	for _, path := range paths {
-		target, err := j.queries.GetEntryByPath(ctx, path)
+		target, err := j.app.Queries().GetEntryByPath(ctx, path)
 		if err != nil {
 			// If target entry not found, just skip it
 			continue
 		}
 
-		if err := j.queries.CreateTrackback(ctx, model.CreateTrackbackParams{
+		if err := j.app.Queries().CreateTrackback(ctx, model.CreateTrackbackParams{
 			EntryID:          sql.NullInt64{Int64: target.ID, Valid: true},
 			TrackbackEntryID: sql.NullInt64{Int64: a.EntryID, Valid: true},
 		}); err != nil {

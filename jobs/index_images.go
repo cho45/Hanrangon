@@ -15,25 +15,18 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/cho45/hanrangon/app"
 	"github.com/cho45/hanrangon/model"
 	"github.com/corona10/goimagehash"
 )
 
 type IndexImagesJob struct {
-	mainQueries     *model.Queries
-	imagesQueries   *model.Queries
-	uploadDir       string
-	uploadURLPrefix string
-	baseURL         string
+	app app.App
 }
 
-func NewIndexImagesJob(mainQueries, imagesQueries *model.Queries, uploadDir, uploadURLPrefix, baseURL string) *IndexImagesJob {
+func NewIndexImagesJob(a app.App) *IndexImagesJob {
 	return &IndexImagesJob{
-		mainQueries:     mainQueries,
-		imagesQueries:   imagesQueries,
-		uploadDir:       uploadDir,
-		uploadURLPrefix: uploadURLPrefix,
-		baseURL:         baseURL,
+		app: a,
 	}
 }
 
@@ -53,7 +46,7 @@ func (j *IndexImagesJob) Execute(ctx context.Context, arg json.RawMessage) error
 		return fmt.Errorf("failed to unmarshal arg: %w", err)
 	}
 
-	entry, err := j.mainQueries.GetEntryById(ctx, a.EntryID)
+	entry, err := j.app.Queries().GetEntryById(ctx, a.EntryID)
 	if err != nil {
 		return err
 	}
@@ -71,7 +64,7 @@ func (j *IndexImagesJob) Execute(ctx context.Context, arg json.RawMessage) error
 	}
 
 	// Delete old records
-	if err := j.imagesQueries.DeleteImagesByEntryID(ctx, a.EntryID); err != nil {
+	if err := j.app.ImagesQueries().DeleteImagesByEntryID(ctx, a.EntryID); err != nil {
 		return err
 	}
 
@@ -90,7 +83,7 @@ func (j *IndexImagesJob) Execute(ctx context.Context, arg json.RawMessage) error
 		sig := make([]byte, 8)
 		binary.BigEndian.PutUint64(sig, hash.GetHash())
 
-		imageID, err := j.imagesQueries.CreateImage(ctx, model.CreateImageParams{
+		imageID, err := j.app.ImagesQueries().CreateImage(ctx, model.CreateImageParams{
 			Uri:     rawURL,
 			EntryID: a.EntryID,
 			Sig:     sig,
@@ -107,7 +100,7 @@ func (j *IndexImagesJob) Execute(ctx context.Context, arg json.RawMessage) error
 			binary.BigEndian.PutUint16(word[0:2], i)       // Position
 			binary.BigEndian.PutUint16(word[2:4], segment) // Value
 
-			if err := j.imagesQueries.CreateNgram(ctx, model.CreateNgramParams{
+			if err := j.app.ImagesQueries().CreateNgram(ctx, model.CreateNgramParams{
 				ImageID: imageID,
 				Word:    word,
 			}); err != nil {
@@ -120,14 +113,18 @@ func (j *IndexImagesJob) Execute(ctx context.Context, arg json.RawMessage) error
 }
 
 func (j *IndexImagesJob) loadImage(rawURL string) (image.Image, error) {
+	uploadURLPrefix := j.app.Config().UploadURLPrefix
+	uploadDir := j.app.Config().UploadDir
+	baseURL := j.app.Config().BaseURL
+
 	// 1. Handle local paths
-	if strings.HasPrefix(rawURL, j.uploadURLPrefix) {
-		filename := strings.TrimPrefix(rawURL, j.uploadURLPrefix)
+	if strings.HasPrefix(rawURL, uploadURLPrefix) {
+		filename := strings.TrimPrefix(rawURL, uploadURLPrefix)
 		unescaped, err := url.PathUnescape(filename)
 		if err == nil {
 			filename = unescaped
 		}
-		path := filepath.Join(j.uploadDir, filename)
+		path := filepath.Join(uploadDir, filename)
 		f, err := os.Open(path)
 		if err != nil {
 			return nil, err
@@ -140,8 +137,8 @@ func (j *IndexImagesJob) loadImage(rawURL string) (image.Image, error) {
 	// 2. Handle absolute URLs to our host
 	u, err := url.Parse(rawURL)
 	if err == nil {
-		baseU, _ := url.Parse(j.baseURL)
-		if u.Host == baseU.Host && strings.HasPrefix(u.Path, j.uploadURLPrefix) {
+		baseU, _ := url.Parse(baseURL)
+		if u.Host == baseU.Host && strings.HasPrefix(u.Path, uploadURLPrefix) {
 			// Reuse local path logic via recursing with the path part
 			return j.loadImage(u.Path)
 		}

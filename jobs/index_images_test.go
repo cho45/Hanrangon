@@ -2,7 +2,6 @@ package jobs
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"image"
 	"image/color"
@@ -11,30 +10,45 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/cho45/hanrangon/app"
+	"github.com/cho45/hanrangon/jobqueue"
 	"github.com/cho45/hanrangon/model"
+	"github.com/cho45/hanrangon/tfidf"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 func TestIndexImagesJob_Execute(t *testing.T) {
-	db, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
+	// Setup databases
+	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
 	defer db.Close()
+	defer tfidfDB.Close()
+	defer workerDB.Close()
+	defer imagesDB.Close()
 
-	// Load schema
-	schema, _ := os.ReadFile("../db/schema/schema.sql")
-	db.Exec(string(schema))
-	imgSchema, _ := os.ReadFile("../db/schema/images.sql")
-	db.Exec(string(imgSchema))
-
-	queries := model.New(db)
 	tmpDir, _ := os.MkdirTemp("", "hanrangon-index-test")
 	defer os.RemoveAll(tmpDir)
 
-	baseURL := "http://localhost:5555"
-	prefix := "/images/entry/"
-	job := NewIndexImagesJob(queries, tmpDir, prefix, baseURL)
+	config := &app.Config{
+		BaseURL:         "http://localhost:5555",
+		UploadURLPrefix: "/images/entry/",
+		UploadDir:       tmpDir,
+	}
+
+	// TF-IDF calculator and similarity calculator
+	tfidfQueries := model.New(tfidfDB)
+	calc, err := tfidf.NewCalculator(tfidfDB, tfidfQueries)
+	if err != nil {
+		t.Fatalf("failed to create calculator: %v", err)
+	}
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
+
+	// Create job queue
+	registry := jobqueue.NewRegistry()
+	workerQueries := model.New(workerDB)
+	queue := jobqueue.NewQueue(workerDB, workerQueries, registry)
+
+	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, queue)
+	job := NewIndexImagesJob(application)
 
 	// Create a dummy image
 	imgName := "test.png"
@@ -66,10 +80,10 @@ func TestIndexImagesJob_Execute(t *testing.T) {
 		t.Fatalf("Execute failed: %v", err)
 	}
 
-	// Verify image records
+	// Verify image records (in imagesDB, not main db)
 	var uri string
 	var sig []byte
-	err = db.QueryRow("SELECT uri, sig FROM images WHERE entry_id = ?", entryID).Scan(&uri, &sig)
+	err = imagesDB.QueryRow("SELECT uri, sig FROM images WHERE entry_id = ?", entryID).Scan(&uri, &sig)
 	if err != nil {
 		t.Fatalf("failed to find image record: %v", err)
 	}
@@ -80,9 +94,9 @@ func TestIndexImagesJob_Execute(t *testing.T) {
 		t.Errorf("unexpected signature length: %d", len(sig))
 	}
 
-	// Verify ngrams
+	// Verify ngrams (in imagesDB)
 	var count int
-	err = db.QueryRow("SELECT COUNT(*) FROM ngram").Scan(&count)
+	err = imagesDB.QueryRow("SELECT COUNT(*) FROM ngram").Scan(&count)
 	if err != nil {
 		t.Fatal(err)
 	}

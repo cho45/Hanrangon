@@ -1,9 +1,7 @@
-package main
+package app
 
 import (
 	"bytes"
-	"context"
-	"database/sql"
 	"encoding/json"
 	"mime/multipart"
 	"net/http"
@@ -14,135 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cho45/hanrangon/jobqueue"
-	"github.com/cho45/hanrangon/jobs"
-	"github.com/cho45/hanrangon/model"
 	"github.com/labstack/echo/v4"
-	_ "github.com/mattn/go-sqlite3"
 )
-
-func setupTestDB(t *testing.T) (*sql.DB, *sql.DB, *sql.DB, *sql.DB) {
-	t.Helper()
-
-	// Main DB
-	db, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatalf("failed to open memory db: %v", err)
-	}
-	schema, err := os.ReadFile("db/schema/schema.sql")
-	if err != nil {
-		t.Fatalf("failed to read schema: %v", err)
-	}
-	if _, err := db.Exec(string(schema)); err != nil {
-		t.Fatalf("failed to apply schema: %v", err)
-	}
-
-	// TFIDF DB
-	tfidfDB, err := sql.Open("sqlite3_with_math_functions", ":memory:")
-	if err != nil {
-		t.Fatalf("failed to open memory tfidf db: %v", err)
-	}
-	tfidfSchema, err := os.ReadFile("db/schema/tfidf.sql")
-	if err != nil {
-		t.Fatalf("failed to read tfidf schema: %v", err)
-	}
-	if _, err := tfidfDB.Exec(string(tfidfSchema)); err != nil {
-		t.Fatalf("failed to apply tfidf schema: %v", err)
-	}
-
-	// Worker DB
-	workerDB, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatalf("failed to open memory worker db: %v", err)
-	}
-	workerSchema, err := os.ReadFile("db/schema/worker.sql")
-	if err != nil {
-		t.Fatalf("failed to read worker schema: %v", err)
-	}
-	if _, err := workerDB.Exec(string(workerSchema)); err != nil {
-		t.Fatalf("failed to apply worker schema: %v", err)
-	}
-
-	// Images DB
-	imagesDB, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatalf("failed to open memory images db: %v", err)
-	}
-	imagesSchema, err := os.ReadFile("db/schema/images.sql")
-	if err != nil {
-		t.Fatalf("failed to read images schema: %v", err)
-	}
-	if _, err := imagesDB.Exec(string(imagesSchema)); err != nil {
-		t.Fatalf("failed to apply images schema: %v", err)
-	}
-
-	return db, tfidfDB, workerDB, imagesDB
-}
-
-func setupTest(t *testing.T) *testEnv {
-	t.Helper()
-	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
-
-	tmpDir, err := os.MkdirTemp("", "hanrangon-upload-test")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-
-	config := &Config{
-		StaticDir:     "static",
-		UploadDir:     tmpDir,
-		Username:      "testuser",
-		Password:      "testpass",
-		SessionSecret: "testsecret",
-	}
-
-	// Create job queue for testing
-	registry := jobqueue.NewRegistry()
-	queue := jobqueue.NewQueue(workerDB, model.New(workerDB), registry)
-
-	app := NewApp(config, db, tfidfDB, workerDB, imagesDB, queue)
-	e := NewServer(app)
-	return &testEnv{
-		db:        db,
-		tfidfDB:   tfidfDB,
-		workerDB:  workerDB,
-		imagesDB:  imagesDB,
-		server:    e,
-		uploadDir: tmpDir,
-	}
-}
-
-type testEnv struct {
-	db        *sql.DB
-	tfidfDB   *sql.DB
-	workerDB  *sql.DB
-	imagesDB  *sql.DB
-	server    *echo.Echo
-	uploadDir string
-}
-
-func (env *testEnv) close() {
-	env.db.Close()
-	env.tfidfDB.Close()
-	env.workerDB.Close()
-	env.imagesDB.Close()
-	os.RemoveAll(env.uploadDir)
-}
-
-func (env *testEnv) login(t *testing.T) string {
-	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("username=testuser&password=testpass"))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec := httptest.NewRecorder()
-	env.server.ServeHTTP(rec, req)
-
-	cookie := rec.Header().Get("Set-Cookie")
-	if cookie == "" {
-		t.Fatal("failed to get session cookie")
-	}
-	// Extract the actual cookie value (e.g. "session=...")
-	return strings.Split(cookie, ";")[0]
-}
 
 func TestHandleIndex(t *testing.T) {
 	env := setupTest(t)
@@ -151,7 +22,7 @@ func TestHandleIndex(t *testing.T) {
 	// Insert test data
 	_, err := env.db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
-		VALUES 
+		VALUES
 		('Test Entry 1', 'Body 1', '<p>Formatted Body 1</p>', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
 		('Test Entry 2', 'Body 2', '<p>Formatted Body 2</p>', '2025/01/01/2', 'Markdown', '2025-01-01', '2025-01-01 12:00:00', '2025-01-01 12:00:00')
 	`)
@@ -183,7 +54,7 @@ func TestHandleEntry(t *testing.T) {
 
 	_, err := env.db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
-		VALUES 
+		VALUES
 		('Test Entry 1', 'Body 1', '<p>Formatted Body 1</p>', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
 		('Test Entry 2', 'Body 2', '<p>Formatted Body 2</p>', '2025/01/01/2', 'Markdown', '2025-01-01', '2025-01-01 12:00:00', '2025-01-01 12:00:00')
 	`)
@@ -227,7 +98,7 @@ func TestHandleArchive(t *testing.T) {
 
 	_, err := env.db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
-		VALUES 
+		VALUES
 		('Entry 1', 'Body 1', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
 		('Entry 2', 'Body 2', '', '2025/01/02/1', 'Markdown', '2025-01-02', '2025-01-02 10:00:00', '2025-01-02 10:00:00'),
 		('Entry 3', 'Body 3', '', '2024/12/31/1', 'Markdown', '2024-12-31', '2024-12-31 10:00:00', '2024-12-31 10:00:00')
@@ -263,7 +134,7 @@ func TestHandleDateArchive(t *testing.T) {
 
 	_, err := env.db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
-		VALUES 
+		VALUES
 		('Entry 2025-01-01', 'Body', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
 		('Entry 2025-01-02', 'Body', '', '2025/01/02/1', 'Markdown', '2025-01-02', '2025-01-02 10:00:00', '2025-01-02 10:00:00'),
 		('Entry 2025-02-01', 'Body', '', '2025/02/01/1', 'Markdown', '2025-02-01', '2025-02-01 10:00:00', '2025-02-01 10:00:00'),
@@ -327,7 +198,7 @@ func TestHandleCategory(t *testing.T) {
 
 	_, err := env.db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
-		VALUES 
+		VALUES
 		('[test] Tagged Entry', 'Body', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
 		('Normal Entry', 'Body', '', '2025/01/02/1', 'Markdown', '2025-01-02', '2025-01-02 10:00:00', '2025-01-02 10:00:00')
 	`)
@@ -364,7 +235,7 @@ func TestHandleFeed(t *testing.T) {
 
 	_, err := env.db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
-		VALUES 
+		VALUES
 		('Feed Entry 1', 'Body', '<p>Body</p>', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00')
 	`)
 	if err != nil {
@@ -400,7 +271,7 @@ func TestHandleSitemap(t *testing.T) {
 
 	_, err := env.db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
-		VALUES 
+		VALUES
 		('Sitemap Entry 1', 'Body', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00')
 	`)
 	if err != nil {
@@ -438,7 +309,7 @@ func TestHandleApiSimilar(t *testing.T) {
 		// Insert entries into main DB
 		_, err := env.db.Exec(`
 			INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at)
-			VALUES 
+			VALUES
 			(1, 'Target Entry', 'Body 1', '<p>Body 1</p>', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
 			(2, 'Related Entry', 'Body 2', '<p>Body 2</p>', '2025/01/01/2', 'Markdown', '2025-01-01', '2025-01-01 11:00:00', '2025-01-01 11:00:00')
 		`)
@@ -492,7 +363,7 @@ func TestHandleApiSimilar(t *testing.T) {
 		// Insert entries
 		_, err := env.db.Exec(`
 			INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at)
-			VALUES 
+			VALUES
 			(3, 'Target Image Entry', 'Body 3', '', '2025/01/01/3', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
 			(4, 'Related Image Entry', 'Body 4', '', '2025/01/01/4', 'Markdown', '2025-01-01', '2025-01-01 11:00:00', '2025-01-01 11:00:00')
 		`)
@@ -502,7 +373,7 @@ func TestHandleApiSimilar(t *testing.T) {
 
 		// Insert images
 		_, err = env.imagesDB.Exec(`
-			INSERT INTO images (id, uri, entry_id, sig) VALUES 
+			INSERT INTO images (id, uri, entry_id, sig) VALUES
 			(1, 'http://example.com/img1.jpg', 3, ''),
 			(2, 'http://example.com/img2.jpg', 4, '')
 		`)
@@ -512,7 +383,7 @@ func TestHandleApiSimilar(t *testing.T) {
 
 		// Insert ngrams (share "test" word)
 		_, err = env.imagesDB.Exec(`
-			INSERT INTO ngram (image_id, word) VALUES 
+			INSERT INTO ngram (image_id, word) VALUES
 			(1, 'test'),
 			(2, 'test')
 		`)
@@ -549,36 +420,6 @@ func TestHandleApiSimilar(t *testing.T) {
 			t.Error("rendered HTML does not contain related image URI")
 		}
 	})
-}
-
-func TestLoadConfig(t *testing.T) {
-	// Create a temporary TOML file for testing
-	tomlPath := "test_config.toml"
-	tomlContent := `
-	data_db_path = "from_toml_data"
-	static_dir = "from_toml_static"
-	`
-	if err := os.WriteFile(tomlPath, []byte(tomlContent), 0644); err != nil {
-		t.Fatalf("failed to create test toml: %v", err)
-	}
-	defer os.Remove(tomlPath)
-
-	// Set env var for config path
-	os.Setenv("HANRANGON_CONFIG", tomlPath)
-	defer os.Unsetenv("HANRANGON_CONFIG")
-
-	// Set env var for override
-	os.Setenv("HANRANGON_STATIC_DIR", "from_env_static")
-	defer os.Unsetenv("HANRANGON_STATIC_DIR")
-
-	cfg := LoadConfig()
-
-	if cfg.DataDBPath != "from_toml_data" {
-		t.Errorf("want from_toml_data, got %s", cfg.DataDBPath)
-	}
-	if cfg.StaticDir != "from_env_static" {
-		t.Errorf("want from_env_static (override), got %s", cfg.StaticDir)
-	}
 }
 
 func TestHandleApiEdit(t *testing.T) {
@@ -748,7 +589,7 @@ func TestCaching(t *testing.T) {
 	modTimeStr := "2025-01-01 12:00:00"
 	_, err := env.db.Exec(`
 		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
-		VALUES 
+		VALUES
 		('Cache Entry', 'Body', '<p>Body</p>', '2025/01/01/cache', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', ?)
 	`, modTimeStr)
 	if err != nil {
@@ -818,56 +659,5 @@ func TestCaching(t *testing.T) {
 	newEtag := rec4.Header().Get("ETag")
 	if newEtag == etag {
 		t.Error("ETag should have changed after modification")
-	}
-}
-
-func TestUpdateTrackbacksJob(t *testing.T) {
-	env := setupTest(t)
-	defer env.close()
-
-	// 1. Create target entry
-	_, err := env.db.Exec(`
-		INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at, status)
-		VALUES (100, 'Target', 'Body', 'Formatted', '2026/01/01/1', 'Markdown', '2026-01-01', '2026-01-01 10:00:00', '2026-01-01 10:00:00', 'public')
-	`)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// 2. Create source entry that links to target
-	// Use the default BaseURL: http://localhost:5555
-	link := "http://localhost:5555/2026/01/01/1"
-	_, err = env.db.Exec(`
-		INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at, status)
-		VALUES (101, 'Source', 'Links to Target', 'Links to <a href="` + link + `">Target</a>', '2026/01/02/1', 'Markdown', '2026-01-02', '2026-01-02 10:00:00', '2026-01-02 10:00:00', 'public')
-	`)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	job := jobs.NewUpdateTrackbacksJob(model.New(env.db), "http://localhost:5555")
-	arg, _ := json.Marshal(jobs.UpdateTrackbacksArg{EntryID: 101})
-
-	if err := job.Execute(context.Background(), arg); err != nil {
-		t.Fatalf("job execution failed: %v", err)
-	}
-
-	// 3. Verify trackback was created
-	rows, err := env.db.Query("SELECT entry_id, trackback_entry_id FROM trackbacks")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-	if !rows.Next() {
-		t.Fatal("no trackback record found")
-	}
-	var entryID, trackbackEntryID int64
-	rows.Scan(&entryID, &trackbackEntryID)
-
-	if entryID != 100 {
-		t.Errorf("expected entry_id 100, got %d", entryID)
-	}
-	if trackbackEntryID != 101 {
-		t.Errorf("expected trackback_entry_id 101, got %d", trackbackEntryID)
 	}
 }

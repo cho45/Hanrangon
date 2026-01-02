@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"crypto/sha1"
@@ -42,7 +42,7 @@ func init() {
 
 // CheckCache handles HTTP caching headers (ETag, Last-Modified) and validation.
 // Returns true if the request was handled (i.e., 304 Not Modified sent), false otherwise.
-func (app *App) CheckCache(c echo.Context, lastMod time.Time, etag string) bool {
+func (app *AppImpl) CheckCache(c echo.Context, lastMod time.Time, etag string) bool {
 	req := c.Request()
 	res := c.Response()
 

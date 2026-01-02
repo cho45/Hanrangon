@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"context"
@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/cho45/hanrangon/formatter"
-	"github.com/cho45/hanrangon/jobs"
 	"github.com/cho45/hanrangon/model"
 	"github.com/cho45/hanrangon/view"
 	"github.com/gorilla/sessions"
@@ -39,7 +38,7 @@ type EditResponse struct {
 	Location string `json:"location"`
 }
 
-func (app *App) HandleEdit(c echo.Context) error {
+func (app *AppImpl) HandleEdit(c echo.Context) error {
 	idStr := c.QueryParam("id")
 	var entry model.Entry
 
@@ -75,7 +74,7 @@ func (app *App) HandleEdit(c echo.Context) error {
 	return view.Edit(string(entryBytes)).Render(c.Request().Context(), c.Response())
 }
 
-func (app *App) HandleLogin(c echo.Context) error {
+func (app *AppImpl) HandleLogin(c echo.Context) error {
 	returnPath := c.QueryParam("return")
 	if returnPath == "" {
 		returnPath = "/"
@@ -83,7 +82,7 @@ func (app *App) HandleLogin(c echo.Context) error {
 	return view.Login("", returnPath).Render(c.Request().Context(), c.Response())
 }
 
-func (app *App) HandleLoginPost(c echo.Context) error {
+func (app *AppImpl) HandleLoginPost(c echo.Context) error {
 	username := c.FormValue("username")
 	password := c.FormValue("password")
 	returnPath := c.FormValue("return")
@@ -110,21 +109,21 @@ func (app *App) HandleLoginPost(c echo.Context) error {
 	return view.Login("Invalid Username or Password", returnPath).Render(c.Request().Context(), c.Response())
 }
 
-func (app *App) HandleLogout(c echo.Context) error {
+func (app *AppImpl) HandleLogout(c echo.Context) error {
 	sess, _ := session.Get("session", c)
 	sess.Options.MaxAge = -1
 	sess.Save(c.Request(), c.Response())
 	return c.Redirect(http.StatusFound, "/")
 }
 
-func (app *App) HandleApiEditProgress(c echo.Context) error {
+func (app *AppImpl) HandleApiEditProgress(c echo.Context) error {
 	// Simple implementation: always return empty progress (means finished)
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"progress": "",
 	})
 }
 
-func (app *App) HandleApiEdit(c echo.Context) error {
+func (app *AppImpl) HandleApiEdit(c echo.Context) error {
 	req := new(EditRequest)
 	if err := c.Bind(req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request payload").SetInternal(err)
@@ -155,7 +154,7 @@ func (app *App) HandleApiEdit(c echo.Context) error {
 
 	// 2. Postprocess the formatted body (MathJax, syntax highlight, image processing, widgets)
 	ctx := c.Request().Context()
-	if processedBody, err := app.postprocess(ctx, formattedBody); err == nil {
+	if processedBody, err := app.Postprocess(ctx, formattedBody); err == nil {
 		formattedBody = processedBody
 	} else {
 		log.Printf("Postprocess failed: %v", err)
@@ -227,7 +226,7 @@ func (app *App) HandleApiEdit(c echo.Context) error {
 
 	// TF-IDF再計算ジョブをエンキュー
 	err = app.jobQueue.Enqueue(context.Background(), "RecalculateTFIDF",
-		jobs.RecalculateTFIDFArg{EntryID: resEntry.ID},
+		map[string]interface{}{"entry_id": resEntry.ID},
 		fmt.Sprintf("recalc-tfidf-%d", resEntry.ID))
 	if err != nil {
 		log.Printf("Failed to enqueue TF-IDF job: %v", err)
@@ -235,7 +234,7 @@ func (app *App) HandleApiEdit(c echo.Context) error {
 
 	// Trackback更新ジョブをエンキュー
 	err = app.jobQueue.Enqueue(context.Background(), "UpdateTrackbacks",
-		jobs.UpdateTrackbacksArg{EntryID: resEntry.ID},
+		map[string]interface{}{"entry_id": resEntry.ID},
 		fmt.Sprintf("update-trackbacks-%d", resEntry.ID))
 	if err != nil {
 		log.Printf("Failed to enqueue Trackback job: %v", err)
@@ -243,7 +242,7 @@ func (app *App) HandleApiEdit(c echo.Context) error {
 
 	// 画像インデックスジョブをエンキュー
 	err = app.jobQueue.Enqueue(context.Background(), "IndexImages",
-		jobs.IndexImagesArg{EntryID: resEntry.ID},
+		map[string]interface{}{"entry_id": resEntry.ID},
 		fmt.Sprintf("index-images-%d", resEntry.ID))
 	if err != nil {
 		log.Printf("Failed to enqueue IndexImages job: %v", err)
@@ -255,7 +254,7 @@ func (app *App) HandleApiEdit(c echo.Context) error {
 	})
 }
 
-func (app *App) HandleApiUploadImage(c echo.Context) error {
+func (app *AppImpl) HandleApiUploadImage(c echo.Context) error {
 	file, err := c.FormFile("file")
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Missing file").SetInternal(err)
