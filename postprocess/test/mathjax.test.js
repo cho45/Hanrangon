@@ -75,4 +75,30 @@ describe('processMathJax', () => {
     assert(result.includes('frac') || result.includes('\\frac'),
            'Result should contain frac (the fraction command should be processed correctly)');
   });
+
+  it('should wrap math in mjx-container with class="MathJax"', async () => {
+    const html = '<p>Inline: \\(x^2\\) and display: $$y^2$$</p>';
+    const result = await processMathJaxHTML(html);
+
+    // mjx-container が含まれているか確認
+    assert(result.includes('mjx-container'), 'Result should contain mjx-container element');
+    // class="MathJax" が含まれているか確認
+    assert(result.includes('class="MathJax"'), 'mjx-container should have class="MathJax"');
+  });
+
+  it('should distinguish inline and display math with display attribute', async () => {
+    const inlineHTML = '<p>\\(x^2\\)</p>';
+    const displayHTML = '<p>$$y^2$$</p>';
+
+    const inlineResult = await processMathJaxHTML(inlineHTML);
+    const displayResult = await processMathJaxHTML(displayHTML);
+
+    // inline math は display 属性を持たない
+    assert(inlineResult.includes('mjx-container'), 'Inline should have mjx-container');
+    assert(!inlineResult.includes('display="true"'), 'Inline should not have display="true"');
+
+    // display math は display="true" 属性を持つ
+    assert(displayResult.includes('mjx-container'), 'Display should have mjx-container');
+    assert(displayResult.includes('display="true"'), 'Display should have display="true"');
+  });
 });

@@ -138,22 +138,22 @@ function createRangeFromOffset(nodeMap, startOffset, endOffset) {
 }
 
 /**
- * Range を SVG 要素に置換
+ * Range を MathJax コンテナ（SVG 含む）に置換
  * @param {Range} range - 置換対象の Range
- * @param {string} svgString - SVG 文字列
+ * @param {string} containerHTML - mjx-container の HTML 文字列
  */
-function replaceRangeWithSVG(range, svgString) {
+function replaceRangeWithSVG(range, containerHTML) {
   const doc = range.startContainer.ownerDocument;
   const tempDiv = doc.createElement('div');
-  tempDiv.innerHTML = svgString;
-  const svgElement = tempDiv.firstChild;
+  tempDiv.innerHTML = containerHTML;
+  const element = tempDiv.firstChild;
 
   range.deleteContents();
-  range.insertNode(svgElement);
+  range.insertNode(element);
 }
 
 /**
- * DOM 内のテキストノードを走査して数式を SVG に置換
+ * DOM 内のテキストノードを走査して数式を MathJax SVG に置換
  * Range を使って複数のテキストノードにまたがる数式にも対応
  * @param {Document} dom - JSDOM の document.body
  * @param {RegExp} regex - マッチパターン
@@ -185,15 +185,14 @@ async function processTextNodesWithPattern(dom, regex, display, type) {
     const endOffset = match.index + match[0].length;
 
     try {
-      // TeX を SVG に変換
+      // TeX を mjx-container (SVG 含む) に変換
       const mjxContainer = await MathJax.tex2svgPromise(match[1], {display});
       const adaptor = MathJax.startup.adaptor;
-      const svg = adaptor.firstChild(mjxContainer);
-      const svgString = adaptor.outerHTML(svg);
+      const containerHTML = adaptor.outerHTML(mjxContainer);
 
       // Range を作成して置換
       const range = createRangeFromOffset(nodeMap, startOffset, endOffset);
-      replaceRangeWithSVG(range, svgString);
+      replaceRangeWithSVG(range, containerHTML);
 
       const preview = match[1].substring(0, 50);
       console.error(`[mathjax] Converted ${display ? 'display' : 'inline'} math: ${preview}${match[1].length > 50 ? '...' : ''}`);

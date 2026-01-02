@@ -652,6 +652,24 @@ body > * {
 	font-size: 24px;
 }
 
+/* MathJax 全般 */
+mjx-container.MathJax {
+	display: inline-block;
+}
+
+/* display math */
+mjx-container.MathJax[display="true"] {
+  display: block;
+  text-align: center;
+  margin: 1em 0;
+  font-size: 24px;
+}
+
+/* inline math */
+mjx-container.MathJax:not([display]) {
+  /* inline specific styles */
+}
+
 .entries article .content iframe {
 	max-width: 100%;
 }
