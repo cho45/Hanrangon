@@ -16,15 +16,9 @@ async function processHTML(html) {
   const startTime = Date.now();
   console.error(`[main] Starting processHTML (input: ${html.length} bytes)`);
 
-  // 1. MathJax 処理（文字列処理）
+  // 1. DOM 構築（一度だけ）
   let stepStart = Date.now();
-  console.error('[main] Step 1/4: MathJax processing');
-  html = await processMathJax(html);
-  console.error(`[main] MathJax completed in ${Date.now() - stepStart}ms`);
-
-  // 2. DOM 構築
-  stepStart = Date.now();
-  console.error('[main] Step 2/4: Building DOM');
+  console.error('[main] Step 1/5: Building DOM');
   const { window } = new JSDOM(html, {
     features: {
       FetchExternalResources: false,
@@ -35,23 +29,31 @@ async function processHTML(html) {
   const dom = window.document.body;
   console.error(`[main] DOM built in ${Date.now() - stepStart}ms`);
 
-  // 3. DOM 処理
+  // 2. MathJax 処理（DOM ベース）
   stepStart = Date.now();
-  console.error('[main] Step 3/4: Syntax highlighting');
+  console.error('[main] Step 2/5: MathJax processing');
+  await processMathJax(dom);
+  console.error(`[main] MathJax completed in ${Date.now() - stepStart}ms`);
+
+  // 3. シンタックスハイライト
+  stepStart = Date.now();
+  console.error('[main] Step 3/5: Syntax highlighting');
   await processHighlight(dom);
   console.error(`[main] Highlighting completed in ${Date.now() - stepStart}ms`);
 
+  // 4. 画像処理
   stepStart = Date.now();
-  console.error('[main] Step 4/4: Image processing');
+  console.error('[main] Step 4/5: Image processing');
   await processImages(dom);
   console.error(`[main] Image processing completed in ${Date.now() - stepStart}ms`);
 
+  // 5. ウィジェット処理
   stepStart = Date.now();
   console.error('[main] Step 5/5: Widget processing');
   await processWidgets(dom);
   console.error(`[main] Widget processing completed in ${Date.now() - stepStart}ms`);
 
-  // 4. 処理後の HTML を返す
+  // 6. 処理後の HTML を返す
   const result = dom.innerHTML;
   window.close();
 

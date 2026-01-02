@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"database/sql"
@@ -92,13 +93,26 @@ func (app *App) postprocess(ctx context.Context, html string) (string, error) {
 	cmd := exec.CommandContext(ctx, "node", scriptPath)
 	cmd.Stdin = bytes.NewReader([]byte(html))
 
-	var stdout, stderr bytes.Buffer
+	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+
+	// stderr をリアルタイムでログに出力
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+
+	// stderr を行ごとにログ出力する goroutine
+	go func() {
+		scanner := bufio.NewScanner(stderrPipe)
+		for scanner.Scan() {
+			log.Printf("[postprocess] %s", scanner.Text())
+		}
+	}()
 
 	if err := cmd.Run(); err != nil {
 		log.Printf("[postprocess] Failed after %v: %v", time.Since(start), err)
-		return "", fmt.Errorf("postprocess failed: %w, stderr: %s", err, stderr.String())
+		return "", fmt.Errorf("postprocess failed: %w", err)
 	}
 
 	elapsed := time.Since(start)
