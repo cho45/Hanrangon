@@ -717,3 +717,63 @@ func TestDateTimeHandling(t *testing.T) {
 		t.Errorf("Timezone offset mismatch. got=%d, want=%d (JST)", offset, 9*60*60)
 	}
 }
+
+func TestUpdateModifiedAt(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	ctx := context.Background()
+	oldTime := time.Date(2025, 1, 1, 12, 0, 0, 0, time.Local)
+
+	// 1. Create entry
+	entry, err := env.app.Queries().CreateEntry(ctx, model.CreateEntryParams{
+		Title:         "Old Title",
+		Body:          "Old Body",
+		FormattedBody: "<p>Old Body</p>",
+		Path:          "2025/01/01/mod-test",
+		Format:        "Markdown",
+		Date:          "2025-01-01",
+		CreatedAt:     oldTime,
+		ModifiedAt:    oldTime,
+		Status:        "public",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cookie := env.login(t)
+
+	// 2. Update via handler
+	updateReq := EditRequest{
+		ID:     entry.ID,
+		Title:  "New Title",
+		Body:   "New Body",
+		Format: "Markdown",
+		Status: "public",
+	}
+	body, _ := json.Marshal(updateReq)
+	req := httptest.NewRequest(http.MethodPost, "/api/edit", strings.NewReader(string(body)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Cookie", cookie)
+	rec := httptest.NewRecorder()
+	env.server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d", rec.Code)
+	}
+
+	// 3. Verify modified_at has changed
+	updated, err := env.app.Queries().GetEntryById(ctx, entry.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !updated.ModifiedAt.After(oldTime) {
+		t.Errorf("modified_at should be updated. old=%v, new=%v", oldTime, updated.ModifiedAt)
+	}
+
+	// CreatedAt should remain same
+	if !updated.CreatedAt.Equal(oldTime) {
+		t.Errorf("created_at should NOT be updated. old=%v, new=%v", oldTime, updated.CreatedAt)
+	}
+}
