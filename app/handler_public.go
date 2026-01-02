@@ -85,7 +85,15 @@ func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 		}
 	}
 
-	return view.Index(entries, "", app.IsAuth(c)).Render(ctx, c.Response())
+	data := &view.IndexData{
+		LayoutData: view.LayoutData{
+			Title:  "氾濫原",
+			IsAuth: app.IsAuth(c),
+		},
+		Entries:  entries,
+		NextPage: "",
+	}
+	return app.templates.Render(c.Response(), "index", data)
 }
 
 func (app *AppImpl) HandleArchive(c echo.Context) error {
@@ -96,7 +104,14 @@ func (app *AppImpl) HandleArchive(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch archives").SetInternal(err)
 	}
 
-	return view.Archive(view.ConvertArchives(archives), app.IsAuth(c)).Render(ctx, c.Response())
+	data := &view.ArchiveData{
+		LayoutData: view.LayoutData{
+			Title:  "アーカイブ - 氾濫原",
+			IsAuth: app.IsAuth(c),
+		},
+		Archives: view.ConvertArchives(archives),
+	}
+	return app.templates.Render(c.Response(), "archive", data)
 }
 
 func (app *AppImpl) HandleIndex(c echo.Context) error {
@@ -138,7 +153,15 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 	}
 
 	if len(dates) == 0 {
-		return view.Index([]model.Entry{}, "", app.IsAuth(c)).Render(ctx, c.Response())
+		data := &view.IndexData{
+			LayoutData: view.LayoutData{
+				Title:  "氾濫原",
+				IsAuth: app.IsAuth(c),
+			},
+			Entries:  []model.Entry{},
+			NextPage: "",
+		}
+		return app.templates.Render(c.Response(), "index", data)
 	}
 
 	// 2. 取得した日付に含まれる全記事を取得
@@ -161,7 +184,15 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 	}
 
 	// HTMLレンダリング
-	return view.Index(entries, nextPage, app.IsAuth(c)).Render(ctx, c.Response())
+	data := &view.IndexData{
+		LayoutData: view.LayoutData{
+			Title:  "氾濫原",
+			IsAuth: app.IsAuth(c),
+		},
+		Entries:  entries,
+		NextPage: nextPage,
+	}
+	return app.templates.Render(c.Response(), "index", data)
 }
 
 func (app *AppImpl) HandleEntry(c echo.Context) error {
@@ -251,7 +282,17 @@ func (app *AppImpl) HandleEntry(c echo.Context) error {
 		nextPtr = &n
 	}
 
-	return view.Entry(entry, trackbacks, prevPtr, nextPtr, app.IsAuth(c)).Render(ctx, c.Response())
+	data := &view.EntryData{
+		LayoutData: view.LayoutData{
+			Title:  entry.Title + " - 氾濫原",
+			IsAuth: app.IsAuth(c),
+		},
+		Entry:      entry,
+		Trackbacks: trackbacks,
+		Prev:       prevPtr,
+		Next:       nextPtr,
+	}
+	return app.templates.Render(c.Response(), "entry", data)
 }
 
 func (app *AppImpl) HandleCategory(c echo.Context) error {
@@ -306,7 +347,15 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 		}
 	}
 
-	return view.Index(entries, nextPage, app.IsAuth(c)).Render(ctx, c.Response())
+	data := &view.IndexData{
+		LayoutData: view.LayoutData{
+			Title:  "氾濫原",
+			IsAuth: app.IsAuth(c),
+		},
+		Entries:  entries,
+		NextPage: nextPage,
+	}
+	return app.templates.Render(c.Response(), "index", data)
 }
 
 func (app *AppImpl) HandleFeed(c echo.Context) error {
@@ -335,7 +384,11 @@ func (app *AppImpl) HandleFeed(c echo.Context) error {
 	}
 
 	c.Response().Header().Set(echo.HeaderContentType, "application/atom+xml; charset=utf-8")
-	return view.Feed(entries, updated).Render(ctx, c.Response())
+	data := &view.FeedData{
+		Entries: entries,
+		Updated: updated.Format(time.RFC3339),
+	}
+	return app.templates.Render(c.Response(), "feed", data)
 }
 
 func (app *AppImpl) HandleSitemap(c echo.Context) error {
@@ -360,7 +413,10 @@ func (app *AppImpl) HandleSitemap(c echo.Context) error {
 	}
 
 	c.Response().Header().Set(echo.HeaderContentType, "application/xml; charset=utf-8")
-	return view.Sitemap(entries).Render(ctx, c.Response())
+	data := &view.SitemapData{
+		Entries: entries,
+	}
+	return app.templates.Render(c.Response(), "sitemap", data)
 }
 
 func (app *AppImpl) HandleRobotsTxt(c echo.Context) error {
@@ -421,7 +477,10 @@ func (app *AppImpl) HandleApiSimilar(c echo.Context) error {
 
 			// 4. Render to string
 			var buf bytes.Buffer
-			if err := view.SimilarEntries(similarEntries).Render(ctx, &buf); err != nil {
+			data := &view.SimilarEntriesData{
+				Entries: similarEntries,
+			}
+			if err := app.templates.Render(&buf, "similar-entries", data); err != nil {
 				continue
 			}
 
@@ -483,7 +542,10 @@ func (app *AppImpl) HandleApiSimilar(c echo.Context) error {
 
 		// Render SimilarImages
 		var buf bytes.Buffer
-		if err := view.SimilarImages(viewImages).Render(ctx, &buf); err != nil {
+		data := &view.SimilarImagesData{
+			Images: viewImages,
+		}
+		if err := app.templates.Render(&buf, "similar-images", data); err != nil {
 			continue
 		}
 		result[idStr] = buf.String()

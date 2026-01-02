@@ -34,6 +34,7 @@ type AppImpl struct {
 	similarityCalculator *tfidf.SimilarityCalculator
 	jobQueue             *jobqueue.Queue
 	config               *Config
+	templates            *Templates
 }
 
 // NewApp creates a new App instance
@@ -47,6 +48,11 @@ func NewApp(
 	similarityCalculator *tfidf.SimilarityCalculator,
 	queue *jobqueue.Queue,
 ) App {
+	templates, err := LoadTemplates(config)
+	if err != nil {
+		log.Fatalf("failed to load templates: %v", err)
+	}
+
 	return &AppImpl{
 		queries:              model.New(db),
 		db:                   db,
@@ -60,6 +66,7 @@ func NewApp(
 		similarityCalculator: similarityCalculator,
 		jobQueue:             queue,
 		config:               config,
+		templates:            templates,
 	}
 }
 
@@ -76,6 +83,7 @@ func (a *AppImpl) Calculator() *tfidf.Calculator                     { return a.
 func (a *AppImpl) SimilarityCalculator() *tfidf.SimilarityCalculator { return a.similarityCalculator }
 func (a *AppImpl) JobQueue() *jobqueue.Queue                         { return a.jobQueue }
 func (a *AppImpl) Config() *Config                                   { return a.config }
+func (a *AppImpl) Templates() *Templates                             { return a.templates }
 
 func (app *AppImpl) RequireAuth(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {

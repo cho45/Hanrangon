@@ -1,0 +1,39 @@
+{{define "similar-entries"}}
+{{if .Entries}}
+<h3>関連エントリー</h3>
+{{range .Entries}}
+<ul>
+	<li data-id="{{.ID}}">
+		<a href="/{{.Path}}" data-score="{{printf "%f" .Score}}">
+			<b>
+				{{if cleanTitle .Title}}
+					{{cleanTitle .Title}}
+				{{else}}
+					✖
+				{{end}}
+			</b>
+			<time data-epoch="{{.CreatedAt.Unix}}" datetime="{{.CreatedAt.Format "2006-01-02T15:04:05Z"}}" itemprop="datePublished">
+				{{.CreatedAt.Format "15:04"}}
+			</time>
+			<span class="summary">{{summary .FormattedBody 200}}</span>
+		</a>
+	</li>
+</ul>
+{{end}}
+{{end}}
+{{end}}
+
+{{define "similar-images"}}
+{{if .Images}}
+<h3>関連エントリー (画像)</h3>
+<ul>
+	{{range .Images}}
+		<li>
+			<a href="/{{.EntryPath}}">
+				<img src="{{.URI}}" style="max-width: 100px; max-height: 100px" />
+			</a>
+		</li>
+	{{end}}
+</ul>
+{{end}}
+{{end}}

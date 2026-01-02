@@ -21,6 +21,7 @@ type Config struct {
 	UploadURLPrefix string `toml:"upload_url_prefix"`
 	BaseURL         string `toml:"base_url"`
 	Listen          string `toml:"listen"`
+	Environment     string `toml:"environment"` // "development" or "production"
 }
 
 func LoadConfig() *Config {
@@ -79,6 +80,19 @@ func LoadConfig() *Config {
 	if env := os.Getenv("HANRANGON_LISTEN"); env != "" {
 		cfg.Listen = env
 	}
+	if env := os.Getenv("HANRANGON_ENV"); env != "" {
+		cfg.Environment = env
+	}
+
+	// デフォルトは development (開発効率優先)
+	if cfg.Environment == "" {
+		cfg.Environment = "development"
+	}
 
 	return cfg
+}
+
+// IsDevelopment returns true if the environment is development
+func (c *Config) IsDevelopment() bool {
+	return c.Environment == "development"
 }

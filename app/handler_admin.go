@@ -71,7 +71,10 @@ func (app *AppImpl) HandleEdit(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to serialize entry")
 	}
 
-	return view.Edit(string(entryBytes)).Render(c.Request().Context(), c.Response())
+	data := &view.EditData{
+		EntryJSON: string(entryBytes),
+	}
+	return app.templates.Render(c.Response(), "edit", data)
 }
 
 func (app *AppImpl) HandleLogin(c echo.Context) error {
@@ -79,7 +82,11 @@ func (app *AppImpl) HandleLogin(c echo.Context) error {
 	if returnPath == "" {
 		returnPath = "/"
 	}
-	return view.Login("", returnPath).Render(c.Request().Context(), c.Response())
+	data := &view.LoginData{
+		ErrorMsg:   "",
+		ReturnPath: returnPath,
+	}
+	return app.templates.Render(c.Response(), "login", data)
 }
 
 func (app *AppImpl) HandleLoginPost(c echo.Context) error {
@@ -106,7 +113,11 @@ func (app *AppImpl) HandleLoginPost(c echo.Context) error {
 		return c.Redirect(http.StatusFound, returnPath)
 	}
 
-	return view.Login("Invalid Username or Password", returnPath).Render(c.Request().Context(), c.Response())
+	data := &view.LoginData{
+		ErrorMsg:   "Invalid Username or Password",
+		ReturnPath: returnPath,
+	}
+	return app.templates.Render(c.Response(), "login", data)
 }
 
 func (app *AppImpl) HandleLogout(c echo.Context) error {

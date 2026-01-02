@@ -13,12 +13,6 @@ HanrangonはNogag (Perl/PSGI) ブログシステムのGo言語による書き直
 ```bash
 # データベースアクセスコード生成 (model/ ディレクトリ)
 sqlc generate
-
-# テンプレートコード生成 (view/*_templ.go ファイル)
-templ generate
-
-# 両方を実行する場合
-sqlc generate && templ generate
 ```
 
 ### テスト実行
@@ -59,10 +53,14 @@ go run cmd/migration-test/main.go -v
 
 ```bash
 # デフォルト設定で起動 (http://localhost:5555)
+# デフォルトで開発モード（テンプレート自動リロード）
 go run .
 
 # 設定ファイル指定
 HANRANGON_CONFIG=/path/to/config.toml go run .
+
+# 本番モード（テンプレート起動時1回のみロード）
+HANRANGON_ENV=production go run .
 ```
 
 ### コードフォーマット
@@ -72,7 +70,7 @@ HANRANGON_CONFIG=/path/to/config.toml go run .
 goimports -w path/to/file.go
 
 # 全Goファイル
-find . -name "*.go" -not -path "./vendor/*" -not -path "./*_templ.go" -exec goimports -w {} \;
+find . -name "*.go" -not -path "./vendor/*" -exec goimports -w {} \;
 ```
 
 ## アーキテクチャ
@@ -87,9 +85,10 @@ find . -name "*.go" -not -path "./vendor/*" -not -path "./*_templ.go" -exec goim
 ├── handler_public.go    # 公開ページハンドラ
 ├── handler_admin.go     # 管理画面ハンドラ
 ├── model/               # sqlc生成のDBアクセスコード (編集禁止)
-├── view/                # templテンプレート
-│   ├── *.templ         # テンプレートソース (これを編集)
-│   └── *_templ.go      # 生成コード (編集禁止)
+├── view/                # html/template テンプレート
+│   ├── *.html          # テンプレートファイル
+│   ├── data.go         # テンプレートデータ構造定義
+│   └── helper.go       # テンプレート用ヘルパー関数
 ├── formatter/           # テキストフォーマッタ
 │   ├── formatter.go    # フォーマット振り分け
 │   ├── html.go         # HTMLフォーマッタ
@@ -122,13 +121,17 @@ find . -name "*.go" -not -path "./vendor/*" -not -path "./*_templ.go" -exec goim
 
 **重要**: `db/schema/` や `db/query/` を変更した場合は必ず `sqlc generate` を実行
 
-#### 2. テンプレート層 (templ)
+#### 2. テンプレート層 (html/template)
 
-- `view/*.templ`: テンプレートソース
-- `view/*_templ.go`: 生成されたGoコード (手動編集禁止)
-- templはコンポーネントベースで型安全なテンプレートを提供
+- `view/*.html`: テンプレートファイル
+- `view/data.go`: テンプレートに渡すデータ構造の定義
+- `view/helper.go`: テンプレート用ヘルパー関数
+- `app/template.go`: テンプレート管理（開発モードでの自動リロード対応）
+- Go標準の `html/template` + `Masterminds/sprig` を使用
 
-**重要**: `*.templ` ファイルを変更した場合は必ず `templ generate` を実行
+**開発モード**: デフォルトで有効。テンプレートファイルを変更すると、ブラウザリロードで即座に反映される（ビルド不要）
+
+**本番モード**: `HANRANGON_ENV=production` で起動すると、テンプレートは起動時に1回のみロードされる
 
 #### 3. App構造体パターン
 
@@ -192,7 +195,6 @@ type App struct {
 
 1. **生成コードの編集禁止**
    - `model/*.go` (sqlc生成)
-   - `view/*_templ.go` (templ生成)
 
 2. **フォーマッタの変更時**
    - 必ず対応するテストを追加・更新
@@ -205,8 +207,9 @@ type App struct {
    - 必要に応じてマイグレーションスクリプトを作成
 
 4. **テンプレート変更時**
-   - `view/*.templ` を編集
-   - `templ generate` を実行
+   - `view/*.html` を直接編集
+   - 開発モード（デフォルト）では、ブラウザリロードで即座に反映
+   - ビルドやコード生成は不要
 
 5. **インポート管理**
    - 手動でのインポート文の追加・削除は禁止

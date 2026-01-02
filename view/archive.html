@@ -1,0 +1,35 @@
+{{define "archive"}}
+<!DOCTYPE html>
+<html lang="ja" data-auth="{{if .IsAuth}}true{{else}}false{{end}}">
+{{template "html-head" .}}
+<body>
+	{{template "global-header" .}}
+	{{template "global-navigation" .}}
+
+	<div id="content">
+		{{template "archive-content" .}}
+	</div>
+
+	{{template "global-footer" .}}
+</body>
+</html>
+{{end}}
+
+{{define "archive-content"}}
+<section id="archive">
+	{{range .Archives}}
+		<section class="year">
+			<h1>{{.Year}}年</h1>
+			<ol class="months">
+				{{range .Months}}
+					<li class="month">
+						<a href="/{{.Year}}/{{.Month}}/" title="{{.Count}}">
+							{{.Month}}月
+						</a>
+					</li>
+				{{end}}
+			</ol>
+		</section>
+	{{end}}
+</section>
+{{end}}
