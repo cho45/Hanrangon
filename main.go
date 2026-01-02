@@ -74,6 +74,7 @@ func NewServer(config *Config, db *sql.DB, tfidfDB *sql.DB, workerDB *sql.DB, qu
 		},
 	}))
 	e.Use(middleware.Recover())
+	e.Use(middleware.Gzip())
 
 	// Static files
 	e.Static("/css", filepath.Join(config.StaticDir, "css"))
