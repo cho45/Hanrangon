@@ -1,9 +1,16 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"database/sql"
+	"fmt"
+	"log"
 	"net/http"
+	"os/exec"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/cho45/hanrangon/jobqueue"
 	"github.com/cho45/hanrangon/model"
@@ -67,4 +74,35 @@ func (app *App) IsAuth(c echo.Context) bool {
 
 	return ok && auth
 
+}
+
+// postprocess はフォーマット済み HTML に対して postprocess を実行する
+// MathJax、シンタックスハイライト、画像処理、ウィジェット処理を行う
+func (app *App) postprocess(ctx context.Context, html string) (string, error) {
+	start := time.Now()
+	log.Printf("[postprocess] Starting postprocess (input size: %d bytes)", len(html))
+
+	// タイムアウト設定（30秒）
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	// Node.js スクリプトのパス（プロジェクトルートからの相対パス）
+	scriptPath := filepath.Join(app.config.StaticDir, "../postprocess/main.js")
+
+	cmd := exec.CommandContext(ctx, "node", scriptPath)
+	cmd.Stdin = bytes.NewReader([]byte(html))
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		log.Printf("[postprocess] Failed after %v: %v", time.Since(start), err)
+		return "", fmt.Errorf("postprocess failed: %w, stderr: %s", err, stderr.String())
+	}
+
+	elapsed := time.Since(start)
+	log.Printf("[postprocess] Completed successfully in %v (output size: %d bytes)", elapsed, stdout.Len())
+
+	return stdout.String(), nil
 }

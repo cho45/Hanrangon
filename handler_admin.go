@@ -153,10 +153,18 @@ func (app *App) HandleApiEdit(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Formatting failed").SetInternal(err)
 	}
 
+	// 2. Postprocess the formatted body (MathJax, syntax highlight, image processing, widgets)
+	ctx := c.Request().Context()
+	if processedBody, err := app.postprocess(ctx, formattedBody); err == nil {
+		formattedBody = processedBody
+	} else {
+		log.Printf("Postprocess failed: %v", err)
+		// エラーでも処理を続行（postprocess なしの formatted_body を保存）
+	}
+
 	now := time.Now()
 	date := now.Format("2006-01-02")
 
-	ctx := c.Request().Context()
 	var resEntry model.Entry
 
 	if req.ID != 0 {
