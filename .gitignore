@@ -21,3 +21,11 @@ Nogag
 config.toml
 Text-Xatena
 xatena-go
+
+# Claude Code
+.claude/
+
+# Development / Testing
+MathJax-demos-node/
+MathJax/
+todo.md
