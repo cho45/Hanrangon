@@ -20,15 +20,17 @@ import (
 )
 
 type IndexImagesJob struct {
-	queries         *model.Queries
+	mainQueries     *model.Queries
+	imagesQueries   *model.Queries
 	uploadDir       string
 	uploadURLPrefix string
 	baseURL         string
 }
 
-func NewIndexImagesJob(queries *model.Queries, uploadDir, uploadURLPrefix, baseURL string) *IndexImagesJob {
+func NewIndexImagesJob(mainQueries, imagesQueries *model.Queries, uploadDir, uploadURLPrefix, baseURL string) *IndexImagesJob {
 	return &IndexImagesJob{
-		queries:         queries,
+		mainQueries:     mainQueries,
+		imagesQueries:   imagesQueries,
 		uploadDir:       uploadDir,
 		uploadURLPrefix: uploadURLPrefix,
 		baseURL:         baseURL,
@@ -51,7 +53,7 @@ func (j *IndexImagesJob) Execute(ctx context.Context, arg json.RawMessage) error
 		return fmt.Errorf("failed to unmarshal arg: %w", err)
 	}
 
-	entry, err := j.queries.GetEntryById(ctx, a.EntryID)
+	entry, err := j.mainQueries.GetEntryById(ctx, a.EntryID)
 	if err != nil {
 		return err
 	}
@@ -69,7 +71,7 @@ func (j *IndexImagesJob) Execute(ctx context.Context, arg json.RawMessage) error
 	}
 
 	// Delete old records
-	if err := j.queries.DeleteImagesByEntryID(ctx, a.EntryID); err != nil {
+	if err := j.imagesQueries.DeleteImagesByEntryID(ctx, a.EntryID); err != nil {
 		return err
 	}
 
@@ -88,7 +90,7 @@ func (j *IndexImagesJob) Execute(ctx context.Context, arg json.RawMessage) error
 		sig := make([]byte, 8)
 		binary.BigEndian.PutUint64(sig, hash.GetHash())
 
-		imageID, err := j.queries.CreateImage(ctx, model.CreateImageParams{
+		imageID, err := j.imagesQueries.CreateImage(ctx, model.CreateImageParams{
 			Uri:     rawURL,
 			EntryID: a.EntryID,
 			Sig:     sig,
@@ -105,7 +107,7 @@ func (j *IndexImagesJob) Execute(ctx context.Context, arg json.RawMessage) error
 			binary.BigEndian.PutUint16(word[0:2], i)       // Position
 			binary.BigEndian.PutUint16(word[2:4], segment) // Value
 
-			if err := j.queries.CreateNgram(ctx, model.CreateNgramParams{
+			if err := j.imagesQueries.CreateNgram(ctx, model.CreateNgramParams{
 				ImageID: imageID,
 				Word:    word,
 			}); err != nil {

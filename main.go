@@ -45,20 +45,20 @@ func main() {
 	sim := tfidf.NewSimilarityCalculator(tfidfDB, model.New(tfidfDB))
 	registry.Register(jobs.NewRecalculateTFIDFJob(model.New(db), calc, sim))
 	registry.Register(jobs.NewUpdateTrackbacksJob(model.New(db), config.BaseURL))
-	registry.Register(jobs.NewIndexImagesJob(model.New(db), config.UploadDir, config.UploadURLPrefix, config.BaseURL))
+	registry.Register(jobs.NewIndexImagesJob(model.New(db), model.New(imagesDB), config.UploadDir, config.UploadURLPrefix, config.BaseURL))
 
 	queue := jobqueue.NewQueue(workerDB, model.New(workerDB), registry)
 	queue.Start(context.Background())
 
-	e := NewServer(config, db, tfidfDB, workerDB, imagesDB, queue)
+	app := NewApp(config, db, tfidfDB, workerDB, imagesDB, queue)
+	e := NewServer(app)
 
 	// Start server
 	e.Logger.Fatal(e.Start(config.Listen))
 }
 
-func NewServer(config *Config, db *sql.DB, tfidfDB *sql.DB, workerDB *sql.DB, imagesDB *sql.DB, queue *jobqueue.Queue) *echo.Echo {
-	app := NewApp(config, db, tfidfDB, workerDB, imagesDB, queue)
-
+func NewServer(app *App) *echo.Echo {
+	config := app.config
 	e := echo.New()
 	e.HideBanner = true
 

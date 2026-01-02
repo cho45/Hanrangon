@@ -100,7 +100,8 @@ func setupTest(t *testing.T) *testEnv {
 	registry := jobqueue.NewRegistry()
 	queue := jobqueue.NewQueue(workerDB, model.New(workerDB), registry)
 
-	e := NewServer(config, db, tfidfDB, workerDB, imagesDB, queue)
+	app := NewApp(config, db, tfidfDB, workerDB, imagesDB, queue)
+	e := NewServer(app)
 	return &testEnv{
 		db:        db,
 		tfidfDB:   tfidfDB,
