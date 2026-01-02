@@ -656,6 +656,87 @@ func TestHandleApiUploadImage(t *testing.T) {
 	}
 }
 
+func TestCaching(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	// Insert test data with specific modified_at
+	modTimeStr := "2025-01-01 12:00:00"
+	_, err := env.db.Exec(`
+		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
+		VALUES 
+		('Cache Entry', 'Body', '<p>Body</p>', '2025/01/01/cache', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', ?)
+	`, modTimeStr)
+	if err != nil {
+		t.Fatalf("failed to insert test data: %v", err)
+	}
+
+	targetURL := "/2025/01/01/cache"
+
+	// 1. First request: Should have ETag and Last-Modified
+	req := httptest.NewRequest(http.MethodGet, targetURL, nil)
+	rec := httptest.NewRecorder()
+	env.server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want status 200, got %d", rec.Code)
+	}
+
+	etag := rec.Header().Get("ETag")
+	lastModified := rec.Header().Get("Last-Modified")
+
+	if etag == "" {
+		t.Error("ETag header missing")
+	}
+	if lastModified == "" {
+		t.Error("Last-Modified header missing")
+	}
+
+	// 2. Second request with If-None-Match (ETag) -> 304
+	req2 := httptest.NewRequest(http.MethodGet, targetURL, nil)
+	req2.Header.Set("If-None-Match", etag)
+	rec2 := httptest.NewRecorder()
+	env.server.ServeHTTP(rec2, req2)
+
+	if rec2.Code != http.StatusNotModified {
+		t.Errorf("want status 304 for ETag match, got %d", rec2.Code)
+	}
+	if rec2.Body.Len() > 0 {
+		t.Error("want empty body for 304, got content")
+	}
+
+	// 3. Third request with If-Modified-Since (Last-Modified) -> 304
+	req3 := httptest.NewRequest(http.MethodGet, targetURL, nil)
+	req3.Header.Set("If-Modified-Since", lastModified)
+	rec3 := httptest.NewRecorder()
+	env.server.ServeHTTP(rec3, req3)
+
+	if rec3.Code != http.StatusNotModified {
+		t.Errorf("want status 304 for Last-Modified match, got %d", rec3.Code)
+	}
+
+	// 4. Update entry and request with old ETag -> 200 and new ETag
+	newModTimeStr := "2025-01-02 12:00:00"
+	_, err = env.db.Exec(`UPDATE entries SET modified_at = ? WHERE path = '2025/01/01/cache'`, newModTimeStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req4 := httptest.NewRequest(http.MethodGet, targetURL, nil)
+	req4.Header.Set("If-None-Match", etag) // Old ETag
+	rec4 := httptest.NewRecorder()
+	env.server.ServeHTTP(rec4, req4)
+
+	if rec4.Code != http.StatusOK {
+		t.Errorf("want status 200 for changed resource, got %d", rec4.Code)
+	}
+
+	newEtag := rec4.Header().Get("ETag")
+	if newEtag == etag {
+		t.Error("ETag should have changed after modification")
+	}
+}
+
 func TestUpdateTrackbacksJob(t *testing.T) {
 	env := setupTest(t)
 	defer env.close()

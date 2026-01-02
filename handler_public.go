@@ -77,6 +77,14 @@ func (app *App) HandleDateArchive(c echo.Context) error {
 		entries[i] = model.Entry(r)
 	}
 
+	if len(entries) > 0 {
+		latest := getLatestModTime(entries)
+		etag := GenerateListETag(latest, len(entries), yyyy+mm+dd)
+		if app.CheckCache(c, latest, etag) {
+			return nil
+		}
+	}
+
 	return view.Index(entries, "", app.IsAuth(c)).Render(ctx, c.Response())
 }
 
@@ -144,6 +152,14 @@ func (app *App) HandleIndex(c echo.Context) error {
 		entries[i] = model.Entry(r)
 	}
 
+	if len(entries) > 0 {
+		latest := getLatestModTime(entries)
+		etag := GenerateListETag(latest, len(entries), dateStr)
+		if app.CheckCache(c, latest, etag) {
+			return nil
+		}
+	}
+
 	// HTMLレンダリング
 	return view.Index(entries, nextPage, app.IsAuth(c)).Render(ctx, c.Response())
 }
@@ -185,6 +201,11 @@ func (app *App) HandleEntry(c echo.Context) error {
 		ModifiedAt:    row.ModifiedAt,
 		PublishAt:     row.PublishAt,
 		Status:        row.Status,
+	}
+
+	etag := GenerateEntryETag(entry.ID, entry.ModifiedAt)
+	if app.CheckCache(c, entry.ModifiedAt, etag) {
+		return nil
 	}
 
 	trackbacks, err := app.queries.ListTrackbackEntries(ctx, sql.NullInt64{Int64: entry.ID, Valid: true})
@@ -277,6 +298,14 @@ func (app *App) HandleCategory(c echo.Context) error {
 		entries[i] = model.Entry(r)
 	}
 
+	if len(entries) > 0 {
+		latest := getLatestModTime(entries)
+		etag := GenerateListETag(latest, len(entries), category+dateStr)
+		if app.CheckCache(c, latest, etag) {
+			return nil
+		}
+	}
+
 	return view.Index(entries, nextPage, app.IsAuth(c)).Render(ctx, c.Response())
 }
 
@@ -298,7 +327,11 @@ func (app *App) HandleFeed(c echo.Context) error {
 
 	updated := time.Now()
 	if len(entries) > 0 {
-		updated = entries[0].ModifiedAt
+		updated = getLatestModTime(entries)
+		etag := GenerateListETag(updated, len(entries), "feed")
+		if app.CheckCache(c, updated, etag) {
+			return nil
+		}
 	}
 
 	c.Response().Header().Set(echo.HeaderContentType, "application/atom+xml; charset=utf-8")
@@ -311,6 +344,19 @@ func (app *App) HandleSitemap(c echo.Context) error {
 	entries, err := app.queries.ListAllEntriesForSitemap(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
+	}
+
+	if len(entries) > 0 {
+		latest := entries[0].ModifiedAt
+		for _, e := range entries {
+			if e.ModifiedAt.After(latest) {
+				latest = e.ModifiedAt
+			}
+		}
+		etag := GenerateListETag(latest, len(entries), "sitemap")
+		if app.CheckCache(c, latest, etag) {
+			return nil
+		}
 	}
 
 	c.Response().Header().Set(echo.HeaderContentType, "application/xml; charset=utf-8")
@@ -392,4 +438,17 @@ func (app *App) HandleApiSimilar(c echo.Context) error {
 		"result": result,
 		"ad":     "",
 	})
+}
+
+func getLatestModTime(entries []model.Entry) time.Time {
+	if len(entries) == 0 {
+		return time.Time{}
+	}
+	latest := entries[0].ModifiedAt
+	for _, e := range entries {
+		if e.ModifiedAt.After(latest) {
+			latest = e.ModifiedAt
+		}
+	}
+	return latest
 }
