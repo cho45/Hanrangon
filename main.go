@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"log"
+	"strings"
 
 	"github.com/cho45/hanrangon/app"
 	"github.com/cho45/hanrangon/jobqueue"
@@ -64,9 +65,15 @@ func main() {
 }
 
 func mustOpenDB(driver, path string) *sql.DB {
-	db, err := sql.Open(driver, path)
+	dsn := path
+	if !strings.Contains(path, "?") {
+		dsn += "?_loc=Asia/Tokyo"
+	} else {
+		dsn += "&_loc=Asia/Tokyo"
+	}
+	db, err := sql.Open(driver, dsn)
 	if err != nil {
-		log.Fatalf("failed to open db (%s): %v", path, err)
+		log.Fatalf("failed to open db (%s): %v", dsn, err)
 	}
 
 	db.SetMaxOpenConns(25)

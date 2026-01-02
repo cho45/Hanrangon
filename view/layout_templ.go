@@ -256,9 +256,9 @@ func Article(e model.Entry, isAuth bool, isPermalink bool) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var14 string
-		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(e.CreatedAt.Format("2006-01-02T15:04:05") + "Z")
+		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(e.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 134, Col: 121}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `view/layout.templ`, Line: 134, Col: 122}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 		if templ_7745c5c3_Err != nil {

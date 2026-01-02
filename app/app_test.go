@@ -19,7 +19,7 @@ func setupTestDB(t *testing.T) (*sql.DB, *sql.DB, *sql.DB, *sql.DB) {
 	t.Helper()
 
 	// Main DB
-	db, err := sql.Open("sqlite3", ":memory:")
+	db, err := sql.Open("sqlite3", ":memory:?_loc=Asia/Tokyo")
 	if err != nil {
 		t.Fatalf("failed to open memory db: %v", err)
 	}
@@ -32,7 +32,7 @@ func setupTestDB(t *testing.T) (*sql.DB, *sql.DB, *sql.DB, *sql.DB) {
 	}
 
 	// TFIDF DB
-	tfidfDB, err := sql.Open("sqlite3_with_math_functions", ":memory:")
+	tfidfDB, err := sql.Open("sqlite3_with_math_functions", ":memory:?_loc=Asia/Tokyo")
 	if err != nil {
 		t.Fatalf("failed to open memory tfidf db: %v", err)
 	}
@@ -45,7 +45,7 @@ func setupTestDB(t *testing.T) (*sql.DB, *sql.DB, *sql.DB, *sql.DB) {
 	}
 
 	// Worker DB
-	workerDB, err := sql.Open("sqlite3", ":memory:")
+	workerDB, err := sql.Open("sqlite3", ":memory:?_loc=Asia/Tokyo")
 	if err != nil {
 		t.Fatalf("failed to open memory worker db: %v", err)
 	}
@@ -58,7 +58,7 @@ func setupTestDB(t *testing.T) (*sql.DB, *sql.DB, *sql.DB, *sql.DB) {
 	}
 
 	// Images DB
-	imagesDB, err := sql.Open("sqlite3", ":memory:")
+	imagesDB, err := sql.Open("sqlite3", ":memory:?_loc=Asia/Tokyo")
 	if err != nil {
 		t.Fatalf("failed to open memory images db: %v", err)
 	}

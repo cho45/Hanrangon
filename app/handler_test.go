@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"mime/multipart"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cho45/hanrangon/model"
 	"github.com/labstack/echo/v4"
 )
 
@@ -659,5 +661,59 @@ func TestCaching(t *testing.T) {
 	newEtag := rec4.Header().Get("ETag")
 	if newEtag == etag {
 		t.Error("ETag should have changed after modification")
+	}
+}
+
+func TestDateTimeHandling(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	ctx := context.Background()
+	// Fix time to a specific value in JST
+	jst := time.FixedZone("Asia/Tokyo", 9*60*60)
+	now := time.Date(2026, 1, 3, 15, 4, 5, 0, jst)
+
+	// 1. Create entry via queries
+	entry, err := env.app.Queries().CreateEntry(ctx, model.CreateEntryParams{
+		Title:         "TZ Test",
+		Body:          "Body",
+		FormattedBody: "<p>Body</p>",
+		Path:          "2026/01/03/tz-test",
+		Format:        "Markdown",
+		Date:          "2026-01-03",
+		CreatedAt:     now,
+		ModifiedAt:    now,
+		Status:        "public",
+	})
+	if err != nil {
+		t.Fatalf("Failed to create entry: %v", err)
+	}
+
+	// 2. Check raw DB value (must be YYYY-MM-DD HH:MM:SS string without TZ)
+	var rawCreatedAt string
+	err = env.db.QueryRow("SELECT CAST(created_at AS TEXT) FROM entries WHERE id = ?", entry.ID).Scan(&rawCreatedAt)
+	if err != nil {
+		t.Fatalf("Failed to query raw created_at: %v", err)
+	}
+
+	// Now we expect TZ suffix in the raw string as we decided to migrate the DB to include it
+	expectedRaw := "2026-01-03 15:04:05+09:00"
+	if rawCreatedAt != expectedRaw {
+		t.Errorf("Raw DB datetime mismatch. got=%s, want=%s", rawCreatedAt, expectedRaw)
+	}
+
+	// 3. Read back and check time.Time Location
+	readEntry, err := env.app.Queries().GetEntryById(ctx, entry.ID)
+	if err != nil {
+		t.Fatalf("Failed to get entry: %v", err)
+	}
+
+	if !readEntry.CreatedAt.Equal(now) {
+		t.Errorf("Time equality mismatch. got=%v, want=%v", readEntry.CreatedAt, now)
+	}
+
+	_, offset := readEntry.CreatedAt.Zone()
+	if offset != 9*60*60 {
+		t.Errorf("Timezone offset mismatch. got=%d, want=%d (JST)", offset, 9*60*60)
 	}
 }
