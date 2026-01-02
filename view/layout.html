@@ -1,4 +1,6 @@
-{{define "html-head"}}
+{{define "layout"}}
+<!DOCTYPE html>
+<html lang="ja" data-auth="{{if .IsAuth}}true{{else}}false{{end}}">
 <head>
 	<meta charset="utf-8"/>
 
@@ -32,60 +34,60 @@
 	<script src="/js/abcjs_basic_5.1.1-min.js" defer></script>
 	<script src="/js/nogag.js" defer></script>
 </head>
-{{end}}
+<body>
+	<header id="global-header">
+		<h1 id="header">
+			<a href="/">
+				<img src="/images/hanrangen.svg" width="60" height="50" style="margin: auto; display: block" alt="氾濫原"/>
+			</a>
+		</h1>
+	</header>
 
-{{define "global-header"}}
-<header id="global-header">
-	<h1 id="header">
-		<a href="/">
-			<img src="/images/hanrangen.svg" width="60" height="50" style="margin: auto; display: block" alt="氾濫原"/>
-		</a>
-	</h1>
-</header>
-{{end}}
+	<nav id="global-navigation">
+		<ul>
+			<li><a href="/">最新</a></li>
+			<li><a href="/photo/">写真</a></li>
+			<li><a href="https://www.lowreal.net/">誰？</a></li>
+			{{if .IsAuth}}
+				<li><a href="#" class="nogag-new">新規</a></li>
+				<li><a href="/logout">ログアウト</a></li>
+			{{end}}
+		</ul>
+	</nav>
 
-{{define "global-navigation"}}
-<nav id="global-navigation">
-	<ul>
-		<li><a href="/">最新</a></li>
-		<li><a href="/photo/">写真</a></li>
-		<li><a href="https://www.lowreal.net/">誰？</a></li>
-		{{if .IsAuth}}
-			<li><a href="#" class="nogag-new">新規</a></li>
-			<li><a href="/logout">ログアウト</a></li>
-		{{end}}
-	</ul>
-</nav>
-{{end}}
-
-{{define "global-footer"}}
-<footer id="global-footer">
-	<h2>書いている人</h2>
-	<div class="author">
-		<div class="image">
-			<img src="/images/profile.jpg" alt="Photo" width="160" height="160"/>
-		</div>
-		<div class="desc">
-			<p>
-				cho45 (<a href="https://www.lowreal.net/" rel="author">www.lowreal.net</a>)
-				&lt;<a href="mailto:cho45@lowreal.net">cho45@lowreal.net</a>&gt;
-			</p>
-			<p>
-				JavaScript, Perl, Ruby, HTML, CSS, Web etc
-			</p>
-			<p>
-				<a class="button github-button" href="https://github.com/cho45" rel="nofollow"><i></i>
-					<span class="label">
-						Follow <b>&#64;cho45</b>
-					</span>
-				</a>
-			</p>
-			<p>
-				<a href="/archive">アーカイブ</a>
-			</p>
-		</div>
+	<div id="content">
+		{{template "content" .}}
 	</div>
-</footer>
+
+	<footer id="global-footer">
+		<h2>書いている人</h2>
+		<div class="author">
+			<div class="image">
+				<img src="/images/profile.jpg" alt="Photo" width="160" height="160"/>
+			</div>
+			<div class="desc">
+				<p>
+					cho45 (<a href="https://www.lowreal.net/" rel="author">www.lowreal.net</a>)
+					&lt;<a href="mailto:cho45@lowreal.net">cho45@lowreal.net</a>&gt;
+				</p>
+				<p>
+					JavaScript, Perl, Ruby, HTML, CSS, Web etc
+				</p>
+				<p>
+					<a class="button github-button" href="https://github.com/cho45" rel="nofollow"><i></i>
+						<span class="label">
+							Follow <b>&#64;cho45</b>
+						</span>
+					</a>
+				</p>
+				<p>
+					<a href="/archive">アーカイブ</a>
+				</p>
+			</div>
+		</div>
+	</footer>
+</body>
+</html>
 {{end}}
 
 {{define "article"}}
@@ -145,96 +147,4 @@
 		</p>
 	</div>
 </article>
-{{end}}
-
-{{define "index-content"}}
-<div class="entries">
-	{{$entries := .Entries}}
-	{{$isAuth := .IsAuth}}
-	{{$ids := list}}
-	{{range $entries}}
-		{{$ids = append $ids (printf "id=%d" .ID)}}
-	{{end}}
-	{{$similarURL := printf "/api/similar?%s" (join "&" $ids)}}
-	<link rel="preload" id="preload-similar-entries" href="{{$similarURL}}" as="fetch" crossorigin="anonymous"/>
-	{{range $i, $e := $entries}}
-		{{if or (eq $i 0) (not (isSameDay (index $entries (sub $i 1)).Date $e.Date))}}
-			<div class="date"><a href="{{datePath $e.Date}}">{{formatDate $e.Date}}</a></div>
-		{{end}}
-		{{template "article" dict "Entry" $e "IsAuth" $isAuth "IsPermalink" false}}
-	{{end}}
-</div>
-
-<div class="pager">
-	{{if .NextPage}}
-		<a href="{{.NextPage}}" rel="next">&#x25BC; もっと古いエントリ</a>
-	{{end}}
-</div>
-{{end}}
-
-{{define "index"}}
-<!DOCTYPE html>
-<html lang="ja" data-auth="{{if .IsAuth}}true{{else}}false{{end}}">
-{{template "html-head" .}}
-<body>
-	{{template "global-header" .}}
-	{{template "global-navigation" .}}
-
-	<div id="content">
-		{{template "index-content" .}}
-	</div>
-
-	{{template "global-footer" .}}
-</body>
-</html>
-{{end}}
-
-{{define "entry"}}
-<!DOCTYPE html>
-<html lang="ja" data-auth="{{if .IsAuth}}true{{else}}false{{end}}">
-{{template "html-head" .}}
-<body>
-	{{template "global-header" .}}
-	{{template "global-navigation" .}}
-
-	<div id="content">
-		{{template "entry-content" .}}
-	</div>
-
-	{{template "global-footer" .}}
-</body>
-</html>
-{{end}}
-
-{{define "entry-content"}}
-<div class="entries">
-	<link rel="preload" id="preload-similar-entries" href="/api/similar?id={{.Entry.ID}}" as="fetch" crossorigin="anonymous"/>
-
-	<div class="date"><a href="{{datePath .Entry.Date}}">{{formatDate .Entry.Date}}</a></div>
-
-	{{template "article" dict "Entry" .Entry "IsAuth" .IsAuth "IsPermalink" true}}
-
-	{{if .Trackbacks}}
-		<div class="trackbacks">
-			<h3>この記事への言及</h3>
-			<ul>
-				{{range .Trackbacks}}
-					<li>
-						<a href="/{{.Path}}">{{.Title}}</a>
-						<span class="date">({{formatDate .Date}})</span>
-					</li>
-				{{end}}
-			</ul>
-		</div>
-	{{end}}
-</div>
-
-<div class="pager">
-	{{if .Next}}
-		<a href="/{{.Next.Path}}" rel="prev"> {{.Next.Title}} &#x25B6;</a>
-	{{end}}
-	{{if .Prev}}
-		<a href="/{{.Prev.Path}}" rel="next">&#x25C0; {{.Prev.Title}}</a>
-	{{end}}
-</div>
 {{end}}

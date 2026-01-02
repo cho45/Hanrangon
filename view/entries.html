@@ -1,0 +1,58 @@
+{{define "content"}}
+<div class="entries">
+	{{if .IsDetail}}
+		{{/* Single entry detail page */}}
+		{{$entry := index .Entries 0}}
+		<link rel="preload" id="preload-similar-entries" href="/api/similar?id={{$entry.ID}}" as="fetch" crossorigin="anonymous"/>
+		<div class="date"><a href="{{datePath $entry.Date}}">{{formatDate $entry.Date}}</a></div>
+		{{template "article" dict "Entry" $entry "IsAuth" .IsAuth "IsPermalink" true}}
+
+		{{if .Trackbacks}}
+			<div class="trackbacks">
+				<h3>この記事への言及</h3>
+				<ul>
+					{{range .Trackbacks}}
+						<li>
+							<a href="/{{.Path}}">{{.Title}}</a>
+							<span class="date">({{formatDate .Date}})</span>
+						</li>
+					{{end}}
+				</ul>
+			</div>
+		{{end}}
+	{{else}}
+		{{/* Multiple entries list page */}}
+		{{$entries := .Entries}}
+		{{$isAuth := .IsAuth}}
+		{{$ids := list}}
+		{{range $entries}}
+			{{$ids = append $ids (printf "id=%d" .ID)}}
+		{{end}}
+		{{$similarURL := printf "/api/similar?%s" (join "&" $ids)}}
+		<link rel="preload" id="preload-similar-entries" href="{{$similarURL}}" as="fetch" crossorigin="anonymous"/>
+		{{range $i, $e := $entries}}
+			{{if or (eq $i 0) (not (isSameDay (index $entries (sub $i 1)).Date $e.Date))}}
+				<div class="date"><a href="{{datePath $e.Date}}">{{formatDate $e.Date}}</a></div>
+			{{end}}
+			{{template "article" dict "Entry" $e "IsAuth" $isAuth "IsPermalink" false}}
+		{{end}}
+	{{end}}
+</div>
+
+<div class="pager">
+	{{if .IsDetail}}
+		{{/* Entry detail navigation */}}
+		{{if .Next}}
+			<a href="/{{.Next.Path}}" rel="prev"> {{.Next.Title}} &#x25B6;</a>
+		{{end}}
+		{{if .Prev}}
+			<a href="/{{.Prev.Path}}" rel="next">&#x25C0; {{.Prev.Title}}</a>
+		{{end}}
+	{{else}}
+		{{/* Index pagination */}}
+		{{if .NextPage}}
+			<a href="{{.NextPage}}" rel="next">&#x25BC; もっと古いエントリ</a>
+		{{end}}
+	{{end}}
+</div>
+{{end}}

@@ -91,6 +91,7 @@ func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 			IsAuth: app.IsAuth(c),
 		},
 		Entries:  entries,
+		IsDetail: false,
 		NextPage: "",
 	}
 	return app.templates.Render(c.Response(), "index", data)
@@ -159,6 +160,7 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 				IsAuth: app.IsAuth(c),
 			},
 			Entries:  []model.Entry{},
+			IsDetail: false,
 			NextPage: "",
 		}
 		return app.templates.Render(c.Response(), "index", data)
@@ -190,6 +192,7 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 			IsAuth: app.IsAuth(c),
 		},
 		Entries:  entries,
+		IsDetail: false,
 		NextPage: nextPage,
 	}
 	return app.templates.Render(c.Response(), "index", data)
@@ -282,17 +285,18 @@ func (app *AppImpl) HandleEntry(c echo.Context) error {
 		nextPtr = &n
 	}
 
-	data := &view.EntryData{
+	data := &view.IndexData{
 		LayoutData: view.LayoutData{
 			Title:  entry.Title + " - 氾濫原",
 			IsAuth: app.IsAuth(c),
 		},
-		Entry:      entry,
+		Entries:    []model.Entry{entry},
+		IsDetail:   true,
 		Trackbacks: trackbacks,
 		Prev:       prevPtr,
 		Next:       nextPtr,
 	}
-	return app.templates.Render(c.Response(), "entry", data)
+	return app.templates.Render(c.Response(), "index", data)
 }
 
 func (app *AppImpl) HandleCategory(c echo.Context) error {
@@ -353,6 +357,7 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 			IsAuth: app.IsAuth(c),
 		},
 		Entries:  entries,
+		IsDetail: false,
 		NextPage: nextPage,
 	}
 	return app.templates.Render(c.Response(), "index", data)

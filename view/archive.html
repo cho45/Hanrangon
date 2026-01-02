@@ -1,21 +1,4 @@
-{{define "archive"}}
-<!DOCTYPE html>
-<html lang="ja" data-auth="{{if .IsAuth}}true{{else}}false{{end}}">
-{{template "html-head" .}}
-<body>
-	{{template "global-header" .}}
-	{{template "global-navigation" .}}
-
-	<div id="content">
-		{{template "archive-content" .}}
-	</div>
-
-	{{template "global-footer" .}}
-</body>
-</html>
-{{end}}
-
-{{define "archive-content"}}
+{{define "content"}}
 <section id="archive">
 	{{range .Archives}}
 		<section class="year">

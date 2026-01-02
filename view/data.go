@@ -10,20 +10,15 @@ type LayoutData struct {
 	IsAuth bool
 }
 
-// IndexData holds data for the index page
+// IndexData holds data for both index and entry detail pages
 type IndexData struct {
 	LayoutData
-	Entries  []model.Entry
-	NextPage string
-}
-
-// EntryData holds data for the entry detail page
-type EntryData struct {
-	LayoutData
-	Entry      model.Entry
-	Trackbacks []model.ListTrackbackEntriesRow
-	Prev       *model.Entry
-	Next       *model.Entry
+	Entries    []model.Entry                   // For index: multiple entries, for detail: single entry
+	IsDetail   bool                            // true for entry detail page, false for list page
+	NextPage   string                          // For index pagination
+	Trackbacks []model.ListTrackbackEntriesRow // For entry detail
+	Prev       *model.Entry                    // For entry detail navigation
+	Next       *model.Entry                    // For entry detail navigation
 }
 
 // ArchiveData holds data for the archive page
