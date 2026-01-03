@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/cho45/hanrangon/app"
 	"github.com/cho45/hanrangon/model"
@@ -32,6 +33,12 @@ func NewIndexImagesJob(a app.App) *IndexImagesJob {
 
 func (j *IndexImagesJob) Name() string {
 	return "IndexImages"
+}
+
+// Timeout returns the maximum execution time for this job
+// Image processing can take time, so set to 3 minutes
+func (j *IndexImagesJob) Timeout() time.Duration {
+	return 3 * time.Minute
 }
 
 type IndexImagesArg struct {

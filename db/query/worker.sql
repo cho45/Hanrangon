@@ -27,3 +27,17 @@ UPDATE jobs SET status = CASE WHEN retry_count + 1 >= max_retries THEN 'failed' 
 
 -- name: CountPendingJobs :one
 SELECT count(*) FROM jobs WHERE status = 'pending';
+
+-- name: RecoverStuckJobs :exec
+UPDATE jobs
+SET status = 'pending', grabbed_at = NULL, retry_count = retry_count + 1
+WHERE status = 'running'
+AND grabbed_at < datetime('now', '-5 minutes')
+AND retry_count < max_retries;
+
+-- name: FailStuckJobs :exec
+UPDATE jobs
+SET status = 'failed'
+WHERE status = 'running'
+AND grabbed_at < datetime('now', '-5 minutes')
+AND retry_count >= max_retries;

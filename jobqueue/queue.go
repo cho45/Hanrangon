@@ -41,14 +41,34 @@ func (w *Worker) run(ctx context.Context) {
 
 	log.Printf("Job queue worker started (polling interval: %v)", w.interval)
 
+	// ワーカー起動時にスタックジョブを回復
+	if err := w.recoverStuckJobs(ctx); err != nil {
+		log.Printf("Error recovering stuck jobs on startup: %v", err)
+	}
+
+	// 1分ごとにスタックジョブを回復するためのカウンター
+	recoveryInterval := 1 * time.Minute
+	ticksSinceLastRecovery := 0
+	ticksUntilRecovery := int(recoveryInterval / w.interval)
+
 	for {
 		select {
 		case <-ctx.Done():
 			log.Printf("Job queue worker stopped")
 			return
 		case <-ticker.C:
+			// ジョブ処理
 			if err := w.processNextJob(ctx); err != nil {
 				log.Printf("Error processing job: %v", err)
+			}
+
+			// 1分ごとにスタックジョブを回復
+			ticksSinceLastRecovery++
+			if ticksSinceLastRecovery >= ticksUntilRecovery {
+				if err := w.recoverStuckJobs(ctx); err != nil {
+					log.Printf("Error recovering stuck jobs: %v", err)
+				}
+				ticksSinceLastRecovery = 0
 			}
 		}
 	}
@@ -85,7 +105,7 @@ func (w *Worker) processNextJob(ctx context.Context) error {
 	handler, ok := w.registry.Get(jobType.Name)
 	if !ok {
 		// ジョブハンドラが見つからない場合は失敗としてマーク
-		return w.markJobFailed(ctx, job.ID, fmt.Errorf("job type %s not registered", jobType.Name))
+		return w.markJobFailed(ctx, job, fmt.Errorf("job type %s not registered", jobType.Name))
 	}
 
 	// ジョブを実行
@@ -93,7 +113,7 @@ func (w *Worker) processNextJob(ctx context.Context) error {
 	err = w.executeJob(ctx, handler, job)
 	if err != nil {
 		log.Printf("Job %d failed: %v", job.ID, err)
-		return w.markJobFailed(ctx, job.ID, err)
+		return w.markJobFailed(ctx, job, err)
 	}
 
 	// 成功したらジョブを削除
@@ -101,7 +121,7 @@ func (w *Worker) processNextJob(ctx context.Context) error {
 	return w.queries.MarkJobCompleted(ctx, job.ID)
 }
 
-// executeJob はジョブを実行する（パニックをリカバー）
+// executeJob はジョブを実行する（パニックをリカバー、タイムアウト付き）
 func (w *Worker) executeJob(ctx context.Context, handler JobHandler, job model.Job) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -109,19 +129,58 @@ func (w *Worker) executeJob(ctx context.Context, handler JobHandler, job model.J
 		}
 	}()
 
-	return handler.Execute(ctx, json.RawMessage(job.Arg))
+	// タイムアウトを取得（デフォルト5分）
+	timeout := 5 * time.Minute
+	if handlerWithTimeout, ok := handler.(JobHandlerWithTimeout); ok {
+		timeout = handlerWithTimeout.Timeout()
+	}
+
+	// タイムアウト付きコンテキストを作成
+	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	log.Printf("Job %d executing with timeout %v", job.ID, timeout)
+
+	return handler.Execute(timeoutCtx, json.RawMessage(job.Arg))
 }
 
-// markJobFailed はジョブを失敗としてマークする
-func (w *Worker) markJobFailed(ctx context.Context, jobID int64, jobErr error) error {
-	runAfter := time.Now().Add(30 * time.Second) // 30秒後にリトライ
+// markJobFailed はジョブを失敗としてマークする（指数バックオフ付きリトライ）
+func (w *Worker) markJobFailed(ctx context.Context, job model.Job, jobErr error) error {
+	// 指数バックオフの計算: min(30秒 * 2^retry_count, 1時間)
+	baseDelay := 30 * time.Second
+	maxDelay := 1 * time.Hour
+	backoffDelay := baseDelay * time.Duration(1<<job.RetryCount) // 2^retry_count
+	if backoffDelay > maxDelay {
+		backoffDelay = maxDelay
+	}
+
+	runAfter := time.Now().Add(backoffDelay)
 	errorMessage := sql.NullString{String: jobErr.Error(), Valid: true}
+
+	log.Printf("Job %d failed (retry_count=%d), will retry after %v", job.ID, job.RetryCount, backoffDelay)
 
 	return w.queries.MarkJobFailed(ctx, model.MarkJobFailedParams{
 		RunAfter:     runAfter,
 		ErrorMessage: errorMessage,
-		ID:           jobID,
+		ID:           job.ID,
 	})
+}
+
+// recoverStuckJobs はスタックしたジョブを回復する
+func (w *Worker) recoverStuckJobs(ctx context.Context) error {
+	// retry_count < max_retries のスタックジョブをpendingに戻す
+	err := w.queries.RecoverStuckJobs(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to recover stuck jobs: %w", err)
+	}
+
+	// retry_count >= max_retries のスタックジョブをfailedにする
+	err = w.queries.FailStuckJobs(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to fail stuck jobs: %w", err)
+	}
+
+	return nil
 }
 
 // Enqueue はジョブをキューに追加する

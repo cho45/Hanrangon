@@ -64,6 +64,19 @@ func (q *Queries) EnqueueJob(ctx context.Context, arg EnqueueJobParams) (Job, er
 	return i, err
 }
 
+const failStuckJobs = `-- name: FailStuckJobs :exec
+UPDATE jobs
+SET status = 'failed'
+WHERE status = 'running'
+AND grabbed_at < datetime('now', '-5 minutes')
+AND retry_count >= max_retries
+`
+
+func (q *Queries) FailStuckJobs(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, failStuckJobs)
+	return err
+}
+
 const findNextJob = `-- name: FindNextJob :one
 SELECT id, job_type_id, arg, uniqkey, retry_count, max_retries, created_at, run_after, grabbed_at, status, error_message FROM jobs WHERE status = 'pending' AND run_after <= ? ORDER BY created_at ASC LIMIT 1
 `
@@ -167,5 +180,18 @@ type MarkJobFailedParams struct {
 
 func (q *Queries) MarkJobFailed(ctx context.Context, arg MarkJobFailedParams) error {
 	_, err := q.db.ExecContext(ctx, markJobFailed, arg.RunAfter, arg.ErrorMessage, arg.ID)
+	return err
+}
+
+const recoverStuckJobs = `-- name: RecoverStuckJobs :exec
+UPDATE jobs
+SET status = 'pending', grabbed_at = NULL, retry_count = retry_count + 1
+WHERE status = 'running'
+AND grabbed_at < datetime('now', '-5 minutes')
+AND retry_count < max_retries
+`
+
+func (q *Queries) RecoverStuckJobs(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, recoverStuckJobs)
 	return err
 }

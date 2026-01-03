@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -207,6 +208,94 @@ func TestWorker_ProcessNextJob_Failure(t *testing.T) {
 	}
 	if job.ErrorMessage.String != "job failed" {
 		t.Errorf("expected error_message='job failed', got '%s'", job.ErrorMessage.String)
+	}
+}
+
+func TestWorker_ExponentialBackoff(t *testing.T) {
+	db, queries := setupTestDB(t)
+	defer db.Close()
+
+	registry := NewRegistry()
+	registry.Register(&TestJob{
+		name: "TestJob",
+		executeFn: func(ctx context.Context, arg json.RawMessage) error {
+			return errors.New("job failed")
+		},
+	})
+
+	worker := NewWorker(db, queries, registry)
+
+	// ジョブをエンキュー
+	err := worker.Enqueue(context.Background(), "TestJob", map[string]string{"key": "value"}, "")
+	if err != nil {
+		t.Fatalf("failed to enqueue job: %v", err)
+	}
+
+	// テストケース: retry_count → 期待されるバックオフ間隔
+	testCases := []struct {
+		retryCount       int64
+		expectedBackoff  time.Duration
+		toleranceSeconds int // 許容誤差（秒）
+	}{
+		{0, 30 * time.Second, 2}, // 2^0 * 30s = 30s
+		{1, 1 * time.Minute, 2},  // 2^1 * 30s = 1m
+		{2, 2 * time.Minute, 2},  // 2^2 * 30s = 2m
+		{3, 4 * time.Minute, 2},  // 2^3 * 30s = 4m
+		{4, 8 * time.Minute, 2},  // 2^4 * 30s = 8m
+		{10, 1 * time.Hour, 2},   // 2^10 * 30s = 512m > 60m → max 1h
+	}
+
+	for _, tc := range testCases {
+		// retry_countを設定
+		_, err := db.Exec("UPDATE jobs SET retry_count = ?, status = 'pending', run_after = datetime('now') WHERE status != 'failed'", tc.retryCount)
+		if err != nil {
+			t.Fatalf("failed to update retry_count: %v", err)
+		}
+
+		// 失敗前の時刻を記録
+		beforeFail := time.Now()
+
+		// ジョブを処理（失敗する）
+		err = worker.processNextJob(context.Background())
+		if err != nil {
+			t.Fatalf("processNextJob should not return error on job failure: %v", err)
+		}
+
+		// ジョブの状態を確認
+		var runAfter time.Time
+		var status string
+		err = db.QueryRow("SELECT run_after, status FROM jobs WHERE id = 1").Scan(&runAfter, &status)
+		if err != nil {
+			t.Fatalf("failed to get job: %v", err)
+		}
+
+		// retry_count + 1 が max_retries (5) に達していない場合
+		if tc.retryCount+1 < 5 {
+			if status != "pending" {
+				t.Errorf("retry_count=%d: expected status=pending, got %s", tc.retryCount, status)
+			}
+
+			// run_afterが期待される時刻になっているか確認
+			actualBackoff := runAfter.Sub(beforeFail)
+
+			// 許容誤差内かチェック
+			diff := actualBackoff - tc.expectedBackoff
+			if diff < 0 {
+				diff = -diff
+			}
+
+			if diff > time.Duration(tc.toleranceSeconds)*time.Second {
+				t.Errorf("retry_count=%d: expected backoff=%v, got %v (diff=%v)",
+					tc.retryCount, tc.expectedBackoff, actualBackoff, diff)
+			}
+
+			t.Logf("retry_count=%d: backoff=%v (expected=%v)", tc.retryCount, actualBackoff, tc.expectedBackoff)
+		} else {
+			// max_retries に達した場合は failed になる
+			if status != "failed" {
+				t.Errorf("retry_count=%d (>= max_retries): expected status=failed, got %s", tc.retryCount, status)
+			}
+		}
 	}
 }
 
@@ -486,6 +575,325 @@ func TestWorker_EnqueueWithUniqkey_DifferentJobTypes(t *testing.T) {
 
 	if count != 2 {
 		t.Errorf("expected 2 pending jobs (different job types), got %d", count)
+	}
+}
+
+func TestWorker_RecoverStuckJobs(t *testing.T) {
+	db, queries := setupTestDB(t)
+	defer db.Close()
+
+	registry := NewRegistry()
+	registry.Register(&TestJob{
+		name:      "TestJob",
+		executeFn: func(ctx context.Context, arg json.RawMessage) error { return nil },
+	})
+
+	worker := NewWorker(db, queries, registry)
+
+	// ジョブをエンキュー
+	err := worker.Enqueue(context.Background(), "TestJob", map[string]string{"key": "value"}, "")
+	if err != nil {
+		t.Fatalf("failed to enqueue job: %v", err)
+	}
+
+	// ジョブをrunningに変更し、grabbed_atを6分前に設定（スタック状態にする）
+	_, err = db.Exec("UPDATE jobs SET status = 'running', grabbed_at = datetime('now', '-6 minutes') WHERE id = 1")
+	if err != nil {
+		t.Fatalf("failed to update job: %v", err)
+	}
+
+	// スタックジョブを回復
+	err = worker.recoverStuckJobs(context.Background())
+	if err != nil {
+		t.Fatalf("failed to recover stuck jobs: %v", err)
+	}
+
+	// ジョブの状態を確認
+	job, err := queries.GetJobByID(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("failed to get job: %v", err)
+	}
+
+	if job.Status != "pending" {
+		t.Errorf("expected status=pending after recovery, got %s", job.Status)
+	}
+
+	if job.RetryCount != 1 {
+		t.Errorf("expected retry_count=1 after recovery, got %d", job.RetryCount)
+	}
+
+	if job.GrabbedAt.Valid {
+		t.Errorf("expected grabbed_at to be NULL after recovery, got %v", job.GrabbedAt)
+	}
+}
+
+func TestWorker_RecoverStuckJobs_MaxRetriesReached(t *testing.T) {
+	db, queries := setupTestDB(t)
+	defer db.Close()
+
+	registry := NewRegistry()
+	registry.Register(&TestJob{
+		name:      "TestJob",
+		executeFn: func(ctx context.Context, arg json.RawMessage) error { return nil },
+	})
+
+	worker := NewWorker(db, queries, registry)
+
+	// ジョブをエンキュー
+	err := worker.Enqueue(context.Background(), "TestJob", map[string]string{"key": "value"}, "")
+	if err != nil {
+		t.Fatalf("failed to enqueue job: %v", err)
+	}
+
+	// ジョブをrunningに変更し、grabbed_atを6分前、retry_countをmax_retries（5）に設定
+	_, err = db.Exec("UPDATE jobs SET status = 'running', grabbed_at = datetime('now', '-6 minutes'), retry_count = 5 WHERE id = 1")
+	if err != nil {
+		t.Fatalf("failed to update job: %v", err)
+	}
+
+	// スタックジョブを回復
+	err = worker.recoverStuckJobs(context.Background())
+	if err != nil {
+		t.Fatalf("failed to recover stuck jobs: %v", err)
+	}
+
+	// ジョブの状態を確認
+	job, err := queries.GetJobByID(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("failed to get job: %v", err)
+	}
+
+	if job.Status != "failed" {
+		t.Errorf("expected status=failed when max_retries reached, got %s", job.Status)
+	}
+
+	if job.RetryCount != 5 {
+		t.Errorf("expected retry_count=5 (unchanged), got %d", job.RetryCount)
+	}
+}
+
+func TestWorker_RecoverStuckJobs_NotStuck(t *testing.T) {
+	db, queries := setupTestDB(t)
+	defer db.Close()
+
+	registry := NewRegistry()
+	registry.Register(&TestJob{
+		name:      "TestJob",
+		executeFn: func(ctx context.Context, arg json.RawMessage) error { return nil },
+	})
+
+	worker := NewWorker(db, queries, registry)
+
+	// ジョブをエンキュー
+	err := worker.Enqueue(context.Background(), "TestJob", map[string]string{"key": "value"}, "")
+	if err != nil {
+		t.Fatalf("failed to enqueue job: %v", err)
+	}
+
+	// ジョブをrunningに変更するが、grabbed_atは現在時刻（スタックしていない）
+	_, err = db.Exec("UPDATE jobs SET status = 'running', grabbed_at = datetime('now') WHERE id = 1")
+	if err != nil {
+		t.Fatalf("failed to update job: %v", err)
+	}
+
+	// スタックジョブを回復（何も変わらないはず）
+	err = worker.recoverStuckJobs(context.Background())
+	if err != nil {
+		t.Fatalf("failed to recover stuck jobs: %v", err)
+	}
+
+	// ジョブの状態を確認
+	job, err := queries.GetJobByID(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("failed to get job: %v", err)
+	}
+
+	// スタックしていないのでrunningのまま
+	if job.Status != "running" {
+		t.Errorf("expected status=running (not stuck), got %s", job.Status)
+	}
+
+	if job.RetryCount != 0 {
+		t.Errorf("expected retry_count=0 (unchanged), got %d", job.RetryCount)
+	}
+}
+
+func TestWorker_JobTimeout_Default(t *testing.T) {
+	db, queries := setupTestDB(t)
+	defer db.Close()
+
+	executed := false
+	registry := NewRegistry()
+	registry.Register(&TestJob{
+		name: "TestJob",
+		executeFn: func(ctx context.Context, arg json.RawMessage) error {
+			executed = true
+			// Check that context has a deadline (timeout)
+			deadline, ok := ctx.Deadline()
+			if !ok {
+				t.Error("expected context to have deadline")
+			}
+			// Deadline should be approximately 5 minutes from now
+			expectedDeadline := time.Now().Add(5 * time.Minute)
+			diff := deadline.Sub(expectedDeadline)
+			if diff < 0 {
+				diff = -diff
+			}
+			if diff > 2*time.Second {
+				t.Errorf("expected deadline ~5m from now, got %v (diff=%v)", deadline, diff)
+			}
+			return nil
+		},
+	})
+
+	worker := NewWorker(db, queries, registry)
+
+	// Enqueue job
+	err := worker.Enqueue(context.Background(), "TestJob", map[string]string{"key": "value"}, "")
+	if err != nil {
+		t.Fatalf("failed to enqueue job: %v", err)
+	}
+
+	// Process job
+	err = worker.processNextJob(context.Background())
+	if err != nil {
+		t.Fatalf("failed to process job: %v", err)
+	}
+
+	if !executed {
+		t.Error("job was not executed")
+	}
+}
+
+// TestJobWithTimeout is a test job that implements JobHandlerWithTimeout
+type TestJobWithTimeout struct {
+	name      string
+	timeout   time.Duration
+	executeFn func(ctx context.Context, arg json.RawMessage) error
+}
+
+func (j *TestJobWithTimeout) Name() string {
+	return j.name
+}
+
+func (j *TestJobWithTimeout) Timeout() time.Duration {
+	return j.timeout
+}
+
+func (j *TestJobWithTimeout) Execute(ctx context.Context, arg json.RawMessage) error {
+	return j.executeFn(ctx, arg)
+}
+
+func TestWorker_JobTimeout_Custom(t *testing.T) {
+	db, queries := setupTestDB(t)
+	defer db.Close()
+
+	customTimeout := 2 * time.Minute
+	executed := false
+	registry := NewRegistry()
+	registry.Register(&TestJobWithTimeout{
+		name:    "TestJobWithTimeout",
+		timeout: customTimeout,
+		executeFn: func(ctx context.Context, arg json.RawMessage) error {
+			executed = true
+			// Check that context has the custom timeout
+			deadline, ok := ctx.Deadline()
+			if !ok {
+				t.Error("expected context to have deadline")
+			}
+			expectedDeadline := time.Now().Add(customTimeout)
+			diff := deadline.Sub(expectedDeadline)
+			if diff < 0 {
+				diff = -diff
+			}
+			if diff > 2*time.Second {
+				t.Errorf("expected deadline ~%v from now, got %v (diff=%v)", customTimeout, deadline, diff)
+			}
+			return nil
+		},
+	})
+
+	worker := NewWorker(db, queries, registry)
+
+	// Enqueue job
+	err := worker.Enqueue(context.Background(), "TestJobWithTimeout", map[string]string{"key": "value"}, "")
+	if err != nil {
+		t.Fatalf("failed to enqueue job: %v", err)
+	}
+
+	// Process job
+	err = worker.processNextJob(context.Background())
+	if err != nil {
+		t.Fatalf("failed to process job: %v", err)
+	}
+
+	if !executed {
+		t.Error("job was not executed")
+	}
+}
+
+func TestWorker_JobTimeout_Exceeded(t *testing.T) {
+	db, queries := setupTestDB(t)
+	defer db.Close()
+
+	shortTimeout := 100 * time.Millisecond
+	executionStarted := false
+	registry := NewRegistry()
+	registry.Register(&TestJobWithTimeout{
+		name:    "TestJobWithTimeout",
+		timeout: shortTimeout,
+		executeFn: func(ctx context.Context, arg json.RawMessage) error {
+			executionStarted = true
+			// Sleep longer than the timeout
+			select {
+			case <-time.After(1 * time.Second):
+				return nil
+			case <-ctx.Done():
+				// Context was cancelled due to timeout
+				return ctx.Err()
+			}
+		},
+	})
+
+	worker := NewWorker(db, queries, registry)
+
+	// Enqueue job
+	err := worker.Enqueue(context.Background(), "TestJobWithTimeout", map[string]string{"key": "value"}, "")
+	if err != nil {
+		t.Fatalf("failed to enqueue job: %v", err)
+	}
+
+	// Process job (should timeout)
+	err = worker.processNextJob(context.Background())
+	if err != nil {
+		t.Fatalf("processNextJob should not return error: %v", err)
+	}
+
+	if !executionStarted {
+		t.Error("job should have started executing")
+	}
+
+	// Job should be marked for retry after timeout
+	job, err := queries.FindNextJob(context.Background(), time.Now().Add(31*time.Second))
+	if err != nil {
+		t.Fatalf("failed to find next job: %v", err)
+	}
+
+	if job.RetryCount != 1 {
+		t.Errorf("expected retry_count=1 after timeout, got %d", job.RetryCount)
+	}
+
+	if job.Status != "pending" {
+		t.Errorf("expected status=pending after timeout, got %s", job.Status)
+	}
+
+	// Error message should indicate timeout
+	if !job.ErrorMessage.Valid {
+		t.Error("expected error_message to be set after timeout")
+	}
+	if !strings.Contains(job.ErrorMessage.String, "deadline exceeded") &&
+		!strings.Contains(job.ErrorMessage.String, "context deadline exceeded") {
+		t.Errorf("expected error message to contain 'deadline exceeded', got '%s'", job.ErrorMessage.String)
 	}
 }
 

@@ -24,6 +24,7 @@ type Querier interface {
 	DeleteTFIDFByEntryID(ctx context.Context, entryID int64) error
 	DeleteTrackbacksBySourceEntryId(ctx context.Context, trackbackEntryID sql.NullInt64) error
 	EnqueueJob(ctx context.Context, arg EnqueueJobParams) (Job, error)
+	FailStuckJobs(ctx context.Context) error
 	FindNextJob(ctx context.Context, runAfter time.Time) (Job, error)
 	GetEntryById(ctx context.Context, id int64) (GetEntryByIdRow, error)
 	GetEntryByPath(ctx context.Context, path string) (GetEntryByPathRow, error)
@@ -55,6 +56,7 @@ type Querier interface {
 	ListUniqueDates(ctx context.Context, arg ListUniqueDatesParams) ([]string, error)
 	MarkJobCompleted(ctx context.Context, id int64) error
 	MarkJobFailed(ctx context.Context, arg MarkJobFailedParams) error
+	RecoverStuckJobs(ctx context.Context) error
 	UpdateEntry(ctx context.Context, arg UpdateEntryParams) (Entry, error)
 }
 

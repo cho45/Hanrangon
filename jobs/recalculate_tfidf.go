@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/cho45/hanrangon/app"
 )
@@ -29,6 +30,12 @@ func NewRecalculateTFIDFJob(a app.App) *RecalculateTFIDFJob {
 // Name returns the job name
 func (j *RecalculateTFIDFJob) Name() string {
 	return "RecalculateTFIDF"
+}
+
+// Timeout returns the maximum execution time for this job
+// TF-IDF recalculation can be heavy for large numbers of entries, so set to 10 minutes
+func (j *RecalculateTFIDFJob) Timeout() time.Duration {
+	return 10 * time.Minute
 }
 
 // Execute executes the TF-IDF recalculation job
