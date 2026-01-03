@@ -81,6 +81,11 @@ func main() {
 			log.Fatalf("reformat failed: %v", err)
 		}
 
+	case "recalc-tfidf":
+		if err := subcommands.RecalcTFIDF(ctx, application, subArgs); err != nil {
+			log.Fatalf("recalc-tfidf failed: %v", err)
+		}
+
 	default:
 		log.Fatalf("unknown command: %s", cmd)
 	}

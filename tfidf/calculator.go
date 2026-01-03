@@ -89,14 +89,22 @@ func (c *Calculator) UpdateTFIDF(ctx context.Context, entryID int64, title, body
 	// Extract terms from title and body
 	terms := c.ExtractTerms(title, body)
 
+	tx, err := c.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	qtx := c.queries.WithTx(tx)
+
 	// Delete existing TF-IDF data for this entry
-	if err := c.queries.DeleteTFIDFByEntryID(ctx, entryID); err != nil {
+	if err := qtx.DeleteTFIDFByEntryID(ctx, entryID); err != nil {
 		return fmt.Errorf("failed to delete existing tfidf data: %w", err)
 	}
 
 	// Insert new terms
 	for term, count := range terms {
-		err := c.queries.InsertTFIDF(ctx, model.InsertTFIDFParams{
+		err := qtx.InsertTFIDF(ctx, model.InsertTFIDFParams{
 			EntryID:   entryID,
 			Term:      term,
 			TermCount: int64(count),
@@ -104,6 +112,10 @@ func (c *Calculator) UpdateTFIDF(ctx context.Context, entryID int64, title, body
 		if err != nil {
 			return fmt.Errorf("failed to insert tfidf term: %w", err)
 		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	log.Printf("Updated TF-IDF for entry %d: %d terms", entryID, len(terms))
