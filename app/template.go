@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/Masterminds/sprig/v3"
@@ -48,26 +49,26 @@ func buildFuncMap() template.FuncMap {
 	return funcMap
 }
 
-// LoadTemplates loads all HTML templates from the view directory
+// LoadTemplates loads all templates from the view directory
 func (t *Templates) LoadTemplates() (*template.Template, error) {
 	tmpl := template.New("")
 	funcMap := buildFuncMap()
 	tmpl.Funcs(funcMap)
 
+	// 実行ディレクトリに応じてテンプレートディレクトリのパスを決定
+	// (メインから実行: view/, テストから実行: ../view/)
 	basePath := "view/"
-	templates, err := tmpl.ParseGlob(basePath + "*.html")
-	if err != nil {
-		// テスト実行時は相対パスが異なる
+	if _, err := os.Stat(basePath); os.IsNotExist(err) {
 		basePath = "../view/"
-		tmpl = template.New("")
-		tmpl.Funcs(funcMap)
-		templates, err = tmpl.ParseGlob(basePath + "*.html")
-		if err != nil {
-			return nil, err
-		}
 	}
 
-	// XMLテンプレートも読み込む
+	// HTML テンプレートを読み込む
+	templates, err := tmpl.ParseGlob(basePath + "*.html")
+	if err != nil {
+		return nil, err
+	}
+
+	// XML テンプレートを読み込む
 	templates, err = templates.ParseGlob(basePath + "*.xml")
 	if err != nil {
 		return nil, err
@@ -96,12 +97,17 @@ func InitTemplates(config *Config) (*Templates, error) {
 
 // getTemplates returns the template set (from cache or by loading)
 func (t *Templates) getTemplates() (*template.Template, error) {
+	// 開発モードでは常にテンプレートを再読み込み
+	if t.config.IsDevelopment() {
+		return t.LoadTemplates()
+	}
+
 	// 本番モードでキャッシュがあればそれを返す
-	if !t.config.IsDevelopment() && t.templates != nil {
+	if t.templates != nil {
 		return t.templates, nil
 	}
 
-	// 開発モードまたはキャッシュがない場合は LoadTemplates を呼ぶ
+	// キャッシュがない場合は読み込む
 	return t.LoadTemplates()
 }
 
