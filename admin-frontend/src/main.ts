@@ -1,1 +1,1 @@
-import './components/app-editor';
+import './components/AppEditor.svelte';

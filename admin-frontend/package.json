@@ -12,11 +12,13 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "lit": "^3.3.2",
-    "strftime": "^0.10.3"
+    "strftime": "^0.10.3",
+    "svelte": "^5.46.1"
   },
   "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^6.2.1",
     "@types/strftime": "^0.9.8",
+    "svelte-check": "^4.3.5",
     "typescript": "^5.9.3",
     "vite": "^7.3.0"
   }
