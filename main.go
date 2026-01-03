@@ -43,12 +43,12 @@ func main() {
 	// 4. Registry作成
 	registry := jobqueue.NewRegistry()
 
-	// 5. Queue作成 (まだStartしない)
+	// 5. Worker作成 (まだStartしない)
 	workerQueries := model.New(workerDB)
-	queue := jobqueue.NewQueue(workerDB, workerQueries, registry)
+	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
 
 	// 6. App作成
-	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, queue)
+	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, worker)
 
 	// 7. ジョブ登録
 	registry.Register(jobs.NewSimpleJob())
@@ -56,8 +56,8 @@ func main() {
 	registry.Register(jobs.NewUpdateTrackbacksJob(application))
 	registry.Register(jobs.NewIndexImagesJob(application))
 
-	// 8. Queue.Start
-	queue.Start(context.Background())
+	// 8. Worker.Start
+	worker.Start(context.Background())
 
 	// 9. Server起動
 	e := app.NewServer(application)

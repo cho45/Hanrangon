@@ -103,9 +103,9 @@ func setupTest(t *testing.T) *testEnv {
 	// Create job queue for testing
 	registry := jobqueue.NewRegistry()
 	workerQueries := model.New(workerDB)
-	queue := jobqueue.NewQueue(workerDB, workerQueries, registry)
+	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
 
-	application := NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, queue)
+	application := NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, worker)
 	e := NewServer(application)
 
 	// テスト用のエラーハンドラーを設定（詳細なエラーメッセージを出力）

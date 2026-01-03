@@ -7,34 +7,34 @@ import (
 
 // Registry はジョブタイプを管理するレジストリ
 type Registry struct {
-	mu   sync.RWMutex
-	jobs map[string]Job
+	mu       sync.RWMutex
+	handlers map[string]JobHandler
 }
 
 // NewRegistry は新しいRegistryを作成する
 func NewRegistry() *Registry {
 	return &Registry{
-		jobs: make(map[string]Job),
+		handlers: make(map[string]JobHandler),
 	}
 }
 
-// Register はジョブをレジストリに登録する
-func (r *Registry) Register(job Job) {
+// Register はジョブハンドラをレジストリに登録する
+func (r *Registry) Register(handler JobHandler) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	name := job.Name()
-	if _, exists := r.jobs[name]; exists {
-		panic(fmt.Sprintf("job %s is already registered", name))
+	name := handler.Name()
+	if _, exists := r.handlers[name]; exists {
+		panic(fmt.Sprintf("job handler %s is already registered", name))
 	}
-	r.jobs[name] = job
+	r.handlers[name] = handler
 }
 
-// Get は名前からジョブを取得する
-func (r *Registry) Get(name string) (Job, bool) {
+// Get は名前からジョブハンドラを取得する
+func (r *Registry) Get(name string) (JobHandler, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	job, ok := r.jobs[name]
-	return job, ok
+	handler, ok := r.handlers[name]
+	return handler, ok
 }

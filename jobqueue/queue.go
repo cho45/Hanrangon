@@ -11,17 +11,17 @@ import (
 	"github.com/cho45/hanrangon/model"
 )
 
-// Queue はジョブキューを管理する
-type Queue struct {
+// Worker はジョブキューのワーカーを管理する
+type Worker struct {
 	db       *sql.DB
 	queries  *model.Queries
 	registry *Registry
 	interval time.Duration
 }
 
-// NewQueue は新しいQueueを作成する
-func NewQueue(db *sql.DB, queries *model.Queries, registry *Registry) *Queue {
-	return &Queue{
+// NewWorker は新しいWorkerを作成する
+func NewWorker(db *sql.DB, queries *model.Queries, registry *Registry) *Worker {
+	return &Worker{
 		db:       db,
 		queries:  queries,
 		registry: registry,
@@ -30,16 +30,16 @@ func NewQueue(db *sql.DB, queries *model.Queries, registry *Registry) *Queue {
 }
 
 // Start はジョブキューのワーカーを起動する
-func (q *Queue) Start(ctx context.Context) {
-	go q.run(ctx)
+func (w *Worker) Start(ctx context.Context) {
+	go w.run(ctx)
 }
 
 // run はポーリングループを実行する
-func (q *Queue) run(ctx context.Context) {
-	ticker := time.NewTicker(q.interval)
+func (w *Worker) run(ctx context.Context) {
+	ticker := time.NewTicker(w.interval)
 	defer ticker.Stop()
 
-	log.Printf("Job queue worker started (polling interval: %v)", q.interval)
+	log.Printf("Job queue worker started (polling interval: %v)", w.interval)
 
 	for {
 		select {
@@ -47,7 +47,7 @@ func (q *Queue) run(ctx context.Context) {
 			log.Printf("Job queue worker stopped")
 			return
 		case <-ticker.C:
-			if err := q.processNextJob(ctx); err != nil {
+			if err := w.processNextJob(ctx); err != nil {
 				log.Printf("Error processing job: %v", err)
 			}
 		}
@@ -55,9 +55,9 @@ func (q *Queue) run(ctx context.Context) {
 }
 
 // processNextJob は次のジョブを1つ処理する
-func (q *Queue) processNextJob(ctx context.Context) error {
+func (w *Worker) processNextJob(ctx context.Context) error {
 	// 次のジョブを取得
-	job, err := q.queries.FindNextJob(ctx, time.Now())
+	job, err := w.queries.FindNextJob(ctx, time.Now())
 	if err != nil {
 		if err == sql.ErrNoRows {
 			// ジョブがない場合は何もしない
@@ -67,7 +67,7 @@ func (q *Queue) processNextJob(ctx context.Context) error {
 	}
 
 	// ジョブを実行中としてマーク
-	err = q.queries.GrabJob(ctx, model.GrabJobParams{
+	err = w.queries.GrabJob(ctx, model.GrabJobParams{
 		GrabbedAt: sql.NullTime{Time: time.Now(), Valid: true},
 		ID:        job.ID,
 	})
@@ -76,48 +76,48 @@ func (q *Queue) processNextJob(ctx context.Context) error {
 	}
 
 	// ジョブタイプを取得
-	jobType, err := q.queries.GetJobTypeByID(ctx, job.JobTypeID)
+	jobType, err := w.queries.GetJobTypeByID(ctx, job.JobTypeID)
 	if err != nil {
 		return fmt.Errorf("failed to get job type %d: %w", job.JobTypeID, err)
 	}
 
-	// レジストリからジョブを取得
-	jobImpl, ok := q.registry.Get(jobType.Name)
+	// レジストリからジョブハンドラを取得
+	handler, ok := w.registry.Get(jobType.Name)
 	if !ok {
-		// ジョブが見つからない場合は失敗としてマーク
-		return q.markJobFailed(ctx, job.ID, fmt.Errorf("job type %s not registered", jobType.Name))
+		// ジョブハンドラが見つからない場合は失敗としてマーク
+		return w.markJobFailed(ctx, job.ID, fmt.Errorf("job type %s not registered", jobType.Name))
 	}
 
 	// ジョブを実行
 	log.Printf("Executing job %d (type: %s)", job.ID, jobType.Name)
-	err = q.executeJob(ctx, jobImpl, job)
+	err = w.executeJob(ctx, handler, job)
 	if err != nil {
 		log.Printf("Job %d failed: %v", job.ID, err)
-		return q.markJobFailed(ctx, job.ID, err)
+		return w.markJobFailed(ctx, job.ID, err)
 	}
 
 	// 成功したらジョブを削除
 	log.Printf("Job %d completed successfully", job.ID)
-	return q.queries.MarkJobCompleted(ctx, job.ID)
+	return w.queries.MarkJobCompleted(ctx, job.ID)
 }
 
 // executeJob はジョブを実行する（パニックをリカバー）
-func (q *Queue) executeJob(ctx context.Context, jobImpl Job, job model.Job) (err error) {
+func (w *Worker) executeJob(ctx context.Context, handler JobHandler, job model.Job) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("job panicked: %v", r)
 		}
 	}()
 
-	return jobImpl.Execute(ctx, json.RawMessage(job.Arg))
+	return handler.Execute(ctx, json.RawMessage(job.Arg))
 }
 
 // markJobFailed はジョブを失敗としてマークする
-func (q *Queue) markJobFailed(ctx context.Context, jobID int64, jobErr error) error {
+func (w *Worker) markJobFailed(ctx context.Context, jobID int64, jobErr error) error {
 	runAfter := time.Now().Add(30 * time.Second) // 30秒後にリトライ
 	errorMessage := sql.NullString{String: jobErr.Error(), Valid: true}
 
-	return q.queries.MarkJobFailed(ctx, model.MarkJobFailedParams{
+	return w.queries.MarkJobFailed(ctx, model.MarkJobFailedParams{
 		RunAfter:     runAfter,
 		ErrorMessage: errorMessage,
 		ID:           jobID,
@@ -125,9 +125,9 @@ func (q *Queue) markJobFailed(ctx context.Context, jobID int64, jobErr error) er
 }
 
 // Enqueue はジョブをキューに追加する
-func (q *Queue) Enqueue(ctx context.Context, jobTypeName string, arg interface{}, uniqkey string) error {
+func (w *Worker) Enqueue(ctx context.Context, jobTypeName string, arg interface{}, uniqkey string) error {
 	// ジョブタイプを取得または作成
-	jobType, err := q.queries.GetOrCreateJobType(ctx, jobTypeName)
+	jobType, err := w.queries.GetOrCreateJobType(ctx, jobTypeName)
 	if err != nil {
 		return fmt.Errorf("failed to get or create job type: %w", err)
 	}
@@ -144,7 +144,7 @@ func (q *Queue) Enqueue(ctx context.Context, jobTypeName string, arg interface{}
 		uniqkeyNull = sql.NullString{String: uniqkey, Valid: true}
 	}
 
-	_, err = q.queries.EnqueueJob(ctx, model.EnqueueJobParams{
+	_, err = w.queries.EnqueueJob(ctx, model.EnqueueJobParams{
 		JobTypeID:  jobType.ID,
 		Arg:        string(argJSON),
 		Uniqkey:    uniqkeyNull,

@@ -45,9 +45,9 @@ func TestIndexImagesJob_Execute(t *testing.T) {
 	// Create job queue
 	registry := jobqueue.NewRegistry()
 	workerQueries := model.New(workerDB)
-	queue := jobqueue.NewQueue(workerDB, workerQueries, registry)
+	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
 
-	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, queue)
+	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, worker)
 	job := NewIndexImagesJob(application)
 
 	// Create a dummy image

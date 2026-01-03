@@ -47,7 +47,7 @@ func setupTestDB(t *testing.T) (*sql.DB, *model.Queries) {
 	return db, model.New(db)
 }
 
-func TestQueue_Enqueue(t *testing.T) {
+func TestWorker_Enqueue(t *testing.T) {
 	db, queries := setupTestDB(t)
 	defer db.Close()
 
@@ -57,10 +57,10 @@ func TestQueue_Enqueue(t *testing.T) {
 		executeFn: func(ctx context.Context, arg json.RawMessage) error { return nil },
 	})
 
-	queue := NewQueue(db, queries, registry)
+	worker := NewWorker(db, queries, registry)
 
 	// ジョブをエンキュー
-	err := queue.Enqueue(context.Background(), "TestJob", map[string]string{"key": "value"}, "")
+	err := worker.Enqueue(context.Background(), "TestJob", map[string]string{"key": "value"}, "")
 	if err != nil {
 		t.Fatalf("failed to enqueue job: %v", err)
 	}
@@ -76,7 +76,7 @@ func TestQueue_Enqueue(t *testing.T) {
 	}
 }
 
-func TestQueue_EnqueueWithUniqkey(t *testing.T) {
+func TestWorker_EnqueueWithUniqkey(t *testing.T) {
 	db, queries := setupTestDB(t)
 	defer db.Close()
 
@@ -86,15 +86,15 @@ func TestQueue_EnqueueWithUniqkey(t *testing.T) {
 		executeFn: func(ctx context.Context, arg json.RawMessage) error { return nil },
 	})
 
-	queue := NewQueue(db, queries, registry)
+	worker := NewWorker(db, queries, registry)
 
 	// 同じuniqkeyで2回エンキュー
-	err := queue.Enqueue(context.Background(), "TestJob", map[string]string{"key": "value1"}, "unique-1")
+	err := worker.Enqueue(context.Background(), "TestJob", map[string]string{"key": "value1"}, "unique-1")
 	if err != nil {
 		t.Fatalf("failed to enqueue job: %v", err)
 	}
 
-	err = queue.Enqueue(context.Background(), "TestJob", map[string]string{"key": "value2"}, "unique-1")
+	err = worker.Enqueue(context.Background(), "TestJob", map[string]string{"key": "value2"}, "unique-1")
 	if err != nil {
 		t.Fatalf("failed to enqueue job: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestQueue_EnqueueWithUniqkey(t *testing.T) {
 	}
 }
 
-func TestQueue_ProcessNextJob_Success(t *testing.T) {
+func TestWorker_ProcessNextJob_Success(t *testing.T) {
 	db, queries := setupTestDB(t)
 	defer db.Close()
 
@@ -124,16 +124,16 @@ func TestQueue_ProcessNextJob_Success(t *testing.T) {
 		},
 	})
 
-	queue := NewQueue(db, queries, registry)
+	worker := NewWorker(db, queries, registry)
 
 	// ジョブをエンキュー
-	err := queue.Enqueue(context.Background(), "TestJob", map[string]string{"key": "value"}, "")
+	err := worker.Enqueue(context.Background(), "TestJob", map[string]string{"key": "value"}, "")
 	if err != nil {
 		t.Fatalf("failed to enqueue job: %v", err)
 	}
 
 	// ジョブを処理
-	err = queue.processNextJob(context.Background())
+	err = worker.processNextJob(context.Background())
 	if err != nil {
 		t.Fatalf("failed to process job: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestQueue_ProcessNextJob_Success(t *testing.T) {
 	}
 }
 
-func TestQueue_ProcessNextJob_Failure(t *testing.T) {
+func TestWorker_ProcessNextJob_Failure(t *testing.T) {
 	db, queries := setupTestDB(t)
 	defer db.Close()
 
@@ -168,16 +168,16 @@ func TestQueue_ProcessNextJob_Failure(t *testing.T) {
 		},
 	})
 
-	queue := NewQueue(db, queries, registry)
+	worker := NewWorker(db, queries, registry)
 
 	// ジョブをエンキュー
-	err := queue.Enqueue(context.Background(), "TestJob", map[string]string{"key": "value"}, "")
+	err := worker.Enqueue(context.Background(), "TestJob", map[string]string{"key": "value"}, "")
 	if err != nil {
 		t.Fatalf("failed to enqueue job: %v", err)
 	}
 
 	// ジョブを処理（失敗する）
-	err = queue.processNextJob(context.Background())
+	err = worker.processNextJob(context.Background())
 	if err != nil {
 		t.Fatalf("processNextJob should not return error on job failure: %v", err)
 	}
@@ -210,7 +210,7 @@ func TestQueue_ProcessNextJob_Failure(t *testing.T) {
 	}
 }
 
-func TestQueue_ProcessNextJob_MaxRetries(t *testing.T) {
+func TestWorker_ProcessNextJob_MaxRetries(t *testing.T) {
 	db, queries := setupTestDB(t)
 	defer db.Close()
 
@@ -224,10 +224,10 @@ func TestQueue_ProcessNextJob_MaxRetries(t *testing.T) {
 		},
 	})
 
-	queue := NewQueue(db, queries, registry)
+	worker := NewWorker(db, queries, registry)
 
 	// ジョブをエンキュー
-	err := queue.Enqueue(context.Background(), "TestJob", map[string]string{"key": "value"}, "")
+	err := worker.Enqueue(context.Background(), "TestJob", map[string]string{"key": "value"}, "")
 	if err != nil {
 		t.Fatalf("failed to enqueue job: %v", err)
 	}
@@ -240,7 +240,7 @@ func TestQueue_ProcessNextJob_MaxRetries(t *testing.T) {
 			t.Fatalf("failed to update run_after: %v", err)
 		}
 
-		err = queue.processNextJob(context.Background())
+		err = worker.processNextJob(context.Background())
 		if err != nil {
 			t.Fatalf("processNextJob failed: %v", err)
 		}
@@ -260,36 +260,36 @@ func TestQueue_ProcessNextJob_MaxRetries(t *testing.T) {
 	}
 }
 
-func TestQueue_ProcessNextJob_NoJobs(t *testing.T) {
+func TestWorker_ProcessNextJob_NoJobs(t *testing.T) {
 	db, queries := setupTestDB(t)
 	defer db.Close()
 
 	registry := NewRegistry()
-	queue := NewQueue(db, queries, registry)
+	worker := NewWorker(db, queries, registry)
 
 	// ジョブがない状態で処理を試みる
-	err := queue.processNextJob(context.Background())
+	err := worker.processNextJob(context.Background())
 	if err != nil {
 		t.Fatalf("processNextJob should not error when no jobs: %v", err)
 	}
 }
 
-func TestQueue_ProcessNextJob_JobNotRegistered(t *testing.T) {
+func TestWorker_ProcessNextJob_JobNotRegistered(t *testing.T) {
 	db, queries := setupTestDB(t)
 	defer db.Close()
 
 	// ジョブを登録しないレジストリ
 	registry := NewRegistry()
-	queue := NewQueue(db, queries, registry)
+	worker := NewWorker(db, queries, registry)
 
 	// 未登録のジョブをエンキュー
-	err := queue.Enqueue(context.Background(), "UnknownJob", map[string]string{"key": "value"}, "")
+	err := worker.Enqueue(context.Background(), "UnknownJob", map[string]string{"key": "value"}, "")
 	if err != nil {
 		t.Fatalf("failed to enqueue job: %v", err)
 	}
 
 	// ジョブを処理（失敗するはず）
-	err = queue.processNextJob(context.Background())
+	err = worker.processNextJob(context.Background())
 	if err != nil {
 		t.Fatalf("processNextJob should not return error: %v", err)
 	}
@@ -305,7 +305,7 @@ func TestQueue_ProcessNextJob_JobNotRegistered(t *testing.T) {
 	}
 }
 
-func TestQueue_ProcessNextJob_Panic(t *testing.T) {
+func TestWorker_ProcessNextJob_Panic(t *testing.T) {
 	db, queries := setupTestDB(t)
 	defer db.Close()
 
@@ -317,16 +317,16 @@ func TestQueue_ProcessNextJob_Panic(t *testing.T) {
 		},
 	})
 
-	queue := NewQueue(db, queries, registry)
+	worker := NewWorker(db, queries, registry)
 
 	// ジョブをエンキュー
-	err := queue.Enqueue(context.Background(), "TestJob", map[string]string{"key": "value"}, "")
+	err := worker.Enqueue(context.Background(), "TestJob", map[string]string{"key": "value"}, "")
 	if err != nil {
 		t.Fatalf("failed to enqueue job: %v", err)
 	}
 
 	// パニックがリカバーされることを確認
-	err = queue.processNextJob(context.Background())
+	err = worker.processNextJob(context.Background())
 	if err != nil {
 		t.Fatalf("processNextJob should recover from panic: %v", err)
 	}
@@ -342,7 +342,7 @@ func TestQueue_ProcessNextJob_Panic(t *testing.T) {
 	}
 }
 
-func TestQueue_Integration(t *testing.T) {
+func TestWorker_Integration(t *testing.T) {
 	db, queries := setupTestDB(t)
 	defer db.Close()
 
@@ -363,16 +363,16 @@ func TestQueue_Integration(t *testing.T) {
 		},
 	})
 
-	queue := NewQueue(db, queries, registry)
+	worker := NewWorker(db, queries, registry)
 
 	// 複数のジョブをエンキュー
-	queue.Enqueue(context.Background(), "Job1", nil, "")
-	queue.Enqueue(context.Background(), "Job2", nil, "")
-	queue.Enqueue(context.Background(), "Job1", nil, "")
+	worker.Enqueue(context.Background(), "Job1", nil, "")
+	worker.Enqueue(context.Background(), "Job2", nil, "")
+	worker.Enqueue(context.Background(), "Job1", nil, "")
 
 	// 全てのジョブを処理
 	for i := 0; i < 3; i++ {
-		err := queue.processNextJob(context.Background())
+		err := worker.processNextJob(context.Background())
 		if err != nil {
 			t.Fatalf("failed to process job %d: %v", i, err)
 		}
@@ -394,7 +394,7 @@ func TestQueue_Integration(t *testing.T) {
 	}
 }
 
-func TestQueue_ProcessNextJob_RunAfter(t *testing.T) {
+func TestWorker_ProcessNextJob_RunAfter(t *testing.T) {
 	db, queries := setupTestDB(t)
 	defer db.Close()
 
@@ -408,7 +408,7 @@ func TestQueue_ProcessNextJob_RunAfter(t *testing.T) {
 		},
 	})
 
-	queue := NewQueue(db, queries, registry)
+	worker := NewWorker(db, queries, registry)
 
 	// 未来にスケジュールされたジョブをDBに直接挿入
 	jobType, err := queries.GetOrCreateJobType(context.Background(), "TestJob")
@@ -430,7 +430,7 @@ func TestQueue_ProcessNextJob_RunAfter(t *testing.T) {
 	}
 
 	// 現在時刻でジョブを処理しようとする
-	err = queue.processNextJob(context.Background())
+	err = worker.processNextJob(context.Background())
 	if err != nil {
 		t.Fatalf("processNextJob failed: %v", err)
 	}
@@ -451,7 +451,7 @@ func TestQueue_ProcessNextJob_RunAfter(t *testing.T) {
 	}
 }
 
-func TestQueue_EnqueueWithUniqkey_DifferentJobTypes(t *testing.T) {
+func TestWorker_EnqueueWithUniqkey_DifferentJobTypes(t *testing.T) {
 	db, queries := setupTestDB(t)
 	defer db.Close()
 
@@ -465,15 +465,15 @@ func TestQueue_EnqueueWithUniqkey_DifferentJobTypes(t *testing.T) {
 		executeFn: func(ctx context.Context, arg json.RawMessage) error { return nil },
 	})
 
-	queue := NewQueue(db, queries, registry)
+	worker := NewWorker(db, queries, registry)
 
 	// 異なるジョブタイプで同じuniqkeyを使用
-	err := queue.Enqueue(context.Background(), "Job1", map[string]string{"key": "value1"}, "unique-key")
+	err := worker.Enqueue(context.Background(), "Job1", map[string]string{"key": "value1"}, "unique-key")
 	if err != nil {
 		t.Fatalf("failed to enqueue Job1: %v", err)
 	}
 
-	err = queue.Enqueue(context.Background(), "Job2", map[string]string{"key": "value2"}, "unique-key")
+	err = worker.Enqueue(context.Background(), "Job2", map[string]string{"key": "value2"}, "unique-key")
 	if err != nil {
 		t.Fatalf("failed to enqueue Job2: %v", err)
 	}
@@ -489,18 +489,18 @@ func TestQueue_EnqueueWithUniqkey_DifferentJobTypes(t *testing.T) {
 	}
 }
 
-func TestQueue_Start_ContextCancellation(t *testing.T) {
+func TestWorker_Start_ContextCancellation(t *testing.T) {
 	db, queries := setupTestDB(t)
 	defer db.Close()
 
 	registry := NewRegistry()
-	queue := NewQueue(db, queries, registry)
+	worker := NewWorker(db, queries, registry)
 
 	// キャンセル可能なコンテキストを作成
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// ワーカーを起動
-	queue.Start(ctx)
+	worker.Start(ctx)
 
 	// 少し待つ
 	time.Sleep(100 * time.Millisecond)

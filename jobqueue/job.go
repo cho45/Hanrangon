@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 )
 
-// Job はジョブキューで実行されるジョブのインターフェース
-type Job interface {
+// JobHandler はジョブキューで実行されるジョブのハンドラインターフェース
+type JobHandler interface {
 	// Name はジョブの名前を返す
 	Name() string
 

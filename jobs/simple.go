@@ -17,7 +17,7 @@ type SimpleJobArg struct {
 }
 
 // NewSimpleJob は新しいSimpleJobを作成する
-func NewSimpleJob() jobqueue.Job {
+func NewSimpleJob() jobqueue.JobHandler {
 	return &SimpleJob{}
 }
 

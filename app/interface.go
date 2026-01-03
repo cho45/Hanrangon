@@ -28,7 +28,7 @@ type App interface {
 	SimilarityCalculator() *tfidf.SimilarityCalculator
 
 	// Job queue accessor
-	JobQueue() *jobqueue.Queue
+	JobQueue() *jobqueue.Worker
 
 	// Config accessor
 	Config() *Config

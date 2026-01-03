@@ -91,9 +91,9 @@ func setupTestApp(t *testing.T) (app.App, *sql.DB) {
 	// Create job queue for testing
 	registry := jobqueue.NewRegistry()
 	workerQueries := model.New(workerDB)
-	queue := jobqueue.NewQueue(workerDB, workerQueries, registry)
+	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
 
-	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, queue)
+	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, worker)
 	return application, db
 }
 
