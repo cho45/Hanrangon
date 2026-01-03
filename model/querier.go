@@ -13,6 +13,7 @@ import (
 type Querier interface {
 	CountEntries(ctx context.Context) (int64, error)
 	CountEntriesByDate(ctx context.Context, date string) (int64, error)
+	CountJobs(ctx context.Context) (int64, error)
 	CountPendingJobs(ctx context.Context) (int64, error)
 	CreateEntry(ctx context.Context, arg CreateEntryParams) (Entry, error)
 	CreateImage(ctx context.Context, arg CreateImageParams) (int64, error)
@@ -26,6 +27,7 @@ type Querier interface {
 	EnqueueJob(ctx context.Context, arg EnqueueJobParams) (Job, error)
 	FailStuckJobs(ctx context.Context) error
 	FindNextJob(ctx context.Context, runAfter time.Time) (Job, error)
+	FindScheduledEntriesToPublish(ctx context.Context, now sql.NullTime) ([]FindScheduledEntriesToPublishRow, error)
 	GetEntryById(ctx context.Context, id int64) (GetEntryByIdRow, error)
 	GetEntryByPath(ctx context.Context, path string) (GetEntryByPathRow, error)
 	GetImageByURI(ctx context.Context, uri string) (Image, error)
@@ -58,6 +60,7 @@ type Querier interface {
 	ListUniqueDates(ctx context.Context, arg ListUniqueDatesParams) ([]string, error)
 	MarkJobCompleted(ctx context.Context, id int64) error
 	MarkJobFailed(ctx context.Context, arg MarkJobFailedParams) error
+	PublishEntries(ctx context.Context, ids []int64) error
 	RecoverStuckJobs(ctx context.Context) error
 	UpdateEntry(ctx context.Context, arg UpdateEntryParams) (Entry, error)
 }

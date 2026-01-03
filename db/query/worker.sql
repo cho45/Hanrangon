@@ -41,3 +41,6 @@ SET status = 'failed'
 WHERE status = 'running'
 AND grabbed_at < datetime('now', '-5 minutes')
 AND retry_count >= max_retries;
+
+-- name: CountJobs :one
+SELECT count(*) FROM jobs;

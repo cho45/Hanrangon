@@ -100,3 +100,13 @@ WHERE id = sqlc.arg(id) LIMIT 1;
 -- name: ListAllEntries :many
 SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
 ORDER BY date DESC, created_at DESC;
+
+-- name: FindScheduledEntriesToPublish :many
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
+WHERE status = 'scheduled' AND (publish_at IS NULL OR publish_at <= sqlc.arg(now))
+ORDER BY publish_at ASC;
+
+-- name: PublishEntries :exec
+UPDATE entries
+SET status = 'public'
+WHERE id IN (sqlc.slice('ids'));

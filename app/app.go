@@ -147,3 +147,62 @@ func (app *AppImpl) Postprocess(ctx context.Context, html string) (string, error
 
 	return stdout.String(), nil
 }
+
+func (app *AppImpl) PublishScheduledEntries(ctx context.Context) error {
+	now := time.Now()
+	entries, err := app.queries.FindScheduledEntriesToPublish(ctx, sql.NullTime{Time: now, Valid: true})
+	if err != nil {
+		return fmt.Errorf("failed to find scheduled entries: %w", err)
+	}
+
+	if len(entries) == 0 {
+		return nil
+	}
+
+	ids := make([]int64, len(entries))
+	for i, e := range entries {
+		ids[i] = e.ID
+	}
+
+	if err := app.queries.PublishEntries(ctx, ids); err != nil {
+		return fmt.Errorf("failed to publish entries: %w", err)
+	}
+
+	log.Printf("Published %d scheduled entries", len(entries))
+
+	for _, e := range entries {
+		if err := app.EnqueuePublishedEntryJobs(ctx, e.ID); err != nil {
+			log.Printf("Failed to enqueue jobs for entry %d: %v", e.ID, err)
+		}
+	}
+
+	return nil
+}
+
+func (app *AppImpl) EnqueuePublishedEntryJobs(ctx context.Context, entryID int64) error {
+	// TF-IDF再計算ジョブをエンキュー
+	err := app.jobQueue.Enqueue(ctx, "RecalculateTFIDF",
+		map[string]interface{}{"entry_id": entryID},
+		fmt.Sprintf("recalc-tfidf-%d", entryID))
+	if err != nil {
+		log.Printf("Failed to enqueue TF-IDF job: %v", err)
+	}
+
+	// Trackback更新ジョブをエンキュー
+	err = app.jobQueue.Enqueue(ctx, "UpdateTrackbacks",
+		map[string]interface{}{"entry_id": entryID},
+		fmt.Sprintf("update-trackbacks-%d", entryID))
+	if err != nil {
+		log.Printf("Failed to enqueue Trackback job: %v", err)
+	}
+
+	// 画像インデックスジョブをエンキュー
+	err = app.jobQueue.Enqueue(ctx, "IndexImages",
+		map[string]interface{}{"entry_id": entryID},
+		fmt.Sprintf("index-images-%d", entryID))
+	if err != nil {
+		log.Printf("Failed to enqueue IndexImages job: %v", err)
+	}
+
+	return nil
+}

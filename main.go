@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/cho45/hanrangon/app"
 	"github.com/cho45/hanrangon/jobqueue"
@@ -71,6 +72,22 @@ func main() {
 
 		// Worker.Start
 		worker.Start(ctx)
+
+		// Periodic tasks
+		go func() {
+			ticker := time.NewTicker(1 * time.Minute)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					if err := application.PublishScheduledEntries(ctx); err != nil {
+						log.Printf("Error publishing scheduled entries: %v", err)
+					}
+				}
+			}
+		}()
 
 		// Server起動
 		e := app.NewServer(application)

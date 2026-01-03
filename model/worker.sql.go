@@ -11,6 +11,17 @@ import (
 	"time"
 )
 
+const countJobs = `-- name: CountJobs :one
+SELECT count(*) FROM jobs
+`
+
+func (q *Queries) CountJobs(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countJobs)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countPendingJobs = `-- name: CountPendingJobs :one
 SELECT count(*) FROM jobs WHERE status = 'pending'
 `

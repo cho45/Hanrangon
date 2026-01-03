@@ -63,4 +63,6 @@ type App interface {
 	HandleApiEdit(c echo.Context) error
 	HandleApiUploadImage(c echo.Context) error
 	HandleApiEditProgress(c echo.Context) error
+	PublishScheduledEntries(ctx context.Context) error
+	EnqueuePublishedEntryJobs(ctx context.Context, entryID int64) error
 }

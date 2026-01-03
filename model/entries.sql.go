@@ -85,6 +85,61 @@ func (q *Queries) CreateEntry(ctx context.Context, arg CreateEntryParams) (Entry
 	return i, err
 }
 
+const findScheduledEntriesToPublish = `-- name: FindScheduledEntriesToPublish :many
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
+WHERE status = 'scheduled' AND (publish_at IS NULL OR publish_at <= ?1)
+ORDER BY publish_at ASC
+`
+
+type FindScheduledEntriesToPublishRow struct {
+	ID            int64        `json:"id"`
+	Title         string       `json:"title"`
+	Body          string       `json:"body"`
+	FormattedBody string       `json:"formatted_body"`
+	Path          string       `json:"path"`
+	Format        string       `json:"format"`
+	Date          string       `json:"date"`
+	CreatedAt     time.Time    `json:"created_at"`
+	ModifiedAt    time.Time    `json:"modified_at"`
+	PublishAt     sql.NullTime `json:"publish_at"`
+	Status        string       `json:"status"`
+}
+
+func (q *Queries) FindScheduledEntriesToPublish(ctx context.Context, now sql.NullTime) ([]FindScheduledEntriesToPublishRow, error) {
+	rows, err := q.db.QueryContext(ctx, findScheduledEntriesToPublish, now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FindScheduledEntriesToPublishRow
+	for rows.Next() {
+		var i FindScheduledEntriesToPublishRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Body,
+			&i.FormattedBody,
+			&i.Path,
+			&i.Format,
+			&i.Date,
+			&i.CreatedAt,
+			&i.ModifiedAt,
+			&i.PublishAt,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getEntryById = `-- name: GetEntryById :one
 SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
 WHERE id = ?1 LIMIT 1
@@ -719,6 +774,27 @@ func (q *Queries) ListUniqueDates(ctx context.Context, arg ListUniqueDatesParams
 		return nil, err
 	}
 	return items, nil
+}
+
+const publishEntries = `-- name: PublishEntries :exec
+UPDATE entries
+SET status = 'public'
+WHERE id IN (/*SLICE:ids*/?)
+`
+
+func (q *Queries) PublishEntries(ctx context.Context, ids []int64) error {
+	query := publishEntries
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	_, err := q.db.ExecContext(ctx, query, queryParams...)
+	return err
 }
 
 const updateEntry = `-- name: UpdateEntry :one

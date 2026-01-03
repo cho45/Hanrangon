@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -235,28 +234,10 @@ func (app *AppImpl) HandleApiEdit(c echo.Context) error {
 		resEntry = model.Entry(row)
 	}
 
-	// TF-IDF再計算ジョブをエンキュー
-	err = app.jobQueue.Enqueue(context.Background(), "RecalculateTFIDF",
-		map[string]interface{}{"entry_id": resEntry.ID},
-		fmt.Sprintf("recalc-tfidf-%d", resEntry.ID))
-	if err != nil {
-		log.Printf("Failed to enqueue TF-IDF job: %v", err)
-	}
-
-	// Trackback更新ジョブをエンキュー
-	err = app.jobQueue.Enqueue(context.Background(), "UpdateTrackbacks",
-		map[string]interface{}{"entry_id": resEntry.ID},
-		fmt.Sprintf("update-trackbacks-%d", resEntry.ID))
-	if err != nil {
-		log.Printf("Failed to enqueue Trackback job: %v", err)
-	}
-
-	// 画像インデックスジョブをエンキュー
-	err = app.jobQueue.Enqueue(context.Background(), "IndexImages",
-		map[string]interface{}{"entry_id": resEntry.ID},
-		fmt.Sprintf("index-images-%d", resEntry.ID))
-	if err != nil {
-		log.Printf("Failed to enqueue IndexImages job: %v", err)
+	if resEntry.Status == "public" {
+		if err := app.EnqueuePublishedEntryJobs(ctx, resEntry.ID); err != nil {
+			log.Printf("Failed to enqueue jobs for entry %d: %v", resEntry.ID, err)
+		}
 	}
 
 	return c.JSON(http.StatusOK, EditResponse{

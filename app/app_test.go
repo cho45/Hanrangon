@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cho45/hanrangon/jobqueue"
 	"github.com/cho45/hanrangon/model"
@@ -170,4 +172,80 @@ func (env *testEnv) login(t *testing.T) string {
 	}
 	// Extract the actual cookie value (e.g. "session=...")
 	return strings.Split(cookie, ";")[0]
+}
+
+func TestPublishScheduledEntries(t *testing.T) {
+	ctx := context.Background()
+	env := setupTest(t)
+	defer env.close()
+
+	now := time.Now()
+	// Past entry (should be published)
+	past := now.Add(-1 * time.Hour)
+	_, err := env.app.Queries().CreateEntry(ctx, model.CreateEntryParams{
+		Title:         "Scheduled Past",
+		Body:          "Body",
+		FormattedBody: "Body",
+		Path:          "2026/01/01/1",
+		Format:        "Hatena",
+		Date:          "2026-01-01",
+		CreatedAt:     past,
+		ModifiedAt:    past,
+		PublishAt:     sql.NullTime{Time: past, Valid: true},
+		Status:        "scheduled",
+	})
+	if err != nil {
+		t.Fatalf("failed to create past entry: %v", err)
+	}
+
+	// Future entry (should NOT be published)
+	future := now.Add(1 * time.Hour)
+	_, err = env.app.Queries().CreateEntry(ctx, model.CreateEntryParams{
+		Title:         "Scheduled Future",
+		Body:          "Body",
+		FormattedBody: "Body",
+		Path:          "2026/01/01/2",
+		Format:        "Hatena",
+		Date:          "2026-01-01",
+		CreatedAt:     now,
+		ModifiedAt:    now,
+		PublishAt:     sql.NullTime{Time: future, Valid: true},
+		Status:        "scheduled",
+	})
+	if err != nil {
+		t.Fatalf("failed to create future entry: %v", err)
+	}
+
+	// Run publisher
+	if err := env.app.PublishScheduledEntries(ctx); err != nil {
+		t.Fatalf("PublishScheduledEntries failed: %v", err)
+	}
+
+	// Check past entry
+	e, err := env.app.Queries().GetEntryByPath(ctx, "2026/01/01/1")
+	if err != nil {
+		t.Fatalf("failed to get past entry: %v", err)
+	}
+	if e.Status != "public" {
+		t.Errorf("expected status public, got %s", e.Status)
+	}
+
+	// Check future entry
+	e, err = env.app.Queries().GetEntryByPath(ctx, "2026/01/01/2")
+	if err != nil {
+		t.Fatalf("failed to get future entry: %v", err)
+	}
+	if e.Status != "scheduled" {
+		t.Errorf("expected status scheduled, got %s", e.Status)
+	}
+
+	// Check jobs
+	count, err := model.New(env.workerDB).CountJobs(ctx)
+	if err != nil {
+		t.Fatalf("failed to count jobs: %v", err)
+	}
+	// UpdateTrackbacks, IndexImages, RecalculateTFIDF = 3 jobs
+	if count != 3 {
+		t.Errorf("expected 3 jobs, got %d", count)
+	}
 }
