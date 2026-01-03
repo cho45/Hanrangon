@@ -1,0 +1,18 @@
+[Unit]
+Description=Hanrangon CMS Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=cho45
+Group=cho45
+
+WorkingDirectory=/srv/www/lowreal.net/Hanrangon
+ExecStart=/srv/www/lowreal.net/Hanrangon/hanrangon
+Environment=HANRANGON_ENV=production
+
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

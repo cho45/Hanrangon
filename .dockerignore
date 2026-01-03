@@ -1,0 +1,11 @@
+.git
+.vscode
+.claude
+Nogag
+Text-Xatena
+postprocess
+var
+*.db
+*.log
+Dockerfile
+.dockerignore
