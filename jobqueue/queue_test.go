@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -897,42 +898,118 @@ func TestWorker_JobTimeout_Exceeded(t *testing.T) {
 	}
 }
 
-func TestWorker_Start_ContextCancellation(t *testing.T) {
+func TestWorker_GracefulShutdown_RunningJobCompletes(t *testing.T) {
 	db, queries := setupTestDB(t)
 	defer db.Close()
 
+	jobStarted := make(chan struct{})
+	jobFinished := make(chan struct{})
+	jobCompletedInDB := make(chan bool, 1)
+
 	registry := NewRegistry()
+	registry.Register(&TestJob{
+		name: "LongJob",
+		executeFn: func(ctx context.Context, arg json.RawMessage) error {
+			close(jobStarted)
+			// Wait for a signal that the main context is canceled
+			// Use a select with time.After to avoid hanging if something goes wrong
+			select {
+			case <-time.After(2 * time.Second):
+				// OK
+			case <-ctx.Done():
+				t.Error("job context should not be canceled by main context cancellation")
+			}
+			close(jobFinished)
+			return nil
+		},
+	})
+
+	// Use a short interval for testing
 	worker := NewWorker(db, queries, registry)
+	worker.interval = 10 * time.Millisecond
 
-	// キャンセル可能なコンテキストを作成
+	// Enqueue a job
+	err := worker.Enqueue(context.Background(), "LongJob", nil, "")
+	if err != nil {
+		t.Fatalf("failed to enqueue job: %v", err)
+	}
+
+	// Start worker with a cancelable context
 	ctx, cancel := context.WithCancel(context.Background())
-
-	// ワーカーを起動
 	worker.Start(ctx)
 
-	// 少し待つ
-	time.Sleep(100 * time.Millisecond)
+	// Wait for job to start
+	<-jobStarted
 
-	// コンテキストをキャンセル
+	// Cancel the main context while the job is running
 	cancel()
 
-	// ワーカーが停止するまで待つ
-	time.Sleep(100 * time.Millisecond)
+	// Wait for the job to finish (it should finish because it uses detached context)
+	select {
+	case <-jobFinished:
+		// OK
+	case <-time.After(3 * time.Second):
+		t.Fatal("job did not finish in time")
+	}
 
-	// ワーカーが停止したことを確認（特にエラーなく終了すればOK）
-	// 注: ログ出力 "Job queue worker stopped" が出力されることを期待
+	// Wait for worker to stop
+	worker.Wait()
+
+	// Verify the job is marked as completed in the DB
+	// (Check queries.CountPendingJobs should be 0)
+	go func() {
+		count, _ := queries.CountPendingJobs(context.Background())
+		jobCompletedInDB <- (count == 0)
+	}()
+
+	select {
+	case completed := <-jobCompletedInDB:
+		if !completed {
+			t.Error("job should be completed in DB even after main context cancel")
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for DB check")
+	}
 }
 
-func TestMain(m *testing.M) {
-	// テスト実行時のログを抑制
-	devNull, _ := os.Open(os.DevNull)
-	os.Stderr = devNull
-	defer devNull.Close()
+func TestWorker_GracefulShutdown_NoNewJobs(t *testing.T) {
+	db, queries := setupTestDB(t)
+	defer db.Close()
 
-	code := m.Run()
+	executionCount := 0
+	registry := NewRegistry()
+	registry.Register(&TestJob{
+		name: "QuickJob",
+		executeFn: func(ctx context.Context, arg json.RawMessage) error {
+			executionCount++
+			return nil
+		},
+	})
 
-	// ログを元に戻す
-	os.Stderr = os.NewFile(2, "/dev/stderr")
+	worker := NewWorker(db, queries, registry)
+	worker.interval = 10 * time.Millisecond
 
-	os.Exit(code)
+	// Enqueue 3 jobs
+	for i := 0; i < 3; i++ {
+		worker.Enqueue(context.Background(), "QuickJob", nil, fmt.Sprintf("job-%d", i))
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// We want to stop the worker after the first job is fetched or during the interval
+	worker.Start(ctx)
+
+	// Give it just enough time to possibly start one job
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+	worker.Wait()
+
+	// The count should be less than or equal to 3, but definitely stopped
+	t.Logf("Executed %d jobs before shutdown", executionCount)
+
+	// If it executed some jobs, ensure they are removed from DB
+	count, _ := queries.CountPendingJobs(context.Background())
+	if int64(executionCount)+count != 3 {
+		t.Errorf("sum of executed (%d) and pending (%d) jobs should be 3", executionCount, count)
+	}
 }

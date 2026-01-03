@@ -3,9 +3,14 @@ package main
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/cho45/hanrangon/app"
@@ -61,37 +66,14 @@ func main() {
 	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, worker)
 
 	// 8. Execute command
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	switch cmd {
 	case "serve":
-		// ジョブ登録
-		registry.Register(jobs.NewSimpleJob())
-		registry.Register(jobs.NewRecalculateTFIDFJob(application))
-		registry.Register(jobs.NewUpdateTrackbacksJob(application))
-		registry.Register(jobs.NewIndexImagesJob(application))
-
-		// Worker.Start
-		worker.Start(ctx)
-
-		// Periodic tasks
-		go func() {
-			ticker := time.NewTicker(1 * time.Minute)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-ticker.C:
-					if err := application.PublishScheduledEntries(ctx); err != nil {
-						log.Printf("Error publishing scheduled entries: %v", err)
-					}
-				}
-			}
-		}()
-
-		// Server起動
-		e := app.NewServer(application)
-		e.Logger.Fatal(e.Start(config.Listen))
+		if err := RunServe(ctx, application); err != nil {
+			log.Fatalf("serve failed: %v", err)
+		}
 
 	case "reformat":
 		if err := subcommands.Reformat(ctx, application, subArgs); err != nil {
@@ -133,4 +115,67 @@ func mustOpenDB(driver, path string) *sql.DB {
 	}
 
 	return db
+}
+
+func RunServe(ctx context.Context, application app.App) error {
+	config := application.Config()
+	worker := application.JobQueue()
+	registry := worker.Registry()
+
+	// ジョブ登録
+	registry.Register(jobs.NewSimpleJob())
+	registry.Register(jobs.NewRecalculateTFIDFJob(application))
+	registry.Register(jobs.NewUpdateTrackbacksJob(application))
+	registry.Register(jobs.NewIndexImagesJob(application))
+
+	// Worker.Start
+	worker.Start(ctx)
+
+	// Periodic tasks
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				log.Printf("Periodic task worker stopping...")
+				return
+			case <-ticker.C:
+				if err := application.PublishScheduledEntries(ctx); err != nil {
+					log.Printf("Error publishing scheduled entries: %v", err)
+				}
+			}
+		}
+	}()
+
+	// Server起動
+	e := app.NewServer(application)
+	go func() {
+		if err := e.Start(config.Listen); err != nil && err != http.ErrServerClosed {
+			log.Printf("Server start error: %v", err)
+		}
+	}()
+
+	// シグナルを待機
+	<-ctx.Done()
+	log.Printf("Shutting down gracefully...")
+
+	// 定期タスクとジョブワーカーの停止待ちを先に行う
+	log.Printf("Waiting for background workers to finish...")
+	wg.Wait()     // Periodic tasks
+	worker.Wait() // Job queue
+	log.Printf("All background workers finished.")
+
+	// 最後にServerの停止
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := e.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("server shutdown failed: %w", err)
+	}
+	log.Printf("Server stopped.")
+
+	return nil
 }

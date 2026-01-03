@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/cho45/hanrangon/model"
@@ -17,6 +18,7 @@ type Worker struct {
 	queries  *model.Queries
 	registry *Registry
 	interval time.Duration
+	wg       sync.WaitGroup
 }
 
 // NewWorker は新しいWorkerを作成する
@@ -31,20 +33,35 @@ func NewWorker(db *sql.DB, queries *model.Queries, registry *Registry) *Worker {
 
 // Start はジョブキューのワーカーを起動する
 func (w *Worker) Start(ctx context.Context) {
+	w.wg.Add(1)
 	go w.run(ctx)
+}
+
+// Wait はワーカーの停止を待機する
+func (w *Worker) Wait() {
+	w.wg.Wait()
+}
+
+// Registry はワーカーに紐づくレジストリを返す
+func (w *Worker) Registry() *Registry {
+	return w.registry
 }
 
 // run はポーリングループを実行する
 func (w *Worker) run(ctx context.Context) {
+	defer w.wg.Done()
 	ticker := time.NewTicker(w.interval)
 	defer ticker.Stop()
 
 	log.Printf("Job queue worker started (polling interval: %v)", w.interval)
 
 	// ワーカー起動時にスタックジョブを回復
-	if err := w.recoverStuckJobs(ctx); err != nil {
+	// 起動時なので短いタイムアウト付きのコンテキストを使用
+	recoverCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	if err := w.recoverStuckJobs(recoverCtx); err != nil {
 		log.Printf("Error recovering stuck jobs on startup: %v", err)
 	}
+	cancel()
 
 	// 1分ごとにスタックジョブを回復するためのカウンター
 	recoveryInterval := 1 * time.Minute
@@ -54,10 +71,13 @@ func (w *Worker) run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Printf("Job queue worker stopped")
+			log.Printf("Job queue worker stopping...")
 			return
 		case <-ticker.C:
 			// ジョブ処理
+			// processNextJob 自体は context.Background() をベースにしたものを使う
+			// ただしDB操作などには ctx を渡して良い（クリーンアップを急ぐなら）
+			// ここではジョブ実行のトリガーとして ctx を使い、実行自体は独立させる
 			if err := w.processNextJob(ctx); err != nil {
 				log.Printf("Error processing job: %v", err)
 			}
@@ -76,7 +96,7 @@ func (w *Worker) run(ctx context.Context) {
 
 // processNextJob は次のジョブを1つ処理する
 func (w *Worker) processNextJob(ctx context.Context) error {
-	// 次のジョブを取得
+	// 次のジョブを取得 (これはポーリングなので ctx を使う)
 	job, err := w.queries.FindNextJob(ctx, time.Now())
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -86,8 +106,13 @@ func (w *Worker) processNextJob(ctx context.Context) error {
 		return fmt.Errorf("failed to find next job: %w", err)
 	}
 
+	// これ以降の処理は、たとえ ctx がキャンセルされても完了させたい
+	// そのため、独立したコンテキスト（detached context）を使用する
+	jobCtx, cancelJob := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancelJob()
+
 	// ジョブを実行中としてマーク
-	err = w.queries.GrabJob(ctx, model.GrabJobParams{
+	err = w.queries.GrabJob(jobCtx, model.GrabJobParams{
 		GrabbedAt: sql.NullTime{Time: time.Now(), Valid: true},
 		ID:        job.ID,
 	})
@@ -96,7 +121,7 @@ func (w *Worker) processNextJob(ctx context.Context) error {
 	}
 
 	// ジョブタイプを取得
-	jobType, err := w.queries.GetJobTypeByID(ctx, job.JobTypeID)
+	jobType, err := w.queries.GetJobTypeByID(jobCtx, job.JobTypeID)
 	if err != nil {
 		return fmt.Errorf("failed to get job type %d: %w", job.JobTypeID, err)
 	}
@@ -105,20 +130,23 @@ func (w *Worker) processNextJob(ctx context.Context) error {
 	handler, ok := w.registry.Get(jobType.Name)
 	if !ok {
 		// ジョブハンドラが見つからない場合は失敗としてマーク
-		return w.markJobFailed(ctx, job, fmt.Errorf("job type %s not registered", jobType.Name))
+		return w.markJobFailed(jobCtx, job, fmt.Errorf("job type %s not registered", jobType.Name))
 	}
 
 	// ジョブを実行
 	log.Printf("Executing job %d (type: %s)", job.ID, jobType.Name)
-	err = w.executeJob(ctx, handler, job)
+	w.wg.Add(1)
+	defer w.wg.Done()
+
+	err = w.executeJob(jobCtx, handler, job)
 	if err != nil {
 		log.Printf("Job %d failed: %v", job.ID, err)
-		return w.markJobFailed(ctx, job, err)
+		return w.markJobFailed(jobCtx, job, err)
 	}
 
 	// 成功したらジョブを削除
 	log.Printf("Job %d completed successfully", job.ID)
-	return w.queries.MarkJobCompleted(ctx, job.ID)
+	return w.queries.MarkJobCompleted(jobCtx, job.ID)
 }
 
 // executeJob はジョブを実行する（パニックをリカバー、タイムアウト付き）
@@ -135,7 +163,8 @@ func (w *Worker) executeJob(ctx context.Context, handler JobHandler, job model.J
 		timeout = handlerWithTimeout.Timeout()
 	}
 
-	// タイムアウト付きコンテキストを作成
+	// 引数をパースしてハンドラに渡す。ctx は既に detached なので
+	// ここでさらにタイムアウトを設定しても、親のキャンセルには影響されない。
 	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
