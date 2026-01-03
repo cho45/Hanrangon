@@ -13,6 +13,7 @@ func RecalcTFIDF(ctx context.Context, application app.App, args []string) error 
 	fs := flag.NewFlagSet("recalc-tfidf", flag.ExitOnError)
 	force := fs.Bool("force", false, "force execution of recalculation")
 	dryRun := fs.Bool("dry-run", false, "show what would be done without making changes")
+	similarityOnly := fs.Bool("similarity-only", false, "run only similarity calculation phase")
 	fs.Parse(args)
 
 	if !*force && !*dryRun {
@@ -34,52 +35,74 @@ func RecalcTFIDF(ctx context.Context, application app.App, args []string) error 
 		return fmt.Errorf("failed to count entries: %w", err)
 	}
 
-	// Phase 1: Term extraction and count update
-	log.Printf("Phase 1: Extracting terms and updating term counts for %d entries...", total)
-
-	query := "SELECT id, title, body FROM entries ORDER BY id ASC"
-	rows, err := application.DB().QueryContext(ctx, query)
-	if err != nil {
-		return fmt.Errorf("failed to query entries: %w", err)
-	}
-	defer rows.Close()
-
 	var entryIDs []int64
-	count := 0
-	for rows.Next() {
-		count++
-		var id int64
-		var title, body string
-		if err := rows.Scan(&id, &title, &body); err != nil {
-			log.Printf("  Error scanning entry: %v", err)
-			continue
+
+	// Phase 1: Term extraction and count update
+	if !*similarityOnly {
+		log.Printf("Phase 1: Extracting terms and updating term counts for %d entries...", total)
+
+		query := "SELECT id, title, body FROM entries ORDER BY id ASC"
+		rows, err := application.DB().QueryContext(ctx, query)
+		if err != nil {
+			return fmt.Errorf("failed to query entries: %w", err)
 		}
+		defer rows.Close()
 
-		log.Printf("  [%d/%d] Processing id:%d %s", count, total, id, title)
-
-		if !*dryRun {
-			if err := application.Calculator().UpdateTFIDF(ctx, id, title, body); err != nil {
-				log.Printf("  Error updating TF-IDF for entry %d: %v", id, err)
+		count := 0
+		for rows.Next() {
+			count++
+			var id int64
+			var title, body string
+			if err := rows.Scan(&id, &title, &body); err != nil {
+				log.Printf("  Error scanning entry: %v", err)
 				continue
 			}
+
+			log.Printf("  [%d/%d] Processing id:%d %s", count, total, id, title)
+
+			if !*dryRun {
+				if err := application.Calculator().UpdateTFIDF(ctx, id, title, body); err != nil {
+					log.Printf("  Error updating TF-IDF for entry %d: %v", id, err)
+					continue
+				}
+			}
+			entryIDs = append(entryIDs, id)
 		}
-		entryIDs = append(entryIDs, id)
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("error during row iteration: %w", err)
+		}
+		log.Printf("Phase 1 completed. Processed %d entries.", count)
+	} else {
+		log.Println("Skipping Phase 1 as --similarity-only is specified.")
+		// Populate entryIDs for Phase 3
+		rows, err := application.DB().QueryContext(ctx, "SELECT id FROM entries ORDER BY id ASC")
+		if err != nil {
+			return fmt.Errorf("failed to query entry IDs: %w", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var id int64
+			if err := rows.Scan(&id); err != nil {
+				return fmt.Errorf("failed to scan entry ID: %w", err)
+			}
+			entryIDs = append(entryIDs, id)
+		}
 	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("error during row iteration: %w", err)
-	}
-	log.Printf("Phase 1 completed. Processed %d entries.", count)
 
 	// Phase 2: Global TF-IDF recalculation
-	log.Println("Phase 2: Recalculating global TF-IDF values...")
-	if *dryRun {
-		log.Println("  [dry-run] Would recalculate global TF-IDF values using temporary tables.")
-	} else {
-		if err := application.Calculator().RecalculateTFIDFValues(ctx, nil); err != nil {
-			return fmt.Errorf("failed to recalculate tfidf values: %w", err)
+	if !*similarityOnly {
+		log.Println("Phase 2: Recalculating global TF-IDF values...")
+		if *dryRun {
+			log.Println("  [dry-run] Would recalculate global TF-IDF values using temporary tables.")
+		} else {
+			if err := application.Calculator().RecalculateTFIDFValues(ctx, nil); err != nil {
+				return fmt.Errorf("failed to recalculate tfidf values: %w", err)
+			}
 		}
+		log.Println("Phase 2 completed.")
+	} else {
+		log.Println("Skipping Phase 2 as --similarity-only is specified.")
 	}
-	log.Println("Phase 2 completed.")
 
 	// Phase 3: Similarity calculation
 	totalToCalc := len(entryIDs)
