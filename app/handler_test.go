@@ -437,6 +437,7 @@ func TestHandleApiEdit(t *testing.T) {
 		payload := `{"title":"New Entry", "body":"Hello <![CDATA[<b>world</b>]]>", "format":"HTML"}`
 		req := httptest.NewRequest(http.MethodPost, "/api/edit", strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Requested-With", "fetch")
 		req.Header.Set("Cookie", cookie)
 		rec := httptest.NewRecorder()
 
@@ -581,6 +582,7 @@ func TestHandleApiUploadImage(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/upload/image", body)
 	req.Header.Set(echo.HeaderContentType, writer.FormDataContentType())
+	req.Header.Set("X-Requested-With", "fetch")
 	req.Header.Set("Cookie", cookie)
 	rec := httptest.NewRecorder()
 
@@ -801,6 +803,7 @@ func TestUpdateModifiedAt(t *testing.T) {
 	payload, _ := json.Marshal(updateReq)
 	req := httptest.NewRequest(http.MethodPost, "/api/edit", strings.NewReader(string(payload)))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Requested-With", "fetch")
 	req.Header.Set("Cookie", cookie)
 	rec := httptest.NewRecorder()
 	env.server.ServeHTTP(rec, req)

@@ -161,17 +161,50 @@ func (env *testEnv) close() {
 
 func (env *testEnv) login(t *testing.T) string {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("username=testuser&password=testpass"))
+
+	// 1. Get login page to get CSRF cookie
+	getReq := httptest.NewRequest(http.MethodGet, "/login", nil)
+	getRec := httptest.NewRecorder()
+	env.server.ServeHTTP(getRec, getReq)
+
+	var sk string
+	var cookies []string
+	for _, cookie := range getRec.Result().Cookies() {
+		if cookie.Name == CSRFCookieName {
+			sk = cookie.Value
+		}
+		cookies = append(cookies, fmt.Sprintf("%s=%s", cookie.Name, cookie.Value))
+	}
+
+	// 2. POST login with CSRF token
+	payload := fmt.Sprintf("username=testuser&password=testpass&sk=%s", sk)
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Cookie", strings.Join(cookies, "; "))
 	rec := httptest.NewRecorder()
 	env.server.ServeHTTP(rec, req)
 
-	cookie := rec.Header().Get("Set-Cookie")
-	if cookie == "" {
-		t.Fatal("failed to get session cookie")
+	if rec.Code != http.StatusFound {
+		t.Fatalf("login failed with status %d: %s", rec.Code, rec.Body.String())
 	}
-	// Extract the actual cookie value (e.g. "session=...")
-	return strings.Split(cookie, ";")[0]
+
+	var finalCookies []string
+	for _, cookie := range rec.Result().Cookies() {
+		finalCookies = append(finalCookies, fmt.Sprintf("%s=%s", cookie.Name, cookie.Value))
+	}
+	// Also include the CSRF cookie from the first request if not present
+	foundCSRF := false
+	for _, c := range finalCookies {
+		if strings.HasPrefix(c, CSRFCookieName+"=") {
+			foundCSRF = true
+			break
+		}
+	}
+	if !foundCSRF {
+		finalCookies = append(finalCookies, CSRFCookieName+"="+sk)
+	}
+
+	return strings.Join(finalCookies, "; ")
 }
 
 func TestPublishScheduledEntries(t *testing.T) {

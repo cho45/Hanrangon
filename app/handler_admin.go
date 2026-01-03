@@ -70,8 +70,15 @@ func (app *AppImpl) HandleEdit(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to serialize entry")
 	}
 
+	cookie, _ := c.Cookie(CSRFCookieName)
+	sk := ""
+	if cookie != nil {
+		sk = cookie.Value
+	}
+
 	data := &view.EditData{
-		EntryJSON: string(entryBytes),
+		EntryJSON:  string(entryBytes),
+		SessionKey: sk,
 	}
 	return app.templates.Render(c.Response(), "edit.html", data)
 }
@@ -81,9 +88,16 @@ func (app *AppImpl) HandleLogin(c echo.Context) error {
 	if returnPath == "" {
 		returnPath = "/"
 	}
+	cookie, _ := c.Cookie(CSRFCookieName)
+	sk := ""
+	if cookie != nil {
+		sk = cookie.Value
+	}
+
 	data := &view.LoginData{
 		ErrorMsg:   "",
 		ReturnPath: returnPath,
+		SessionKey: sk,
 	}
 	return app.templates.Render(c.Response(), "login.html", data)
 }

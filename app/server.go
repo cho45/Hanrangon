@@ -31,6 +31,7 @@ func NewServer(app App) *echo.Echo {
 	}))
 	e.Use(middleware.Recover())
 	e.Use(middleware.Gzip())
+	e.Use(app.CSRF)
 
 	// Static files
 	e.Static("/css", filepath.Join(config.StaticDir, "css"))

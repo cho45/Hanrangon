@@ -35,6 +35,7 @@ type App interface {
 
 	// Auth methods
 	RequireAuth(next echo.HandlerFunc) echo.HandlerFunc
+	CSRF(next echo.HandlerFunc) echo.HandlerFunc
 	IsAuth(c echo.Context) bool
 
 	// Cache methods

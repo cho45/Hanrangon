@@ -121,6 +121,9 @@
     try {
       const response = await fetch('/api/edit', {
         method: 'POST',
+        headers: {
+          'X-Requested-With': 'fetch'
+        },
         body: data
       });
       const resData = await response.json();
@@ -203,7 +206,13 @@
       formData.append('sk', sk);
 
       try {
-        const response = await fetch('/api/upload/image', { method: 'POST', body: formData });
+        const response = await fetch('/api/upload/image', {
+          method: 'POST',
+          headers: {
+            'X-Requested-With': 'fetch'
+          },
+          body: formData
+        });
         const data = await response.json();
         const syntax = `<span itemscope itemtype="http://schema.org/Photograph"><a href="${data.uploaded}" class="picasa" itemprop="url"><img src="${data.uploaded}" alt="photo" itemprop="image"/></a></span>\n`;
         insertText(syntax, true);

@@ -31,11 +31,13 @@ type ArchiveData struct {
 type LoginData struct {
 	ErrorMsg   string
 	ReturnPath string
+	SessionKey string
 }
 
 // EditData holds data for the edit page
 type EditData struct {
-	EntryJSON string
+	EntryJSON  string
+	SessionKey string
 }
 
 // FeedData holds data for the Atom feed
