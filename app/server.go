@@ -35,6 +35,7 @@ func NewServer(app App) *echo.Echo {
 	// Static files
 	e.Static("/css", filepath.Join(config.StaticDir, "css"))
 	e.Static("/js", filepath.Join(config.StaticDir, "js"))
+	e.Static("/admin", filepath.Join(config.StaticDir, "admin"))
 	e.Static("/images", filepath.Join(config.StaticDir, "images"))
 
 	// Auth

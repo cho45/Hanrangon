@@ -5,8 +5,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
 	<title>編集</title>
 
-	<link rel="preload" href="/js/editor/app-editor.html" as="fetch"/>
-	<script src="/js/bower_components/webcomponentsjs/webcomponents-lite.min.js" async></script>
+	<script type="module" src="/admin/admin-front.mjs"></script>
 
 	<link rel="shortcut icon" href="/favicon.ico" type="image/x-icon"/>
 	<style>
@@ -39,18 +38,5 @@
 	<app-editor
 		entry-json="{{.EntryJSON}}"
 	></app-editor>
-
-	<script>
-		requestAnimationFrame(function () {
-			var link = document.createElement('link');
-			link.rel = "import";
-			link.href = "/js/editor/app-editor.html";
-			link.addEventListener('load', function () {
-				var loading = document.querySelector('.loading');
-				if (loading) loading.parentNode.removeChild(loading);
-			});
-			document.body.appendChild(link);
-		});
-	</script>
 </body>
 </html>

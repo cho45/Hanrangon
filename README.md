@@ -26,6 +26,12 @@ Perl 版 Nogag (氾濫原) の Go (Golang) によるリライトプロジェク�
 # sqlc (DB コード生成)
 go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
 
+# Admin Frontend (Vite/Lit)
+cd admin-frontend
+npm install
+npm run build
+cd ..
+
 # Node.js 依存関係 (ポストプロセス)
 cd postprocess
 npm install
