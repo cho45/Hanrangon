@@ -195,107 +195,6 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 	return app.templates.RenderWithLayout(c.Response(), "layout.html", "entries.html", data)
 }
 
-func (app *AppImpl) HandleEntry(c echo.Context) error {
-	ctx := c.Request().Context()
-	yyyy := c.Param("yyyy")
-	mm := c.Param("mm")
-	dd := c.Param("dd")
-	n := c.Param("n")
-
-	path := fmt.Sprintf("%s/%s/%s/%s", yyyy, mm, dd, n)
-
-	row, err := app.queries.GetEntryByPath(ctx, path)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
-		}
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entry").SetInternal(err)
-	}
-
-	if row.Status != "public" && !app.IsAuth(c) {
-		return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
-	}
-
-	if row.PublishAt.Valid && row.PublishAt.Time.After(time.Now()) && !app.IsAuth(c) {
-		return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
-	}
-
-	entry := model.Entry{
-		ID:            row.ID,
-		Title:         row.Title,
-		Body:          row.Body,
-		FormattedBody: row.FormattedBody,
-		Path:          row.Path,
-		Format:        row.Format,
-		Date:          row.Date,
-		CreatedAt:     row.CreatedAt,
-		ModifiedAt:    row.ModifiedAt,
-		PublishAt:     row.PublishAt,
-		Status:        row.Status,
-	}
-
-	etag := GenerateEntryETag(entry.ID, entry.ModifiedAt, app.IsAuth(c))
-	if app.CheckCache(c, entry.ModifiedAt, etag) {
-		return nil
-	}
-
-	trackbacks, err := app.queries.ListTrackbackEntries(ctx, sql.NullInt64{Int64: entry.ID, Valid: true})
-	if err != nil && err != sql.ErrNoRows {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch trackbacks").SetInternal(err)
-	}
-
-	prevRow, err := app.queries.GetPrevEntry(ctx, entry.CreatedAt)
-	if err != nil && err != sql.ErrNoRows {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch prev entry").SetInternal(err)
-	}
-	var prevPtr *model.Entry
-	if err == nil {
-		p := model.Entry{
-			ID:         prevRow.ID,
-			Title:      prevRow.Title,
-			CreatedAt:  prevRow.CreatedAt,
-			Path:       prevRow.Path,
-			Date:       prevRow.Date,
-			ModifiedAt: prevRow.ModifiedAt,
-			PublishAt:  prevRow.PublishAt,
-			Status:     prevRow.Status,
-		}
-		prevPtr = &p
-	}
-
-	nextRow, err := app.queries.GetNextEntry(ctx, entry.CreatedAt)
-	if err != nil && err != sql.ErrNoRows {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch next entry").SetInternal(err)
-	}
-	var nextPtr *model.Entry
-	if err == nil {
-		n := model.Entry{
-			ID:         nextRow.ID,
-			Title:      nextRow.Title,
-			CreatedAt:  nextRow.CreatedAt,
-			Path:       nextRow.Path,
-			Date:       nextRow.Date,
-			ModifiedAt: nextRow.ModifiedAt,
-			PublishAt:  nextRow.PublishAt,
-			Status:     nextRow.Status,
-		}
-		nextPtr = &n
-	}
-
-	data := &view.IndexData{
-		LayoutData: view.LayoutData{
-			PageTitle: entry.Title,
-			IsAuth:    app.IsAuth(c),
-		},
-		Entries:    []model.Entry{entry},
-		IsDetail:   true,
-		Trackbacks: trackbacks,
-		Prev:       prevPtr,
-		Next:       nextPtr,
-	}
-	return app.templates.RenderWithLayout(c.Response(), "layout.html", "entries.html", data)
-}
-
 func (app *AppImpl) HandleCategory(c echo.Context) error {
 	ctx := c.Request().Context()
 	category := c.Param("category")
@@ -556,6 +455,110 @@ func (app *AppImpl) HandleApiSimilar(c echo.Context) error {
 		"result": result,
 		"ad":     "",
 	})
+}
+
+func (app *AppImpl) HandlePath(c echo.Context) error {
+	ctx := c.Request().Context()
+	// Get the full path from the catch-all parameter
+	path := c.Param("*")
+	// Remove leading slash
+	path = strings.TrimPrefix(path, "/")
+
+	// Empty path should not be handled here
+	if path == "" {
+		return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
+	}
+
+	row, err := app.queries.GetEntryByPath(ctx, path)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entry").SetInternal(err)
+	}
+
+	if row.Status != "public" && !app.IsAuth(c) {
+		return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
+	}
+
+	if row.PublishAt.Valid && row.PublishAt.Time.After(time.Now()) && !app.IsAuth(c) {
+		return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
+	}
+
+	entry := model.Entry{
+		ID:            row.ID,
+		Title:         row.Title,
+		Body:          row.Body,
+		FormattedBody: row.FormattedBody,
+		Path:          row.Path,
+		Format:        row.Format,
+		Date:          row.Date,
+		CreatedAt:     row.CreatedAt,
+		ModifiedAt:    row.ModifiedAt,
+		PublishAt:     row.PublishAt,
+		Status:        row.Status,
+	}
+
+	etag := GenerateEntryETag(entry.ID, entry.ModifiedAt, app.IsAuth(c))
+	if app.CheckCache(c, entry.ModifiedAt, etag) {
+		return nil
+	}
+
+	trackbacks, err := app.queries.ListTrackbackEntries(ctx, sql.NullInt64{Int64: entry.ID, Valid: true})
+	if err != nil && err != sql.ErrNoRows {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch trackbacks").SetInternal(err)
+	}
+
+	prevRow, err := app.queries.GetPrevEntry(ctx, entry.CreatedAt)
+	if err != nil && err != sql.ErrNoRows {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch prev entry").SetInternal(err)
+	}
+	var prevPtr *model.Entry
+	if err == nil {
+		p := model.Entry{
+			ID:         prevRow.ID,
+			Title:      prevRow.Title,
+			CreatedAt:  prevRow.CreatedAt,
+			Path:       prevRow.Path,
+			Date:       prevRow.Date,
+			ModifiedAt: prevRow.ModifiedAt,
+			PublishAt:  prevRow.PublishAt,
+			Status:     prevRow.Status,
+		}
+		prevPtr = &p
+	}
+
+	nextRow, err := app.queries.GetNextEntry(ctx, entry.CreatedAt)
+	if err != nil && err != sql.ErrNoRows {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch next entry").SetInternal(err)
+	}
+	var nextPtr *model.Entry
+	if err == nil {
+		n := model.Entry{
+			ID:         nextRow.ID,
+			Title:      nextRow.Title,
+			CreatedAt:  nextRow.CreatedAt,
+			Path:       nextRow.Path,
+			Date:       nextRow.Date,
+			ModifiedAt: nextRow.ModifiedAt,
+			PublishAt:  nextRow.PublishAt,
+			Status:     nextRow.Status,
+		}
+		nextPtr = &n
+	}
+
+	data := &view.IndexData{
+		LayoutData: view.LayoutData{
+			PageTitle: entry.Title,
+			IsAuth:    app.IsAuth(c),
+		},
+		Entries:    []model.Entry{entry},
+		IsDetail:   true,
+		Trackbacks: trackbacks,
+		Prev:       prevPtr,
+		Next:       nextPtr,
+	}
+	return app.templates.RenderWithLayout(c.Response(), "layout.html", "entries.html", data)
 }
 
 func getLatestModTime(entries []model.Entry) time.Time {

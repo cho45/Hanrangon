@@ -50,12 +50,10 @@ func NewServer(app App) *echo.Echo {
 	e.GET("/.page/:date/:limit", app.HandleIndex)
 	e.GET("/archive", app.HandleArchive)
 
-	// Date archives (order matters vs /:yyyy/:mm/:dd/:n)
+	// Date archives (order matters)
 	e.GET("/:param/", app.HandleRootParam) // Year archive OR Category
 	e.GET("/:yyyy/:mm/", app.HandleDateArchive)
 	e.GET("/:yyyy/:mm/:dd/", app.HandleDateArchive)
-
-	e.GET("/:yyyy/:mm/:dd/:n", app.HandleEntry)
 
 	e.GET("/:category/.page/:date/:limit", app.HandleCategory)
 
@@ -71,6 +69,9 @@ func NewServer(app App) *echo.Echo {
 	e.POST("/api/upload/image", app.HandleApiUploadImage, app.RequireAuth)
 
 	e.GET("/api/edit/progress", app.HandleApiEditProgress, app.RequireAuth)
+
+	// Catch-all route for entries by path (must be last)
+	e.GET("/*", app.HandlePath)
 
 	return e
 }

@@ -45,7 +45,7 @@ type App interface {
 
 	// Handler methods
 	HandleIndex(c echo.Context) error
-	HandleEntry(c echo.Context) error
+	HandlePath(c echo.Context) error
 	HandleArchive(c echo.Context) error
 	HandleDateArchive(c echo.Context) error
 	HandleCategory(c echo.Context) error
