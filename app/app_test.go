@@ -2,6 +2,7 @@ package app
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -106,6 +107,27 @@ func setupTest(t *testing.T) *testEnv {
 
 	application := NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, queue)
 	e := NewServer(application)
+
+	// テスト用のエラーハンドラーを設定（詳細なエラーメッセージを出力）
+	e.HTTPErrorHandler = func(err error, c echo.Context) {
+		code := http.StatusInternalServerError
+		message := err.Error()
+		if he, ok := err.(*echo.HTTPError); ok {
+			code = he.Code
+			message = fmt.Sprintf("%v", he.Message)
+			if he.Internal != nil {
+				message = fmt.Sprintf("%v (internal: %v)", he.Message, he.Internal)
+			}
+		}
+		if !c.Response().Committed {
+			if c.Request().Method == http.MethodHead {
+				c.NoContent(code)
+			} else {
+				c.JSON(code, map[string]string{"message": message, "error": err.Error()})
+			}
+		}
+	}
+
 	return &testEnv{
 		app:       application,
 		db:        db,

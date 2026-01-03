@@ -48,7 +48,7 @@ func NewApp(
 	similarityCalculator *tfidf.SimilarityCalculator,
 	queue *jobqueue.Queue,
 ) App {
-	templates, err := LoadTemplates(config)
+	templates, err := InitTemplates(config)
 	if err != nil {
 		log.Fatalf("failed to load templates: %v", err)
 	}

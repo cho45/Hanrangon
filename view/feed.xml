@@ -1,4 +1,4 @@
-{{define "feed"}}<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
 	<title>氾濫原</title>
 	<link href="https://lowreal.net/"/>
@@ -21,4 +21,3 @@
 	</entry>
 	{{end}}
 </feed>
-{{end}}

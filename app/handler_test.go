@@ -39,6 +39,7 @@ func TestHandleIndex(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("want status 200, got %d", rec.Code)
+		t.Logf("Response body: %s", rec.Body.String())
 	}
 
 	body := rec.Body.String()

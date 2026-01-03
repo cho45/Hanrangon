@@ -12,31 +12,12 @@ import (
 
 // Templates manages HTML templates
 type Templates struct {
-	config *Config
+	config    *Config
+	templates *template.Template // 本番モード用キャッシュ
 }
 
-// LoadTemplates loads all HTML templates from the view directory
-func LoadTemplates(config *Config) (*Templates, error) {
-	return &Templates{
-		config: config,
-	}, nil
-}
-
-// Render renders a template with the given data
-func (t *Templates) Render(w io.Writer, name string, data interface{}) error {
-	// 開発モードでは毎回リロード
-	if t.config.IsDevelopment() {
-		return t.renderTemplate(w, name, data)
-	}
-
-	// 本番モードではキャッシュ（未実装、とりあえず毎回読み込み）
-	return t.renderTemplate(w, name, data)
-}
-
-func (t *Templates) renderTemplate(w io.Writer, name string, data interface{}) error {
-	tmpl := template.New("")
-
-	// Sprig関数を登録
+// buildFuncMap builds the function map for templates
+func buildFuncMap() template.FuncMap {
 	funcMap := sprig.FuncMap()
 
 	// カスタム関数を追加
@@ -64,59 +45,104 @@ func (t *Templates) renderTemplate(w io.Writer, name string, data interface{}) e
 	funcMap["summary"] = view.Summary
 	funcMap["isSameDay"] = view.IsSameDay
 
+	return funcMap
+}
+
+// LoadTemplates loads all HTML templates from the view directory
+func (t *Templates) LoadTemplates() (*template.Template, error) {
+	tmpl := template.New("")
+	funcMap := buildFuncMap()
 	tmpl.Funcs(funcMap)
 
-	// テンプレートファイルのパスを決定
 	basePath := "view/"
-	_, err := tmpl.ParseFiles(basePath + "layout.html")
+	templates, err := tmpl.ParseGlob(basePath + "*.html")
 	if err != nil {
 		// テスト実行時は相対パスが異なる
 		basePath = "../view/"
 		tmpl = template.New("")
 		tmpl.Funcs(funcMap)
-		_, err = tmpl.ParseFiles(basePath + "layout.html")
+		templates, err = tmpl.ParseGlob(basePath + "*.html")
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	// テンプレート名に応じて追加ファイルを読み込み
-	var additionalFiles []string
-	var executeTemplate string
-	switch name {
-	case "index":
-		additionalFiles = []string{basePath + "entries.html"}
-		executeTemplate = "layout"
-	case "archive":
-		additionalFiles = []string{basePath + "archive.html"}
-		executeTemplate = "layout"
-	case "login":
-		additionalFiles = []string{basePath + "login.html"}
-		executeTemplate = "login"
-	case "edit":
-		additionalFiles = []string{basePath + "edit.html"}
-		executeTemplate = "edit"
-	case "feed":
-		additionalFiles = []string{basePath + "feed.html"}
-		executeTemplate = "feed"
-	case "sitemap":
-		additionalFiles = []string{basePath + "sitemap.html"}
-		executeTemplate = "sitemap"
-	case "similar-entries", "similar-images":
-		additionalFiles = []string{basePath + "similar.html"}
-		executeTemplate = name
-	default:
-		return fmt.Errorf("unknown template name: %s", name)
+	// XMLテンプレートも読み込む
+	templates, err = templates.ParseGlob(basePath + "*.xml")
+	if err != nil {
+		return nil, err
 	}
 
-	if len(additionalFiles) > 0 {
-		_, err = tmpl.ParseFiles(additionalFiles...)
+	return templates, nil
+}
+
+// InitTemplates initializes the template system
+func InitTemplates(config *Config) (*Templates, error) {
+	t := &Templates{
+		config: config,
+	}
+
+	if !config.IsDevelopment() {
+		// 本番モードでは起動時に読み込んでキャッシュ
+		templates, err := t.LoadTemplates()
 		if err != nil {
-			return err
+			return nil, err
 		}
+		t.templates = templates
 	}
 
-	return tmpl.ExecuteTemplate(w, executeTemplate, data)
+	return t, nil
+}
+
+// getTemplates returns the template set (from cache or by loading)
+func (t *Templates) getTemplates() (*template.Template, error) {
+	// 本番モードでキャッシュがあればそれを返す
+	if !t.config.IsDevelopment() && t.templates != nil {
+		return t.templates, nil
+	}
+
+	// 開発モードまたはキャッシュがない場合は LoadTemplates を呼ぶ
+	return t.LoadTemplates()
+}
+
+// RenderWithLayout renders a template with the specified layout
+func (t *Templates) RenderWithLayout(w io.Writer, layoutName, contentName string, data interface{}) error {
+	templates, err := t.getTemplates()
+	if err != nil {
+		return err
+	}
+
+	layoutTmpl := templates.Lookup(layoutName)
+	if layoutTmpl == nil {
+		return fmt.Errorf("layout template %s not found", layoutName)
+	}
+
+	contentTmpl := templates.Lookup(contentName)
+	if contentTmpl == nil {
+		return fmt.Errorf("content template %s not found", contentName)
+	}
+
+	// layout をクローンして content を追加
+	cloned, err := layoutTmpl.Clone()
+	if err != nil {
+		return err
+	}
+
+	_, err = cloned.AddParseTree("content", contentTmpl.Tree)
+	if err != nil {
+		return err
+	}
+
+	return cloned.ExecuteTemplate(w, layoutName, data)
+}
+
+// Render renders a template by name
+func (t *Templates) Render(w io.Writer, name string, data interface{}) error {
+	templates, err := t.getTemplates()
+	if err != nil {
+		return err
+	}
+	return templates.ExecuteTemplate(w, name, data)
 }
 
 // formatDate formats a date string from "2006-01-02" to "2006年 01月 02日"

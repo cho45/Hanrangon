@@ -1,12 +1,21 @@
-{{define "content"}}
 <div class="entries">
-	{{if .IsDetail}}
-		{{/* Single entry detail page */}}
-		{{$entry := index .Entries 0}}
-		<link rel="preload" id="preload-similar-entries" href="/api/similar?id={{$entry.ID}}" as="fetch" crossorigin="anonymous"/>
-		<div class="date"><a href="{{datePath $entry.Date}}">{{formatDate $entry.Date}}</a></div>
-		{{template "article" dict "Entry" $entry "IsAuth" .IsAuth "IsPermalink" true}}
+	{{$entries := .Entries}}
+	{{$isAuth := .IsAuth}}
+	{{$isDetail := .IsDetail}}
+	{{$ids := list}}
+	{{range $entries}}
+		{{$ids = append $ids (printf "id=%d" .ID)}}
+	{{end}}
+	{{$similarURL := printf "/api/similar?%s" (join "&" $ids)}}
+	<link rel="preload" id="preload-similar-entries" href="{{$similarURL}}" as="fetch" crossorigin="anonymous"/>
+	{{range $i, $e := $entries}}
+		{{if or (eq $i 0) (not (isSameDay (index $entries (sub $i 1)).Date $e.Date))}}
+			<div class="date"><a href="{{datePath $e.Date}}">{{formatDate $e.Date}}</a></div>
+		{{end}}
+		{{template "article" dict "Entry" $e "IsAuth" $isAuth "IsPermalink" $isDetail}}
+	{{end}}
 
+	{{if .IsDetail}}
 		{{if .Trackbacks}}
 			<div class="trackbacks">
 				<h3>この記事への言及</h3>
@@ -19,22 +28,6 @@
 					{{end}}
 				</ul>
 			</div>
-		{{end}}
-	{{else}}
-		{{/* Multiple entries list page */}}
-		{{$entries := .Entries}}
-		{{$isAuth := .IsAuth}}
-		{{$ids := list}}
-		{{range $entries}}
-			{{$ids = append $ids (printf "id=%d" .ID)}}
-		{{end}}
-		{{$similarURL := printf "/api/similar?%s" (join "&" $ids)}}
-		<link rel="preload" id="preload-similar-entries" href="{{$similarURL}}" as="fetch" crossorigin="anonymous"/>
-		{{range $i, $e := $entries}}
-			{{if or (eq $i 0) (not (isSameDay (index $entries (sub $i 1)).Date $e.Date))}}
-				<div class="date"><a href="{{datePath $e.Date}}">{{formatDate $e.Date}}</a></div>
-			{{end}}
-			{{template "article" dict "Entry" $e "IsAuth" $isAuth "IsPermalink" false}}
 		{{end}}
 	{{end}}
 </div>
@@ -55,4 +48,62 @@
 		{{end}}
 	{{end}}
 </div>
+
+{{define "article"}}
+{{$cleanTitle := cleanTitle .Entry.Title}}
+{{$tags := getTags .Entry.Title}}
+{{$canonical := printf "/%s" .Entry.Path}}
+<article
+	id="post-{{.Entry.CreatedAt.Unix}}"
+	class="{{range $tags}}{{.}} {{end}}status-public"
+	data-id="{{.Entry.ID}}"
+	{{if not .IsPermalink}}
+	itemprop="blogPosts"
+	itemscope
+	itemtype="http://schema.org/BlogPosting"
+	{{end}}
+>
+	<header>
+		<h2 itemprop="name"><a href="{{$canonical}}" class="bookmark" rel="bookmark" itemprop="url">{{$cleanTitle}}</a></h2>
+		<div class="metadata">
+			{{range $tags}}
+				<a href="/{{.}}/"><span itemprop="keywords">{{.}}</span></a>
+			{{end}}
+			|
+			<time data-epoch="{{$.Entry.CreatedAt.Unix}}" datetime="{{$.Entry.CreatedAt.UTC.Format "2006-01-02T15:04:05Z"}}" itemprop="datePublished">
+				{{$.Entry.CreatedAt.Format "15:04"}}
+			</time>
+			{{if $.IsAuth}}
+				| <a href="javascript:void(0)" class="nogag-edit">編集</a>
+			{{end}}
+		</div>
+	</header>
+
+	<div class="content" itemprop="articleBody">
+		{{.Entry.FormattedBody | safeHTML}}
+	</div>
+
+	<div class="content similar-entries"></div>
+
+	<div class="social">
+		<span class="hatena-star"></span>
+		<p class="share-buttons">
+			<a class="share-button" style="background: #3b5998" target="_blank" rel="noopener nofollow"
+				href="https://www.facebook.com/sharer/sharer.php?u={{$canonical}}"
+			>
+				<img src="/images/sharebuttons/FB-f-Logo__white_50.png" width="18" height="18" alt="Facebook"/>
+			</a>
+			<a class="share-button" style="background: #efefef" target="_blank" rel="noopener nofollow"
+				href="https://bsky.app/intent/compose?text={{$cleanTitle}} {{$canonical}}"
+			>
+				<img src="/images/bluesky_media_kit_logo_svgs.svg" width="40" height="40" alt="Bluesky"/>
+			</a>
+			<a class="share-button" style="background: #00a4de" target="_blank" rel="noopener nofollow"
+				href="http://b.hatena.ne.jp/add?url={{$canonical}}"
+			>
+				<img src="/images/sharebuttons/hatenabookmark-logomark.svg" width="40" height="40" alt="はてなブックマーク"/>
+			</a>
+		</p>
+	</div>
+</article>
 {{end}}

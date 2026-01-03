@@ -74,7 +74,7 @@ func (app *AppImpl) HandleEdit(c echo.Context) error {
 	data := &view.EditData{
 		EntryJSON: string(entryBytes),
 	}
-	return app.templates.Render(c.Response(), "edit", data)
+	return app.templates.Render(c.Response(), "edit.html", data)
 }
 
 func (app *AppImpl) HandleLogin(c echo.Context) error {
@@ -86,7 +86,7 @@ func (app *AppImpl) HandleLogin(c echo.Context) error {
 		ErrorMsg:   "",
 		ReturnPath: returnPath,
 	}
-	return app.templates.Render(c.Response(), "login", data)
+	return app.templates.Render(c.Response(), "login.html", data)
 }
 
 func (app *AppImpl) HandleLoginPost(c echo.Context) error {
@@ -117,7 +117,7 @@ func (app *AppImpl) HandleLoginPost(c echo.Context) error {
 		ErrorMsg:   "Invalid Username or Password",
 		ReturnPath: returnPath,
 	}
-	return app.templates.Render(c.Response(), "login", data)
+	return app.templates.Render(c.Response(), "login.html", data)
 }
 
 func (app *AppImpl) HandleLogout(c echo.Context) error {
