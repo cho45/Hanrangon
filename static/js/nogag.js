@@ -1,33 +1,3 @@
-function webfontReady (font, opts) {
-	if (!opts) opts = {};
-	return new Promise(function (resolve, reject) {
-		var canvas = document.createElement('canvas');
-		var ctx = canvas.getContext('2d');
-		var TEST_TEXT = "test.@01N日本語";
-		var TEST_SIZE = "100px";
-
-		var timeout = Date.now() + (opts.timeout || 5000);
-		(function me () {
-			ctx.font = TEST_SIZE + " '" + font + "', sans-serif";
-			var w1 = ctx.measureText(TEST_TEXT).width;
-			ctx.font = TEST_SIZE + " '" + font + "', serif";
-			var w2 = ctx.measureText(TEST_TEXT).width;
-			ctx.font = TEST_SIZE + " '" + font + "', monospace";
-			var w3 = ctx.measureText(TEST_TEXT).width;
-			console.log(w1, w2, w3);
-			if (w1 === w2 && w1 === w3) {
-				resolve();
-			} else {
-				if (Date.now() < timeout) {
-					setTimeout(me, 100);
-				} else {
-					reject('timeout');
-				}
-			}
-		})();
-	});
-}
-
 if (typeof IntersectionObserver === "undefined") {
 	window.IntersectionObserver = function () { };
 	window.IntersectionObserver.prototype = {
@@ -123,8 +93,8 @@ Nogag = {
 		DateRelative.updateAll();
 
 		this.initSimilarEntries();
-		this.initExif();
-		this.initWebfont();
+		// this.initExif();
+		this.initBudouX();
 		this.initABC();
 
 		(function () {
@@ -196,20 +166,20 @@ Nogag = {
 		}
 	},
 
-	initWebfont: function () {
-		webfontReady("Noto Serif JP").then(function () {
-			balance(document.querySelectorAll([
-				'.entries article header h1 a',
-				'.entries article header h2 a',
-				'.entries article .content h1',
-				'.entries article .content h2',
-				'.entries article .content h3',
-				'.entries article .content h4',
-				'.entries article .content h5',
-				'.entries article .content h6'
-			].join(',')));
-		});
-
+	initBudouX: function () {
+		const targets = document.querySelectorAll([
+			'.entries article header h1 a',
+			'.entries article header h2 a',
+			'.entries article .content h1',
+			'.entries article .content h2',
+			'.entries article .content h3',
+			'.entries article .content h4',
+			'.entries article .content h5',
+			'.entries article .content h6'
+		].join(','));
+		for (var i = 0, it; (it = targets[i]); i++) {
+			it.innerHTML = '<budoux-ja>' + it.innerHTML + '</budoux-ja>';
+		}
 	},
 
 	initABC : function () {
