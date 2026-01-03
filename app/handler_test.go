@@ -1,9 +1,11 @@
 package app
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -426,63 +428,104 @@ func TestHandleApiSimilar(t *testing.T) {
 }
 
 func TestHandleApiEdit(t *testing.T) {
-	t.Skip("Skipping due to EditResponse refactoring, will be fixed in next commit")
-	/*
-		env := setupTest(t)
-		defer env.close()
+	env := setupTest(t)
+	defer env.close()
 
-		cookie := env.login(t)
+	cookie := env.login(t)
 
-		t.Run("Create new entry with auto path", func(t *testing.T) {
-			payload := `{"title":"New Entry", "body":"Hello <![CDATA[<b>world</b>]]>", "format":"HTML"}`
-			req := httptest.NewRequest(http.MethodPost, "/api/edit", strings.NewReader(payload))
-			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("Cookie", cookie)
-			rec := httptest.NewRecorder()
+	t.Run("Create new entry with auto path", func(t *testing.T) {
+		payload := `{"title":"New Entry", "body":"Hello <![CDATA[<b>world</b>]]>", "format":"HTML"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/edit", strings.NewReader(payload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Cookie", cookie)
+		rec := httptest.NewRecorder()
 
-			env.server.ServeHTTP(rec, req)
+		env.server.ServeHTTP(rec, req)
 
-			if rec.Code != http.StatusOK {
-				t.Fatalf("want status 200, got %d: %s", rec.Code, rec.Body.String())
-			}
+		if rec.Code != http.StatusOK {
+			t.Fatalf("want status 200, got %d: %s", rec.Code, rec.Body.String())
+		}
 
-			var res EditResponse
-			if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
-				t.Fatalf("failed to unmarshal response: %v", err)
-			}
+		var res EditResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+			t.Fatalf("failed to unmarshal response: %v", err)
+		}
 
-			if res.ID == 0 {
-				t.Fatal("got zero ID")
-			}
+		if res.SessionID == "" {
+			t.Fatal("got empty session ID")
+		}
 
-			// Verify saved data in DB
-			row, err := env.db.Query(`SELECT title, formatted_body, path FROM entries WHERE id = ?`, res.ID)
-			if err != nil {
-				t.Fatalf("failed to query db: %v", err)
-			}
-			defer row.Close()
-			if !row.Next() {
-				t.Fatal("entry not found in db")
-			}
-			var title, formattedBody, path string
-			row.Scan(&title, &formattedBody, &path)
+		// Wait for completion via SSE
+		done := make(chan string, 1)
+		errChan := make(chan error, 1)
 
-			if title != "New Entry" {
-				t.Errorf("want New Entry, got %s", title)
+		go func() {
+			progReq := httptest.NewRequest(http.MethodGet, "/api/edit/progress?sid="+res.SessionID, nil)
+			progReq.Header.Set("Cookie", cookie)
+			progRec := httptest.NewRecorder()
+
+			env.server.ServeHTTP(progRec, progReq)
+
+			scanner := bufio.NewScanner(progRec.Body)
+			var location string
+			for scanner.Scan() {
+				line := scanner.Text()
+				if strings.HasPrefix(line, "data: ") {
+					data := strings.TrimPrefix(line, "data: ")
+					var msg map[string]interface{}
+					if err := json.Unmarshal([]byte(data), &msg); err == nil {
+						if msg["type"] == "done" {
+							location = msg["location"].(string)
+							break
+						}
+						if msg["type"] == "error" {
+							errChan <- fmt.Errorf("error from SSE: %v", msg["message"])
+							return
+						}
+					}
+				}
 			}
-			if formattedBody != "Hello &lt;b&gt;world&lt;/b&gt;" {
-				t.Errorf("formatted body not escaped: %s", formattedBody)
+			if location != "" {
+				done <- location
+			} else {
+				errChan <- fmt.Errorf("did not get location from SSE")
 			}
-			// Check path format YYYY/MM/DD/1
-			now := time.Now().Format("2006/01/02")
-			if !strings.HasPrefix(path, now) || !strings.HasSuffix(path, "/1") {
-				t.Errorf("unexpected path format: %s", path)
-			}
-			if res.Location != "/"+path {
-				t.Errorf("want location /%s, got %s", path, res.Location)
-			}
-		})
-	*/
+		}()
+
+		var location string
+		select {
+		case location = <-done:
+		case err := <-errChan:
+			t.Fatalf("SSE failed: %v", err)
+		case <-time.After(10 * time.Second): // Give it enough time for postprocess (node)
+			t.Fatal("timeout waiting for SSE done")
+		}
+
+		// Verify saved data in DB
+		path := strings.TrimPrefix(location, "/")
+		row, err := env.db.Query(`SELECT title, formatted_body FROM entries WHERE path = ?`, path)
+		if err != nil {
+			t.Fatalf("failed to query db: %v", err)
+		}
+		defer row.Close()
+		if !row.Next() {
+			t.Fatal("entry not found in db")
+		}
+		var title, formattedBody string
+		row.Scan(&title, &formattedBody)
+
+		if title != "New Entry" {
+			t.Errorf("want New Entry, got %s", title)
+		}
+		if formattedBody != "Hello &lt;b&gt;world&lt;/b&gt;" {
+			t.Errorf("formatted body not escaped: %s", formattedBody)
+		}
+		// Check path format YYYY/MM/DD/1
+		now := time.Now().Format("2006/01/02")
+		if !strings.HasPrefix(path, now) || !strings.HasSuffix(path, "/1") {
+			t.Errorf("unexpected path format: %s", path)
+		}
+	})
 }
 
 func TestHandleEdit(t *testing.T) {
@@ -723,7 +766,6 @@ func TestDateTimeHandling(t *testing.T) {
 }
 
 func TestUpdateModifiedAt(t *testing.T) {
-	t.Skip("Skipping as it depends on synchronous HandleApiEdit execution")
 	env := setupTest(t)
 	defer env.close()
 
@@ -756,8 +798,8 @@ func TestUpdateModifiedAt(t *testing.T) {
 		Format: "Markdown",
 		Status: "public",
 	}
-	body, _ := json.Marshal(updateReq)
-	req := httptest.NewRequest(http.MethodPost, "/api/edit", strings.NewReader(string(body)))
+	payload, _ := json.Marshal(updateReq)
+	req := httptest.NewRequest(http.MethodPost, "/api/edit", strings.NewReader(string(payload)))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Cookie", cookie)
 	rec := httptest.NewRecorder()
@@ -765,6 +807,36 @@ func TestUpdateModifiedAt(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("want 200, got %d", rec.Code)
+	}
+
+	var res EditResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	// Wait for completion via SSE
+	progReq := httptest.NewRequest(http.MethodGet, "/api/edit/progress?sid="+res.SessionID, nil)
+	progReq.Header.Set("Cookie", cookie)
+	progRec := httptest.NewRecorder()
+	env.server.ServeHTTP(progRec, progReq)
+
+	scanner := bufio.NewScanner(progRec.Body)
+	done := false
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "data: ") {
+			data := strings.TrimPrefix(line, "data: ")
+			var msg map[string]interface{}
+			if err := json.Unmarshal([]byte(data), &msg); err == nil {
+				if msg["type"] == "done" {
+					done = true
+					break
+				}
+			}
+		}
+	}
+	if !done {
+		t.Fatal("did not get done from SSE")
 	}
 
 	// 3. Verify modified_at has changed
