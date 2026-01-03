@@ -24,8 +24,9 @@ go test ./...
 - Code Gen: `sqlc generate`
 
 ### 4. Templating
-`a-h/templ` を使用。
+標準の `html/template` を使用。テンプレートは `view/*.html` および `view/*.xml`。
+開発モードではリクエストごとにディスクから再読み込みされる。
 
-```bash
-templ generate
-```
+### 5. Post-processing
+MathJax やシンタックスハイライトなどの最終整形には Node.js を使用する。
+`postprocess/main.js` が記事保存時に `exec` 経由で実行される。

@@ -87,7 +87,6 @@ func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 
 	data := &view.IndexData{
 		LayoutData: view.LayoutData{
-			Title:  "氾濫原",
 			IsAuth: app.IsAuth(c),
 		},
 		Entries:  entries,
@@ -107,8 +106,8 @@ func (app *AppImpl) HandleArchive(c echo.Context) error {
 
 	data := &view.ArchiveData{
 		LayoutData: view.LayoutData{
-			Title:  "アーカイブ - 氾濫原",
-			IsAuth: app.IsAuth(c),
+			PageTitle: "アーカイブ",
+			IsAuth:    app.IsAuth(c),
 		},
 		Archives: view.ConvertArchives(archives),
 	}
@@ -156,7 +155,6 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 	if len(dates) == 0 {
 		data := &view.IndexData{
 			LayoutData: view.LayoutData{
-				Title:  "氾濫原",
 				IsAuth: app.IsAuth(c),
 			},
 			Entries:  []model.Entry{},
@@ -188,7 +186,6 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 	// HTMLレンダリング
 	data := &view.IndexData{
 		LayoutData: view.LayoutData{
-			Title:  "氾濫原",
 			IsAuth: app.IsAuth(c),
 		},
 		Entries:  entries,
@@ -287,8 +284,8 @@ func (app *AppImpl) HandleEntry(c echo.Context) error {
 
 	data := &view.IndexData{
 		LayoutData: view.LayoutData{
-			Title:  entry.Title + " - 氾濫原",
-			IsAuth: app.IsAuth(c),
+			PageTitle: entry.Title,
+			IsAuth:    app.IsAuth(c),
 		},
 		Entries:    []model.Entry{entry},
 		IsDetail:   true,
@@ -353,7 +350,6 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 
 	data := &view.IndexData{
 		LayoutData: view.LayoutData{
-			Title:  "氾濫原",
 			IsAuth: app.IsAuth(c),
 		},
 		Entries:  entries,
