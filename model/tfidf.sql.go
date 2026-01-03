@@ -9,6 +9,15 @@ import (
 	"context"
 )
 
+const deletePostingsByEntryID = `-- name: DeletePostingsByEntryID :exec
+DELETE FROM postings WHERE entry_id = ?
+`
+
+func (q *Queries) DeletePostingsByEntryID(ctx context.Context, entryID int64) error {
+	_, err := q.db.ExecContext(ctx, deletePostingsByEntryID, entryID)
+	return err
+}
+
 const deleteRelatedEntriesByEntryID = `-- name: DeleteRelatedEntriesByEntryID :exec
 DELETE FROM related_entries WHERE entry_id = ?
 `
@@ -18,12 +27,30 @@ func (q *Queries) DeleteRelatedEntriesByEntryID(ctx context.Context, entryID int
 	return err
 }
 
-const deleteTFIDFByEntryID = `-- name: DeleteTFIDFByEntryID :exec
-DELETE FROM tfidf WHERE entry_id = ?
+const getTermID = `-- name: GetTermID :one
+SELECT id FROM terms WHERE term = ?
 `
 
-func (q *Queries) DeleteTFIDFByEntryID(ctx context.Context, entryID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteTFIDFByEntryID, entryID)
+func (q *Queries) GetTermID(ctx context.Context, term string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getTermID, term)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const insertPosting = `-- name: InsertPosting :exec
+INSERT INTO postings (entry_id, term_id, term_count, tfidf, tfidf_n)
+VALUES (?, ?, ?, 0.0, 0.0)
+`
+
+type InsertPostingParams struct {
+	EntryID   int64 `json:"entry_id"`
+	TermID    int64 `json:"term_id"`
+	TermCount int64 `json:"term_count"`
+}
+
+func (q *Queries) InsertPosting(ctx context.Context, arg InsertPostingParams) error {
+	_, err := q.db.ExecContext(ctx, insertPosting, arg.EntryID, arg.TermID, arg.TermCount)
 	return err
 }
 
@@ -43,19 +70,12 @@ func (q *Queries) InsertRelatedEntry(ctx context.Context, arg InsertRelatedEntry
 	return err
 }
 
-const insertTFIDF = `-- name: InsertTFIDF :exec
-INSERT INTO tfidf (entry_id, term, term_count, tfidf, tfidf_n)
-VALUES (?, ?, ?, 0.0, 0.0)
+const insertTerm = `-- name: InsertTerm :exec
+INSERT OR IGNORE INTO terms (term) VALUES (?)
 `
 
-type InsertTFIDFParams struct {
-	EntryID   int64  `json:"entry_id"`
-	Term      string `json:"term"`
-	TermCount int64  `json:"term_count"`
-}
-
-func (q *Queries) InsertTFIDF(ctx context.Context, arg InsertTFIDFParams) error {
-	_, err := q.db.ExecContext(ctx, insertTFIDF, arg.EntryID, arg.Term, arg.TermCount)
+func (q *Queries) InsertTerm(ctx context.Context, term string) error {
+	_, err := q.db.ExecContext(ctx, insertTerm, term)
 	return err
 }
 

@@ -65,6 +65,15 @@ type Ngram struct {
 	Word    []byte `json:"word"`
 }
 
+type Posting struct {
+	ID        int64   `json:"id"`
+	EntryID   int64   `json:"entry_id"`
+	TermID    int64   `json:"term_id"`
+	TermCount int64   `json:"term_count"`
+	Tfidf     float64 `json:"tfidf"`
+	TfidfN    float64 `json:"tfidf_n"`
+}
+
 type RelatedEntry struct {
 	ID             int64   `json:"id"`
 	EntryID        int64   `json:"entry_id"`
@@ -72,13 +81,9 @@ type RelatedEntry struct {
 	Score          float64 `json:"score"`
 }
 
-type Tfidf struct {
-	ID        int64   `json:"id"`
-	Term      string  `json:"term"`
-	EntryID   int64   `json:"entry_id"`
-	TermCount int64   `json:"term_count"`
-	Tfidf     float64 `json:"tfidf"`
-	TfidfN    float64 `json:"tfidf_n"`
+type Term struct {
+	ID   int64  `json:"id"`
+	Term string `json:"term"`
 }
 
 type Trackback struct {

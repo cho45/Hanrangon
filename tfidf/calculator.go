@@ -98,15 +98,23 @@ func (c *Calculator) UpdateTFIDF(ctx context.Context, entryID int64, title, body
 	qtx := c.queries.WithTx(tx)
 
 	// Delete existing TF-IDF data for this entry
-	if err := qtx.DeleteTFIDFByEntryID(ctx, entryID); err != nil {
+	if err := qtx.DeletePostingsByEntryID(ctx, entryID); err != nil {
 		return fmt.Errorf("failed to delete existing tfidf data: %w", err)
 	}
 
 	// Insert new terms
 	for term, count := range terms {
-		err := qtx.InsertTFIDF(ctx, model.InsertTFIDFParams{
+		if err := qtx.InsertTerm(ctx, term); err != nil {
+			return fmt.Errorf("failed to insert term: %w", err)
+		}
+		termID, err := qtx.GetTermID(ctx, term)
+		if err != nil {
+			return fmt.Errorf("failed to get term id: %w", err)
+		}
+
+		err = qtx.InsertPosting(ctx, model.InsertPostingParams{
 			EntryID:   entryID,
-			Term:      term,
+			TermID:    termID,
 			TermCount: int64(count),
 		})
 		if err != nil {
@@ -141,7 +149,7 @@ func (c *Calculator) RecalculateTFIDFValues(ctx context.Context, entryIDs []int6
 	// entry_total: total number of entries
 	_, err = tx.ExecContext(ctx, `
 		CREATE TEMPORARY TABLE entry_total AS
-			SELECT CAST(COUNT(DISTINCT entry_id) AS REAL) AS value FROM tfidf
+			SELECT CAST(COUNT(DISTINCT entry_id) AS REAL) AS value FROM postings
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to create entry_total table: %w", err)
@@ -150,13 +158,13 @@ func (c *Calculator) RecalculateTFIDFValues(ctx context.Context, entryIDs []int6
 	// term_counts: number of entries each term appears in
 	_, err = tx.ExecContext(ctx, `
 		CREATE TEMPORARY TABLE term_counts AS
-			SELECT term, CAST(COUNT(*) AS REAL) AS cnt FROM tfidf GROUP BY term
+			SELECT term_id, CAST(COUNT(*) AS REAL) AS cnt FROM postings GROUP BY term_id
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to create term_counts table: %w", err)
 	}
 
-	_, err = tx.ExecContext(ctx, `CREATE INDEX temp.term_counts_term ON term_counts (term)`)
+	_, err = tx.ExecContext(ctx, `CREATE INDEX temp.term_counts_term_id ON term_counts (term_id)`)
 	if err != nil {
 		return fmt.Errorf("failed to create index on term_counts: %w", err)
 	}
@@ -164,7 +172,7 @@ func (c *Calculator) RecalculateTFIDFValues(ctx context.Context, entryIDs []int6
 	// entry_term_counts: log of total term count per entry
 	_, err = tx.ExecContext(ctx, `
 		CREATE TEMPORARY TABLE entry_term_counts AS
-			SELECT entry_id, LN(CAST(SUM(term_count) AS REAL)) AS cnt FROM tfidf GROUP BY entry_id
+			SELECT entry_id, LN(CAST(SUM(term_count) AS REAL)) AS cnt FROM postings GROUP BY entry_id
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to create entry_term_counts table: %w", err)
@@ -192,19 +200,19 @@ func (c *Calculator) RecalculateTFIDFValues(ctx context.Context, entryIDs []int6
 	// TF (Harman method): LOG(term_count + 1) / LOG(total_term_count_in_entry)
 	// IDF (Sparck Jones method): 1 + LOG(total_entries / entries_with_term)
 	calcTFIDFSQL := fmt.Sprintf(`
-		UPDATE tfidf SET tfidf = IFNULL(
+		UPDATE postings SET tfidf = IFNULL(
 			-- tf (normalized with Harman method)
 			(
 				LN(CAST(term_count AS REAL) + 1) -- term_count in an entry
 				/
-				(SELECT cnt FROM entry_term_counts WHERE entry_term_counts.entry_id = tfidf.entry_id) -- total term count in an entry
+				(SELECT cnt FROM entry_term_counts WHERE entry_term_counts.entry_id = postings.entry_id) -- total term count in an entry
 			)
 			*
 			-- idf (normalized with Sparck Jones method)
 			(1 + LN(
 				(SELECT value FROM entry_total) -- total
 				/
-				(SELECT cnt FROM term_counts WHERE term_counts.term = tfidf.term) -- term entry count
+				(SELECT cnt FROM term_counts WHERE term_counts.term_id = postings.term_id) -- term entry count
 			))
 		, 0.0)
 		%s
@@ -218,7 +226,7 @@ func (c *Calculator) RecalculateTFIDFValues(ctx context.Context, entryIDs []int6
 	// Calculate vector size (L2 norm) for each entry
 	calcTFIDFSizeSQL := fmt.Sprintf(`
 		CREATE TEMPORARY TABLE tfidf_size AS
-			SELECT entry_id, SQRT(SUM(tfidf * tfidf)) AS size FROM tfidf
+			SELECT entry_id, SQRT(SUM(tfidf * tfidf)) AS size FROM postings
 			%s
 			GROUP BY entry_id
 	`, where)
@@ -235,7 +243,7 @@ func (c *Calculator) RecalculateTFIDFValues(ctx context.Context, entryIDs []int6
 
 	// Normalize TF-IDF values
 	normalizeTFIDFSQL := fmt.Sprintf(`
-		UPDATE tfidf SET tfidf_n = IFNULL(tfidf / (SELECT size FROM tfidf_size WHERE entry_id = tfidf.entry_id), 0.0)
+		UPDATE postings SET tfidf_n = IFNULL(tfidf / (SELECT size FROM tfidf_size WHERE entry_id = postings.entry_id), 0.0)
 		%s
 	`, where)
 

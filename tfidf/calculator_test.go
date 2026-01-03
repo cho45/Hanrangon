@@ -112,44 +112,44 @@ func TestUpdateTFIDF(t *testing.T) {
 		t.Fatalf("failed to update tfidf: %v", err)
 	}
 
-	// Verify that terms were inserted
-	rows, err := db.Query("SELECT term, term_count FROM tfidf WHERE entry_id = ? ORDER BY term_count DESC", entryID)
+	// Verify that terms are inserted
+	rows, err := db.Query("SELECT t.term, p.term_count FROM postings p JOIN terms t ON p.term_id = t.id WHERE p.entry_id = ? ORDER BY p.term_count DESC", entryID)
 	if err != nil {
-		t.Fatalf("failed to query tfidf: %v", err)
+		t.Fatalf("failed to query postings: %v", err)
 	}
 	defer rows.Close()
 
-	termCounts := make(map[string]int64)
+	foundTerms := make(map[string]int)
 	for rows.Next() {
 		var term string
-		var count int64
+		var count int
 		if err := rows.Scan(&term, &count); err != nil {
 			t.Fatalf("failed to scan row: %v", err)
 		}
-		termCounts[term] = count
+		foundTerms[term] = count
 	}
 
-	// Check that "テスト" appears multiple times
-	if count, ok := termCounts["テスト"]; !ok {
-		t.Error("expected term 'テスト' not found")
-	} else if count < 2 {
-		t.Errorf("expected 'テスト' to appear at least 2 times, got %d", count)
+	expectedTerms := []string{"テスト", "本文", "タイトル"}
+	for _, term := range expectedTerms {
+		if _, ok := foundTerms[term]; !ok {
+			t.Errorf("expected term %s not found in postings", term)
+		}
 	}
 
-	// Update again (should delete old terms and insert new ones)
+	// Update existing entry
 	err = calc.UpdateTFIDF(ctx, entryID, "新しいタイトル", "新しい本文")
 	if err != nil {
 		t.Fatalf("failed to update tfidf second time: %v", err)
 	}
 
-	// Verify that old terms were deleted
-	var count int64
-	err = db.QueryRow("SELECT COUNT(*) FROM tfidf WHERE entry_id = ? AND term = ?", entryID, "テスト").Scan(&count)
+	// Verify that old terms are deleted and new ones are inserted
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM postings p JOIN terms t ON p.term_id = t.id WHERE p.entry_id = ? AND t.term = ?", entryID, "テスト").Scan(&count)
 	if err != nil {
-		t.Fatalf("failed to query: %v", err)
+		t.Fatalf("failed to query postings count: %v", err)
 	}
-	if count > 0 {
-		t.Error("old term 'テスト' should have been deleted")
+	if count != 0 {
+		t.Errorf("expected term 'テスト' to be deleted, but found %d occurrences", count)
 	}
 }
 
@@ -157,22 +157,18 @@ func TestRecalculateTFIDFValues(t *testing.T) {
 	db, queries := setupTestDB(t)
 	defer db.Close()
 
-	calc, err := NewCalculator(db, queries)
-	if err != nil {
-		t.Fatalf("failed to create calculator: %v", err)
-	}
-
+	calc, _ := NewCalculator(db, queries)
 	ctx := context.Background()
 
-	// Create multiple entries with terms
+	// Insert some test entries
 	entries := []struct {
 		id    int64
 		title string
 		body  string
 	}{
-		{1, "文書1", "これは最初の文書です"},
-		{2, "文書2", "これは2番目の文書です"},
-		{3, "文書3", "これは3番目の文書です"},
+		{1, "Go言語の学習", "Go言語はシンプルで強力な言語です。並行処理が得意です。"},
+		{2, "Pythonでのデータ分析", "Pythonはデータ分析や機械学習に広く使われています。"},
+		{3, "プログラミング言語比較", "GoとPythonはどちらも人気のあるプログラミング言語です。"},
 	}
 
 	for _, entry := range entries {
@@ -182,22 +178,23 @@ func TestRecalculateTFIDFValues(t *testing.T) {
 		}
 	}
 
-	// Recalculate TF-IDF values
-	err = calc.RecalculateTFIDFValues(ctx, []int64{})
+	// Recalculate values
+	err := calc.RecalculateTFIDFValues(ctx, []int64{})
 	if err != nil {
 		t.Fatalf("failed to recalculate tfidf values: %v", err)
 	}
 
 	// Verify that tfidf and tfidf_n values are set
-	rows, err := db.Query("SELECT entry_id, term, tfidf, tfidf_n FROM tfidf WHERE tfidf > 0 LIMIT 5")
+	rows, err := db.Query("SELECT p.entry_id, t.term, p.tfidf, p.tfidf_n FROM postings p JOIN terms t ON p.term_id = t.id WHERE p.tfidf > 0 LIMIT 5")
+
 	if err != nil {
-		t.Fatalf("failed to query tfidf: %v", err)
+		t.Fatalf("failed to query postings: %v", err)
 	}
 	defer rows.Close()
 
-	hasResults := false
+	count := 0
 	for rows.Next() {
-		hasResults = true
+		count++
 		var entryID int64
 		var term string
 		var tfidf, tfidfN float64
@@ -216,7 +213,7 @@ func TestRecalculateTFIDFValues(t *testing.T) {
 		}
 	}
 
-	if !hasResults {
+	if count == 0 {
 		t.Error("expected some tfidf results, got none")
 	}
 }

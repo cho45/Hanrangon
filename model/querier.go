@@ -20,8 +20,8 @@ type Querier interface {
 	CreateTrackback(ctx context.Context, arg CreateTrackbackParams) error
 	DeleteImagesByEntryID(ctx context.Context, entryID int64) error
 	DeleteNgramsByImageID(ctx context.Context, imageID int64) error
+	DeletePostingsByEntryID(ctx context.Context, entryID int64) error
 	DeleteRelatedEntriesByEntryID(ctx context.Context, entryID int64) error
-	DeleteTFIDFByEntryID(ctx context.Context, entryID int64) error
 	DeleteTrackbacksBySourceEntryId(ctx context.Context, trackbackEntryID sql.NullInt64) error
 	EnqueueJob(ctx context.Context, arg EnqueueJobParams) (Job, error)
 	FailStuckJobs(ctx context.Context) error
@@ -34,9 +34,11 @@ type Querier interface {
 	GetNextEntry(ctx context.Context, createdAt time.Time) (GetNextEntryRow, error)
 	GetOrCreateJobType(ctx context.Context, name string) (JobType, error)
 	GetPrevEntry(ctx context.Context, createdAt time.Time) (GetPrevEntryRow, error)
+	GetTermID(ctx context.Context, term string) (int64, error)
 	GrabJob(ctx context.Context, arg GrabJobParams) error
+	InsertPosting(ctx context.Context, arg InsertPostingParams) error
 	InsertRelatedEntry(ctx context.Context, arg InsertRelatedEntryParams) error
-	InsertTFIDF(ctx context.Context, arg InsertTFIDFParams) error
+	InsertTerm(ctx context.Context, term string) error
 	ListAllEntries(ctx context.Context) ([]ListAllEntriesRow, error)
 	ListAllEntriesForSitemap(ctx context.Context) ([]ListAllEntriesForSitemapRow, error)
 	ListArchiveMonths(ctx context.Context) ([]ListArchiveMonthsRow, error)

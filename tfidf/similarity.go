@@ -62,11 +62,11 @@ func (s *SimilarityCalculator) calculateForEntry(ctx context.Context, entryID in
 	// Limited to top 100 candidates
 	_, err = tx.ExecContext(ctx, `
 		CREATE TEMPORARY TABLE similar_candidate AS
-			SELECT entry_id, COUNT(*) as cnt FROM tfidf
+			SELECT entry_id, COUNT(*) as cnt FROM postings
 			WHERE
 				entry_id > ? AND
-				term IN (
-					SELECT term FROM tfidf WHERE entry_id = ?
+				term_id IN (
+					SELECT term_id FROM postings WHERE entry_id = ?
 					ORDER BY tfidf_n DESC
 					LIMIT 50
 				)
@@ -92,17 +92,18 @@ func (s *SimilarityCalculator) calculateForEntry(ctx context.Context, entryID in
 			entry_id AS eid,
 			SUM(a.tfidf_n * b.tfidf_n) AS score
 		FROM (
-			(SELECT term, tfidf_n FROM tfidf WHERE entry_id = ? ORDER BY tfidf_n DESC LIMIT 50) as a
+			(SELECT term_id, tfidf_n FROM postings WHERE entry_id = ? ORDER BY tfidf_n DESC LIMIT 50) as a
 			INNER JOIN
-			(SELECT entry_id, term, tfidf_n FROM tfidf WHERE entry_id IN (SELECT entry_id FROM similar_candidate)) as b
+			(SELECT entry_id, term_id, tfidf_n FROM postings WHERE entry_id IN (SELECT entry_id FROM similar_candidate)) as b
 			ON
-			a.term = b.term
+			a.term_id = b.term_id
 		)
 		WHERE eid != ?
 		GROUP BY entry_id
 		ORDER BY score DESC
 		LIMIT 10
 	`, entryID, entryID)
+
 	if err != nil {
 		return fmt.Errorf("failed to calculate similarity scores: %w", err)
 	}
