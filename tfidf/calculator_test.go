@@ -12,7 +12,7 @@ import (
 
 // setupTestDB creates an in-memory database for testing
 func setupTestDB(t *testing.T) (*sql.DB, *model.Queries) {
-	db, err := sql.Open("sqlite3_with_math_functions", ":memory:")
+	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}

@@ -5,33 +5,13 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"math"
 	"regexp"
 	"strings"
 
 	"github.com/cho45/hanrangon/model"
 	"github.com/ikawaha/kagome-dict/ipa"
 	"github.com/ikawaha/kagome/v2/tokenizer"
-	sqlite3 "github.com/mattn/go-sqlite3"
 )
-
-func init() {
-	// Register custom SQLite driver with math functions
-	sql.Register("sqlite3_with_math_functions",
-		&sqlite3.SQLiteDriver{
-			ConnectHook: func(conn *sqlite3.SQLiteConn) error {
-				// Register LN (natural logarithm) function
-				if err := conn.RegisterFunc("LN", math.Log, true); err != nil {
-					return err
-				}
-				// Register SQRT (square root) function
-				if err := conn.RegisterFunc("SQRT", math.Sqrt, true); err != nil {
-					return err
-				}
-				return nil
-			},
-		})
-}
 
 // Calculator handles TF-IDF calculations
 type Calculator struct {

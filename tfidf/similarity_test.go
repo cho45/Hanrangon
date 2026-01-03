@@ -12,7 +12,7 @@ import (
 
 // setupTestDBForSimilarity creates an in-memory database for similarity testing
 func setupTestDBForSimilarity(t *testing.T) (*sql.DB, *model.Queries, *Calculator, *SimilarityCalculator) {
-	db, err := sql.Open("sqlite3_with_math_functions", ":memory:")
+	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}

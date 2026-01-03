@@ -31,7 +31,7 @@ func setupTestDB(t *testing.T) (*sql.DB, *sql.DB, *sql.DB, *sql.DB) {
 	}
 
 	// TFIDF DB
-	tfidfDB, err := sql.Open("sqlite3_with_math_functions", ":memory:")
+	tfidfDB, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatalf("failed to open memory tfidf db: %v", err)
 	}

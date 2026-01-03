@@ -4,25 +4,35 @@ import (
 	"context"
 	"database/sql"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/cho45/hanrangon/app"
 	"github.com/cho45/hanrangon/jobqueue"
 	"github.com/cho45/hanrangon/jobs"
 	"github.com/cho45/hanrangon/model"
+	"github.com/cho45/hanrangon/subcommands"
 	"github.com/cho45/hanrangon/tfidf"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 func main() {
-	// 1. Config読み込み
+	// 1. Determine subcommand
+	cmd := "serve"
+	subArgs := os.Args[1:]
+	if len(os.Args) > 1 && !strings.HasPrefix(os.Args[1], "-") {
+		cmd = os.Args[1]
+		subArgs = os.Args[2:]
+	}
+
+	// 2. Config読み込み
 	config := app.LoadConfig()
 
-	// 2. DB接続 (4つのDB)
+	// 3. DB接続 (4つのDB)
 	db := mustOpenDB("sqlite3", config.DataDBPath)
 	defer db.Close()
 
-	tfidfDB := mustOpenDB("sqlite3_with_math_functions", config.TFIDFDBPath)
+	tfidfDB := mustOpenDB("sqlite3", config.TFIDFDBPath)
 	defer tfidfDB.Close()
 
 	workerDB := mustOpenDB("sqlite3", config.WorkerDBPath)
@@ -31,8 +41,7 @@ func main() {
 	imagesDB := mustOpenDB("sqlite3", config.ImagesDBPath)
 	defer imagesDB.Close()
 
-	// 3. TF-IDF Calculator/Similarity初期化
-	// model.New()を一度だけ呼ぶ（重複解消）
+	// 4. TF-IDF Calculator/Similarity初期化
 	tfidfQueries := model.New(tfidfDB)
 	calc, err := tfidf.NewCalculator(tfidfDB, tfidfQueries)
 	if err != nil {
@@ -40,28 +49,41 @@ func main() {
 	}
 	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
 
-	// 4. Registry作成
+	// 5. Registry作成
 	registry := jobqueue.NewRegistry()
 
-	// 5. Worker作成 (まだStartしない)
+	// 6. Worker作成 (まだStartしない)
 	workerQueries := model.New(workerDB)
 	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
 
-	// 6. App作成
+	// 7. App作成
 	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, worker)
 
-	// 7. ジョブ登録
-	registry.Register(jobs.NewSimpleJob())
-	registry.Register(jobs.NewRecalculateTFIDFJob(application))
-	registry.Register(jobs.NewUpdateTrackbacksJob(application))
-	registry.Register(jobs.NewIndexImagesJob(application))
+	// 8. Execute command
+	ctx := context.Background()
+	switch cmd {
+	case "serve":
+		// ジョブ登録
+		registry.Register(jobs.NewSimpleJob())
+		registry.Register(jobs.NewRecalculateTFIDFJob(application))
+		registry.Register(jobs.NewUpdateTrackbacksJob(application))
+		registry.Register(jobs.NewIndexImagesJob(application))
 
-	// 8. Worker.Start
-	worker.Start(context.Background())
+		// Worker.Start
+		worker.Start(ctx)
 
-	// 9. Server起動
-	e := app.NewServer(application)
-	e.Logger.Fatal(e.Start(config.Listen))
+		// Server起動
+		e := app.NewServer(application)
+		e.Logger.Fatal(e.Start(config.Listen))
+
+	case "reformat":
+		if err := subcommands.Reformat(ctx, application, subArgs); err != nil {
+			log.Fatalf("reformat failed: %v", err)
+		}
+
+	default:
+		log.Fatalf("unknown command: %s", cmd)
+	}
 }
 
 func mustOpenDB(driver, path string) *sql.DB {

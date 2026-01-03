@@ -8,27 +8,37 @@ HanrangonはNogag (Perl/PSGI) ブログシステムのGo言語による書き直
 
 ## 主要コマンド
 
+### ビルドと実行
+
+```bash
+# ビルド
+make build
+
+# 実行
+make run
+
+# クリーンアップ
+make clean
+```
+
 ### コード生成
 
 ```bash
 # データベースアクセスコード生成 (model/ ディレクトリ)
-sqlc generate
+make generate
 ```
 
 ### テスト実行
 
 ```bash
 # 全テスト実行
-go test ./...
+make test
 
-# 特定パッケージのテスト
-go test ./formatter/...
+# 特定パッケージのテスト (tagsが必要な点に注意)
+go test -tags "sqlite_math_functions" ./formatter/...
 
 # 詳細出力付きテスト
-go test -v ./formatter/...
-
-# 特定のテスト関数のみ実行
-go test -v -run TestFormatHatena ./formatter/
+go test -v -tags "sqlite_math_functions" ./formatter/...
 ```
 
 ### マイグレーションテスト
@@ -66,11 +76,11 @@ HANRANGON_ENV=production go run .
 ### コードフォーマット
 
 ```bash
+# プロジェクト全体のフォーマット (goimports + go fmt)
+make fmt
+
 # 単一ファイル
 goimports -w path/to/file.go
-
-# 全Goファイル
-find . -name "*.go" -not -path "./vendor/*" -exec goimports -w {} \;
 ```
 
 ## アーキテクチャ

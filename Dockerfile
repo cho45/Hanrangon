@@ -24,10 +24,11 @@ RUN apt-get update && apt-get install -y \
     libsqlite3-dev \
     pkg-config \
     ca-certificates \
+    make \
     && rm -rf /var/lib/apt/lists/*
 
 # 実行時にソースコードをマウントするディレクトリ
 WORKDIR /app
 
-# デフォルトで sqlc generate と go build を実行
-CMD ["/bin/sh", "-c", "sqlc generate && go build -o hanrangon main.go"]
+# デフォルトで sqlc generate と make build を実行
+CMD ["/bin/sh", "-c", "make generate build"]
