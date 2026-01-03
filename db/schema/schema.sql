@@ -5,10 +5,10 @@ CREATE TABLE entries (
     formatted_body TEXT NOT NULL,
     path TEXT NOT NULL,
     format TEXT NOT NULL,
-    date DATE NOT NULL,
-    created_at DATETIME NOT NULL,
-    modified_at DATETIME NOT NULL,
-    publish_at DATETIME,
+    date DATE NOT NULL, -- YYYY-MM-DD (JST),
+    created_at DATETIME NOT NULL, -- YYYY-MM-DD HH:MM:SS[.ffffff]+09:00,
+    modified_at DATETIME NOT NULL, -- YYYY-MM-DD HH:MM:SS[.ffffff]+09:00,
+    publish_at DATETIME, -- YYYY-MM-DD HH:MM:SS[.ffffff]+09:00,
     status TEXT NOT NULL DEFAULT 'public'
 );
 CREATE INDEX index_date ON entries (date, path);
