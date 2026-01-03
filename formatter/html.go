@@ -8,7 +8,7 @@ import (
 var cdataRegexp = regexp.MustCompile(`<!\[CDATA\[([\s\S]*?)\]\]>`)
 var htmlCommentRegexp = regexp.MustCompile(`(?s)<!--[\s\S]*?-->`)
 
-func FormatHTML(body string) string {
+func FormatHTML(body string) (string, error) {
 	res := cdataRegexp.ReplaceAllStringFunc(body, func(match string) string {
 		submatch := cdataRegexp.FindStringSubmatch(match)
 		if len(submatch) > 1 {
@@ -16,5 +16,5 @@ func FormatHTML(body string) string {
 		}
 		return match
 	})
-	return htmlCommentRegexp.ReplaceAllString(res, "")
+	return htmlCommentRegexp.ReplaceAllString(res, ""), nil
 }

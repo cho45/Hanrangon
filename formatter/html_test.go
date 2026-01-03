@@ -32,7 +32,12 @@ func TestFormatHTML(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := FormatHTML(tt.body); got != tt.want {
+			got, err := FormatHTML(tt.body)
+			if err != nil {
+				t.Errorf("FormatHTML() error = %v", err)
+				return
+			}
+			if got != tt.want {
 				t.Errorf("FormatHTML() = %v, want %v", got, tt.want)
 			}
 		})

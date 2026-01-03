@@ -18,7 +18,7 @@ var (
 	reMy        = regexp.MustCompile(`(?s)my\s*(?:'|")(\d{4})(\d{2})(\d{2})#p(\d+)(?:'|"),\s*(?:'|")([^'"]+)(?:'|")`)
 )
 
-func FormatTDiary(body string) string {
+func FormatTDiary(body string) (string, error) {
 	res := reTDiaryPlugin.ReplaceAllStringFunc(body, func(match string) string {
 		sub := reTDiaryPlugin.FindStringSubmatch(match)
 		if len(sub) < 2 {
@@ -115,5 +115,5 @@ func FormatTDiary(body string) string {
 		sb.WriteString(line)
 		sb.WriteString("</p>")
 	}
-	return sb.String()
+	return sb.String(), nil
 }

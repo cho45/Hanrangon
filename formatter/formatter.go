@@ -7,11 +7,11 @@ import (
 func Format(body string, format string) (string, error) {
 	switch format {
 	case "HTML":
-		return FormatHTML(body), nil
+		return FormatHTML(body)
 	case "Hatena":
 		return FormatHatena(body)
 	case "tDiary":
-		return FormatTDiary(body), nil
+		return FormatTDiary(body)
 	case "Markdown":
 		return FormatMarkdown(body)
 	default:

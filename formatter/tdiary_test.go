@@ -77,7 +77,11 @@ OK}}`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatTDiary(tt.body)
+			got, err := FormatTDiary(tt.body)
+			if err != nil {
+				t.Errorf("FormatTDiary() error = %v", err)
+				return
+			}
 			for _, w := range tt.want {
 				if !strings.Contains(got, w) {
 					t.Errorf("FormatTDiary() output does not contain %q\nGot: %s", w, got)
