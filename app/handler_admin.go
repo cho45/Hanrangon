@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -33,8 +34,7 @@ type EditRequest struct {
 }
 
 type EditResponse struct {
-	ID       int64  `json:"id"`
-	Location string `json:"location"`
+	SessionID string `json:"session_id"` // session_id のみに簡略化
 }
 
 func (app *AppImpl) HandleEdit(c echo.Context) error {
@@ -127,13 +127,70 @@ func (app *AppImpl) HandleLogout(c echo.Context) error {
 }
 
 func (app *AppImpl) HandleApiEditProgress(c echo.Context) error {
-	// Simple implementation: always return empty progress (means finished)
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"progress": "",
-	})
+	sessionID := c.QueryParam("sid")
+	if sessionID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "session ID required")
+	}
+
+	val, ok := app.progressSessions.Load(sessionID)
+	if !ok {
+		return echo.NewHTTPError(http.StatusNotFound, "session not found")
+	}
+	session := val.(*ProgressSession)
+
+	// SSEヘッダー設定
+	c.Response().Header().Set("Content-Type", "text/event-stream")
+	c.Response().Header().Set("Cache-Control", "no-cache")
+	c.Response().Header().Set("Connection", "keep-alive")
+	c.Response().Header().Set("X-Accel-Buffering", "no") // nginx バッファリング無効化
+	c.Response().WriteHeader(http.StatusOK)
+
+	// 初回メッセージ（接続確認）
+	connectMsg := map[string]string{"type": "connected"}
+	connectJSON, _ := json.Marshal(connectMsg)
+	fmt.Fprintf(c.Response().Writer, "data: %s\n\n", connectJSON)
+	c.Response().Flush()
+
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	// 進捗配信ループ
+	for {
+		select {
+		case msg, ok := <-session.Messages:
+			if !ok {
+				// チャネルクローズ
+				return nil
+			}
+			// すべてのメッセージはすでにJSON形式
+			fmt.Fprintf(c.Response().Writer, "data: %s\n\n", msg)
+			c.Response().Flush()
+
+		case err := <-session.Done:
+			if err != nil {
+				// JSON形式でエラーを送信
+				errMsg := map[string]string{"type": "error", "message": err.Error()}
+				errJSON, _ := json.Marshal(errMsg)
+				fmt.Fprintf(c.Response().Writer, "data: %s\n\n", errJSON)
+			}
+			c.Response().Flush()
+			return nil
+
+		case <-ticker.C:
+			// Heartbeat（接続維持）
+			fmt.Fprintf(c.Response().Writer, ": heartbeat\n\n")
+			c.Response().Flush()
+
+		case <-c.Request().Context().Done():
+			// クライアント切断
+			log.Printf("[SSE] Client disconnected: %s", sessionID)
+			return nil
+		}
+	}
 }
 
 func (app *AppImpl) HandleApiEdit(c echo.Context) error {
+	// 1. リクエスト検証
 	req := new(EditRequest)
 	if err := c.Bind(req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request payload").SetInternal(err)
@@ -156,93 +213,139 @@ func (app *AppImpl) HandleApiEdit(c echo.Context) error {
 		publishAt = sql.NullTime{Time: t, Valid: true}
 	}
 
-	// 1. Format the body
-	formattedBody, err := formatter.Format(req.Body, req.Format)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "Formatting failed").SetInternal(err)
-	}
+	// 2. ProgressSession作成
+	session := app.createProgressSession()
 
-	// 2. Postprocess the formatted body (MathJax, syntax highlight, image processing, widgets)
-	ctx := c.Request().Context()
-	if processedBody, err := app.Postprocess(ctx, formattedBody); err == nil {
-		formattedBody = processedBody
-	} else {
-		log.Printf("Postprocess failed: %v", err)
-		// エラーでも処理を続行（postprocess なしの formatted_body を保存）
-	}
+	// 3. goroutineで全処理を非同期実行
+	go func() {
+		defer app.cleanupProgressSession(session.ID)
 
-	now := time.Now()
-	date := now.Format("2006-01-02")
+		// detached context（HTTPリクエストから独立）
+		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+		defer cancel()
 
-	var resEntry model.Entry
-
-	if req.ID != 0 {
-		// Update existing entry
-		existing, err := app.queries.GetEntryById(ctx, req.ID)
+		// 3-1. Format
+		app.sendProgressMessage(session, "フォーマット処理中...")
+		formattedBody, err := formatter.Format(req.Body, req.Format)
 		if err != nil {
-			return echo.NewHTTPError(http.StatusNotFound, "Entry not found").SetInternal(err)
+			app.sendProgressMessage(session, fmt.Sprintf("フォーマットエラー: %v", err))
+			session.Done <- err
+			return
 		}
+		app.sendProgressMessage(session, "フォーマット完了")
 
-		path := req.Path
-		if path == "" {
-			path = existing.Path
-		}
-
-		row, err := app.queries.UpdateEntry(ctx, model.UpdateEntryParams{
-			ID:            req.ID,
-			Title:         req.Title,
-			Body:          req.Body,
-			FormattedBody: formattedBody,
-			Path:          path,
-			Format:        req.Format,
-			Date:          existing.Date, // Keep original date string
-			ModifiedAt:    now,
-			PublishAt:     publishAt,
-			Status:        req.Status,
-		})
+		// 3-2. Postprocess
+		app.sendProgressMessage(session, "postprocess開始")
+		processedBody, err := app.PostprocessWithProgress(ctx, formattedBody, session)
 		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "Failed to update entry").SetInternal(err)
-		}
-		resEntry = model.Entry(row)
-	} else {
-		// Create new entry
-		count, err := app.queries.CountEntriesByDate(ctx, date)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "Failed to count entries").SetInternal(err)
+			log.Printf("Postprocess failed: %v", err)
+			app.sendProgressMessage(session, fmt.Sprintf("postprocessエラー: %v（続行）", err))
+			// エラーでも続行（現在の挙動を維持）
+			processedBody = formattedBody
+		} else {
+			app.sendProgressMessage(session, "postprocess完了")
 		}
 
-		path := req.Path
-		if path == "" {
-			path = fmt.Sprintf("%s/%d", now.Format("2006/01/02"), count+1)
+		// 3-3. DB保存（完全な状態で保存）
+		app.sendProgressMessage(session, "データベース保存中...")
+		var location string
+
+		now := time.Now()
+		date := now.Format("2006-01-02")
+
+		if req.ID != 0 {
+			// 更新
+			existing, err := app.queries.GetEntryById(ctx, req.ID)
+			if err != nil {
+				app.sendProgressMessage(session, fmt.Sprintf("エントリ取得エラー: %v", err))
+				session.Done <- err
+				return
+			}
+
+			path := req.Path
+			if path == "" {
+				path = existing.Path
+			}
+
+			row, err := app.queries.UpdateEntry(ctx, model.UpdateEntryParams{
+				ID:            req.ID,
+				Title:         req.Title,
+				Body:          req.Body,
+				FormattedBody: processedBody,
+				Path:          path,
+				Format:        req.Format,
+				Date:          existing.Date,
+				ModifiedAt:    now,
+				PublishAt:     publishAt,
+				Status:        req.Status,
+			})
+			if err != nil {
+				app.sendProgressMessage(session, fmt.Sprintf("更新エラー: %v", err))
+				session.Done <- err
+				return
+			}
+			location = "/" + row.Path
+
+			// ジョブエンキュー
+			if row.Status == "public" {
+				if err := app.EnqueuePublishedEntryJobs(ctx, row.ID); err != nil {
+					log.Printf("Failed to enqueue jobs: %v", err)
+				}
+			}
+		} else {
+			// 新規作成
+			count, err := app.queries.CountEntriesByDate(ctx, date)
+			if err != nil {
+				app.sendProgressMessage(session, fmt.Sprintf("カウントエラー: %v", err))
+				session.Done <- err
+				return
+			}
+
+			path := req.Path
+			if path == "" {
+				path = fmt.Sprintf("%s/%d", now.Format("2006/01/02"), count+1)
+			}
+
+			row, err := app.queries.CreateEntry(ctx, model.CreateEntryParams{
+				Title:         req.Title,
+				Body:          req.Body,
+				FormattedBody: processedBody,
+				Path:          path,
+				Format:        req.Format,
+				Date:          date,
+				CreatedAt:     now,
+				ModifiedAt:    now,
+				PublishAt:     publishAt,
+				Status:        req.Status,
+			})
+			if err != nil {
+				app.sendProgressMessage(session, fmt.Sprintf("作成エラー: %v", err))
+				session.Done <- err
+				return
+			}
+			location = "/" + row.Path
+
+			// ジョブエンキュー（進捗通知なし）
+			if row.Status == "public" {
+				if err := app.EnqueuePublishedEntryJobs(ctx, row.ID); err != nil {
+					log.Printf("Failed to enqueue jobs: %v", err)
+				}
+			}
 		}
 
-		row, err := app.queries.CreateEntry(ctx, model.CreateEntryParams{
-			Title:         req.Title,
-			Body:          req.Body,
-			FormattedBody: formattedBody,
-			Path:          path,
-			Format:        req.Format,
-			Date:          date, // String YYYY-MM-DD
-			CreatedAt:     now,
-			ModifiedAt:    now,
-			PublishAt:     publishAt,
-			Status:        req.Status,
-		})
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create entry").SetInternal(err)
-		}
-		resEntry = model.Entry(row)
-	}
+		app.sendProgressMessage(session, "保存完了")
 
-	if resEntry.Status == "public" {
-		if err := app.EnqueuePublishedEntryJobs(ctx, resEntry.ID); err != nil {
-			log.Printf("Failed to enqueue jobs for entry %d: %v", resEntry.ID, err)
-		}
-	}
+		// 3-4. 完了（location を含めて送信）
+		doneMsg := map[string]interface{}{"type": "done", "location": location}
+		doneJSON, _ := json.Marshal(doneMsg)
+		session.Messages <- string(doneJSON)
+		// Done チャネルはエラー時のみ使用（正常終了時は Messages のみ）
+	}()
 
+	// 4. 即座にレスポンス返却（session_id のみ）
 	return c.JSON(http.StatusOK, EditResponse{
-		ID:       resEntry.ID,
-		Location: "/" + resEntry.Path,
+		SessionID: session.ID,
 	})
 }
 

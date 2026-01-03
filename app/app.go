@@ -5,20 +5,31 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cho45/hanrangon/jobqueue"
 	"github.com/cho45/hanrangon/model"
 	"github.com/cho45/hanrangon/tfidf"
+	"github.com/google/uuid"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
 )
+
+// ProgressSession は進捗追跡用のセッション情報
+type ProgressSession struct {
+	ID        string
+	CreatedAt time.Time
+	Messages  chan string // 進捗メッセージチャネル
+	Done      chan error  // 完了/エラー通知
+}
 
 // AppImpl は App インターフェースの具象実装
 type AppImpl struct {
@@ -35,6 +46,7 @@ type AppImpl struct {
 	jobQueue             *jobqueue.Worker
 	config               *Config
 	templates            *Templates
+	progressSessions     sync.Map // map[sessionID]*ProgressSession
 }
 
 // NewApp creates a new App instance
@@ -148,6 +160,59 @@ func (app *AppImpl) Postprocess(ctx context.Context, html string) (string, error
 	return stdout.String(), nil
 }
 
+// PostprocessWithProgress は進捗通知付きでpostprocessを実行する
+func (app *AppImpl) PostprocessWithProgress(ctx context.Context, html string, session *ProgressSession) (string, error) {
+	start := time.Now()
+	log.Printf("[postprocess] Starting postprocess (input size: %d bytes)", len(html))
+
+	// タイムアウト設定（30秒）
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	// Node.js スクリプトのパス
+	scriptPath := filepath.Join(app.config.StaticDir, "../postprocess/main.js")
+
+	cmd := exec.CommandContext(ctx, "node", scriptPath)
+	cmd.Stdin = bytes.NewReader([]byte(html))
+
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+
+	// stderr をリアルタイムでログに出力し、SSE に送信
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+
+	// stderr を行ごとにログ出力＆SSE送信する goroutine
+	go func() {
+		scanner := bufio.NewScanner(stderrPipe)
+		for scanner.Scan() {
+			line := scanner.Text()
+			log.Printf("[postprocess] %s", line)
+
+			// JSON形式でSSEに送信（非ブロッキング）
+			msg := map[string]string{"type": "progress", "message": line}
+			msgJSON, _ := json.Marshal(msg)
+			select {
+			case session.Messages <- string(msgJSON):
+			case <-time.After(100 * time.Millisecond):
+				// クライアント接続が切れている場合はスキップ
+			}
+		}
+	}()
+
+	if err := cmd.Run(); err != nil {
+		log.Printf("[postprocess] Failed after %v: %v", time.Since(start), err)
+		return "", fmt.Errorf("postprocess failed: %w", err)
+	}
+
+	elapsed := time.Since(start)
+	log.Printf("[postprocess] Completed successfully in %v (output size: %d bytes)", elapsed, stdout.Len())
+
+	return stdout.String(), nil
+}
+
 func (app *AppImpl) PublishScheduledEntries(ctx context.Context) error {
 	now := time.Now()
 	entries, err := app.queries.FindScheduledEntriesToPublish(ctx, sql.NullTime{Time: now, Valid: true})
@@ -205,4 +270,38 @@ func (app *AppImpl) EnqueuePublishedEntryJobs(ctx context.Context, entryID int64
 	}
 
 	return nil
+}
+
+// createProgressSession は新しい進捗セッションを作成する
+func (app *AppImpl) createProgressSession() *ProgressSession {
+	session := &ProgressSession{
+		ID:        uuid.New().String(),
+		CreatedAt: time.Now(),
+		Messages:  make(chan string, 10), // バッファ付き
+		Done:      make(chan error, 1),
+	}
+	app.progressSessions.Store(session.ID, session)
+
+	// 5分後に自動クリーンアップ（念のため）
+	time.AfterFunc(5*time.Minute, func() {
+		app.cleanupProgressSession(session.ID)
+	})
+
+	return session
+}
+
+// cleanupProgressSession はセッションをクリーンアップする
+func (app *AppImpl) cleanupProgressSession(id string) {
+	if val, ok := app.progressSessions.LoadAndDelete(id); ok {
+		session := val.(*ProgressSession)
+		close(session.Messages)
+		// Done チャネルは送信側がクローズする
+	}
+}
+
+// sendProgressMessage は進捗メッセージをJSON形式で送信する
+func (app *AppImpl) sendProgressMessage(session *ProgressSession, message string) {
+	msg := map[string]string{"type": "progress", "message": message}
+	msgJSON, _ := json.Marshal(msg)
+	session.Messages <- string(msgJSON)
 }

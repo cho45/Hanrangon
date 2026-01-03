@@ -65,10 +65,10 @@ sqlite3 var/db/tfidf.db < db/schema/tfidf.sql
 
 XXX: /data/public/images に保存されているのをそのままつかう
 
-## 4. インデックスの再構築 (初期ジョブ投入)
+## 4. インデックスの再構築
 
 ```
-hanrangon recalc-tfidf
+hanrangon recalc-tfidf --force
 ```
 
 ## 5. サービスの起動

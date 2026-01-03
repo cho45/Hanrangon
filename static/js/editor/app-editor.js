@@ -153,8 +153,9 @@ Polymer({
 
 	saveEntry : function () {
 		this.set('saving', true);
-		this.set('progress', '');
+		this.set('progress', 'リクエスト中');
 
+		var self = this;
 		var data = new FormData();
 		data.set('id', this.form.id);
 		data.set('title', this.form.title);
@@ -162,7 +163,7 @@ Polymer({
 		data.set('sk', this.sk);
 		data.set('post_buffer', this.$.postBuffer.checked ? "1" : "");
 		if (this.$.publishLater.checked) {
-			var epoch = 
+			var epoch =
 				this.entry.publish_at ||
 				((Date.now() / 1000) + (60 * 60 * 24 * 30));
 
@@ -175,47 +176,88 @@ Polymer({
 		var req = new XMLHttpRequest();
 		req.open("POST", '/api/edit');
 		req.onload = (e) => {
-			// 保存したらバックアップは削除
-			var key = this.backupKeyForEntry(this.entry);
-			delete this.backup[key];
-			this.$.backup.save();
+			var resData = JSON.parse(req.responseText);
+			var sessionID = resData.session_id;
 
-			var data = JSON.parse(req.responseText);
-			location.href = data.location;
+			if (!sessionID) {
+				self.set('saving', false);
+				alert('保存に失敗しました');
+				return;
+			}
+
+			// SSE接続開始
+			var eventSource = new EventSource('/api/edit/progress?sid=' + sessionID);
+
+			eventSource.onmessage = function(e) {
+				// すべてのメッセージはJSON形式
+				try {
+					var msg = JSON.parse(e.data);
+					console.log('[SSE] Parsed message:', msg);
+
+					switch (msg.type) {
+						case 'connected':
+							// 接続確認
+							break;
+
+						case 'progress':
+							// 進捗メッセージ
+							self.set('progress', msg.message);
+							break;
+
+						case 'done':
+							// 保存完了、バックアップ削除
+							var key = self.backupKeyForEntry(self.entry);
+							delete self.backup[key];
+							self.$.backup.save();
+
+							self.set('progress', '完了');
+							self.set('saving', false);
+
+							// EventSource完全クリーンアップ（onerrorが発火しないように）
+							eventSource.onerror = null;
+							eventSource.close();
+							location.href = msg.location;
+							break;
+
+						case 'error':
+							// エラー
+							self.set('progress', 'エラー: ' + msg.message);
+							self.set('saving', false);
+							eventSource.onerror = null;
+							eventSource.close();
+							alert('保存に失敗しました: ' + msg.message);
+							break;
+
+						default:
+							console.warn('[SSE] Unknown message type:', msg.type);
+					}
+				} catch (err) {
+					console.error('[SSE] JSON parse error:', err, 'data:', e.data);
+					self.set('progress', '通信エラー');
+					self.set('saving', false);
+					eventSource.onerror = null;
+					eventSource.close();
+					alert('通信エラーが発生しました');
+				}
+			};
+
+			eventSource.onerror = function(err) {
+				console.error('[SSE] Connection error:', err);
+				self.set('progress', '通信エラー');
+				self.set('saving', false);
+				eventSource.close();
+				alert('通信エラーが発生しました');
+			};
 		};
+
 		req.onerror = (e) => {
-			this.set('saving', false);
-			if (confirm('error ' + e + "\nRetry?")) {
-				this.saveEntry();
+			self.set('saving', false);
+			if (confirm('通信に失敗しました\nリトライしますか？')) {
+				self.saveEntry();
 			}
 		};
+
 		req.send(data);
-
-		var self = this;
-		(function progress () {
-			var req = new XMLHttpRequest();
-			req.open("GET", '/api/edit/progress');
-			var timeout = setTimeout(function () {
-				if (req.readyState !== 4) {
-					req.abort();
-					progress();
-				}
-			}, 5000);
-			req.onload = (e) => {
-				clearTimeout(timeout);
-
-				var data = JSON.parse(req.responseText);
-
-				self.set('progress', data.progress);
-				setTimeout(() => {
-					progress();
-				}, 500);
-			};
-			req.onerror = (e) => {
-				progress();
-			};
-			req.send(null);
-		}).call(this);
 	},
 
 	initializeBackup : function () {
