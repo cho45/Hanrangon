@@ -37,6 +37,7 @@ func NewServer(app App) *echo.Echo {
 	e.Static("/css", filepath.Join(config.StaticDir, "css"))
 	e.Static("/js", filepath.Join(config.StaticDir, "js"))
 	e.Static("/static/admin", filepath.Join(config.StaticDir, "admin"))
+	e.Static("/images/entry", config.UploadDir)
 	e.Static("/images", filepath.Join(config.StaticDir, "images"))
 
 	// Public Routes
