@@ -38,61 +38,35 @@ type EditResponse struct {
 }
 
 func (app *AppImpl) HandleAdminEdit(c echo.Context) error {
-	idStr := c.QueryParam("id")
-	var entry model.Entry
-
-	if idStr != "" {
-		id, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, "Invalid ID")
-		}
-		row, err := app.queries.GetEntryById(c.Request().Context(), id)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
-		}
-		entry = model.Entry{
-			ID:            row.ID,
-			Title:         row.Title,
-			Body:          row.Body,
-			FormattedBody: row.FormattedBody,
-			Path:          row.Path,
-			Format:        row.Format,
-			Date:          row.Date,
-			CreatedAt:     row.CreatedAt,
-			ModifiedAt:    row.ModifiedAt,
-			PublishAt:     row.PublishAt,
-			Status:        row.Status,
-		}
-	}
-
-	entryBytes, err := json.Marshal(entry)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to serialize entry")
-	}
-
 	cookie, _ := c.Cookie(CSRFCookieName)
 	sk := ""
 	if cookie != nil {
 		sk = cookie.Value
 	}
 
-	data := &view.EditData{
+	data := &view.AdminIndexData{
 		LayoutData: view.LayoutData{
 			PageTitle: "エントリ編集",
 			IsAuth:    true,
 		},
-		EntryJSON:  string(entryBytes),
 		SessionKey: sk,
 	}
-	return app.templates.RenderWithLayout(c.Response(), "admin/layout.html", "admin/edit.html", data)
+	return app.templates.RenderWithLayout(c.Response(), "admin/layout.html", "admin/index.html", data)
 }
 
 func (app *AppImpl) HandleAdminIndex(c echo.Context) error {
+	cookie, _ := c.Cookie(CSRFCookieName)
+	sk := ""
+	if cookie != nil {
+		sk = cookie.Value
+	}
+
 	data := &view.AdminIndexData{
 		LayoutData: view.LayoutData{
-			PageTitle: "管理トップ",
+			PageTitle: "管理画面",
 			IsAuth:    true,
 		},
+		SessionKey: sk,
 	}
 	return app.templates.RenderWithLayout(c.Response(), "admin/layout.html", "admin/index.html", data)
 }
@@ -429,5 +403,68 @@ func (app *AppImpl) HandleAdminApiUploadImage(c echo.Context) error {
 	// URL-escape the filename for the response
 	return c.JSON(http.StatusOK, map[string]string{
 		"uploaded": fmt.Sprintf("/images/entry/%s", url.PathEscape(filename)),
+	})
+}
+
+func (app *AppImpl) HandleAdminApiEntries(c echo.Context) error {
+	limit, _ := strconv.Atoi(c.QueryParam("limit"))
+	if limit <= 0 {
+		limit = 50
+	}
+	offset, _ := strconv.Atoi(c.QueryParam("offset"))
+
+	entries, err := app.queries.ListEntriesAdmin(c.Request().Context(), model.ListEntriesAdminParams{
+		Limit:  int64(limit),
+		Offset: int64(offset),
+	})
+	if err != nil {
+		return err
+	}
+
+	total, _ := app.queries.CountAllEntries(c.Request().Context())
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"entries": entries,
+		"total":   total,
+	})
+}
+
+func (app *AppImpl) HandleAdminApiEntry(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid ID")
+	}
+
+	entry, err := app.queries.GetEntryById(c.Request().Context(), id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
+		}
+		return err
+	}
+
+	return c.JSON(http.StatusOK, entry)
+}
+
+func (app *AppImpl) HandleAdminApiJobs(c echo.Context) error {
+	limit, _ := strconv.Atoi(c.QueryParam("limit"))
+	if limit <= 0 {
+		limit = 50
+	}
+	offset, _ := strconv.Atoi(c.QueryParam("offset"))
+
+	jobs, err := app.workerQueries.ListJobs(c.Request().Context(), model.ListJobsParams{
+		Limit:  int64(limit),
+		Offset: int64(offset),
+	})
+	if err != nil {
+		return err
+	}
+
+	total, _ := app.workerQueries.CountJobs(c.Request().Context())
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"jobs":  jobs,
+		"total": total,
 	})
 }

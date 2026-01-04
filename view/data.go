@@ -45,6 +45,7 @@ type EditData struct {
 // AdminIndexData holds data for the admin index page
 type AdminIndexData struct {
 	LayoutData
+	SessionKey string
 }
 
 // FeedData holds data for the Atom feed

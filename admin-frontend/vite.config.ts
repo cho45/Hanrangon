@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [
     svelte({
       compilerOptions: {
-        customElement: true,
+        customElement: false,
       },
     }),
   ],
@@ -14,7 +14,7 @@ export default defineConfig({
     lib: {
       entry: resolve(__dirname, 'src/main.ts'),
       name: 'AdminFront',
-      fileName: 'admin-front',
+      fileName: () => 'admin-front.js',
       formats: ['es'],
     },
     outDir: '../static/admin',

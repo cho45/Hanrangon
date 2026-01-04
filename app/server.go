@@ -36,7 +36,7 @@ func NewServer(app App) *echo.Echo {
 	// Static files
 	e.Static("/css", filepath.Join(config.StaticDir, "css"))
 	e.Static("/js", filepath.Join(config.StaticDir, "js"))
-	e.Static("/admin", filepath.Join(config.StaticDir, "admin"))
+	e.Static("/static/admin", filepath.Join(config.StaticDir, "admin"))
 	e.Static("/images", filepath.Join(config.StaticDir, "images"))
 
 	// Public Routes
@@ -65,9 +65,15 @@ func NewServer(app App) *echo.Echo {
 	// Admin
 	e.GET("/admin/", app.HandleAdminIndex, app.RequireAuth)
 	e.GET("/admin/edit", app.HandleAdminEdit, app.RequireAuth)
+	e.GET("/admin/api/entries", app.HandleAdminApiEntries, app.RequireAuth)
+	e.GET("/admin/api/entry/:id", app.HandleAdminApiEntry, app.RequireAuth)
+	e.GET("/admin/api/jobs", app.HandleAdminApiJobs, app.RequireAuth)
 	e.POST("/admin/api/edit", app.HandleAdminApiEdit, app.RequireAuth)
 	e.POST("/admin/api/upload/image", app.HandleAdminApiUploadImage, app.RequireAuth)
 	e.GET("/admin/api/edit/progress", app.HandleAdminApiEditProgress, app.RequireAuth)
+
+	// Admin SPA catch-all
+	e.GET("/admin/*", app.HandleAdminIndex, app.RequireAuth)
 
 	// Catch-all route for entries by path (must be last)
 	e.GET("/*", app.HandlePath)

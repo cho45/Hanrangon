@@ -1,27 +1,15 @@
-<svelte:options
-  customElement={{
-    tag: 'app-editor',
-    props: {
-      entryJson: { attribute: 'entry-json' },
-      sk: { attribute: 'sk' }
-    }
-  }}
-/>
-
 <script lang="ts">
-  import { onMount, untrack } from 'svelte';
+  import { onMount } from 'svelte';
   import strftime from 'strftime';
 
-  // Svelte 5 のプロパティ受け取り
-  let { entryJson = '', sk = '' } = $props();
+  let { sk = '', id = null, onSave } = $props<{ sk: string, id: string | null, onSave: (location: string) => void }>();
 
   interface Entry {
-    id: string | null;
+    id: number | null;
     title: string;
     body: string;
     status: string | null;
-    publish_at?: number;
-    publish_at_epoch?: number;
+    publish_at?: string;
   }
 
   interface Backup {
@@ -31,45 +19,49 @@
   }
 
   let entry: Entry = $state({ id: null, title: '', body: '', status: null });
-  let form = $state({ id: null as string | null, title: '', body: '', publishLater: false });
+  let form = $state({ id: null as number | null, title: '', body: '', publishLater: false });
   let saving = $state(false);
+  let loading = $state(false);
   let progress = $state('');
   let existingBackup = $state<Backup | null>(null);
 
-  let titleInput: HTMLInputElement;
-  let bodyTextArea: HTMLTextAreaElement;
-  let tagDialog: HTMLDialogElement;
-  let restoreDialog: HTMLDialogElement;
+  let titleInput = $state<HTMLInputElement>(null!);
+  let bodyTextArea = $state<HTMLTextAreaElement>(null!);
+  let tagDialog = $state<HTMLDialogElement>(null!);
+  let restoreDialog = $state<HTMLDialogElement>(null!);
 
-  // 無限ループ防止のため、最後に処理した JSON を記録しておく
-  let lastProcessedJson = '';
-
-  $effect(() => {
-    // entryJson が変わったときだけ処理する
-    if (entryJson && entryJson !== lastProcessedJson) {
-      console.log('Processing entryJson...');
-      try {
-        const parsed = JSON.parse(entryJson);
-        
-        // untrack を使って、この更新自体が effect を再トリガーしないようにする
-        untrack(() => {
-          lastProcessedJson = entryJson;
-          entry = parsed;
-          form.id = parsed.id;
-          form.title = parsed.title;
-          form.body = parsed.body;
-          form.publishLater = parsed.status === 'scheduled';
-          checkBackup();
-        });
-      } catch (e) {
-        console.error('Failed to parse entryJson', e);
-      }
+  async function fetchEntry(id: string) {
+    loading = true;
+    try {
+      const res = await fetch(`/admin/api/entry/${id}`);
+      if (!res.ok) throw new Error('Failed to fetch entry');
+      const parsed = await res.json();
+      entry = parsed;
+      form.id = parsed.id;
+      form.title = parsed.title;
+      form.body = parsed.body;
+      form.publishLater = parsed.status === 'scheduled';
+      checkBackup();
+    } catch (e) {
+      console.error(e);
+      alert('エントリの取得に失敗しました');
+    } finally {
+      loading = false;
     }
-  });
+  }
 
   onMount(() => {
-    const loading = document.querySelector('.loading');
-    if (loading) loading.remove();
+    if (id) {
+      fetchEntry(id);
+    } else {
+      // New entry
+      entry = { id: null, title: '', body: '', status: 'public' };
+      form.id = null;
+      form.title = '';
+      form.body = '';
+      form.publishLater = false;
+      checkBackup();
+    }
 
     const interval = setInterval(saveBackup, 3000);
     return () => clearInterval(interval);
@@ -154,7 +146,7 @@
           progress = '完了';
           saving = false;
           eventSource.close();
-          location.href = msg.location;
+          onSave(msg.location);
           break;
         case 'error':
           progress = 'エラー: ' + msg.message;
@@ -253,6 +245,11 @@
   }
 </script>
 
+{#if loading}
+  <div class="loading-spinner-container">
+    <div class="loading-spinner"></div>
+  </div>
+{:else}
 <div class="container">
   <div class="main">
     <input
@@ -331,21 +328,16 @@
     <button type="button" class="submit-button" onclick={restoreBackup}>復元</button>
   </div>
 </dialog>
+{/if}
 
 <style>
-  :host {
-    display: block;
-    height: 100%;
-    width: 100%;
-    background: #f7f8f9;
-    font-family: sans-serif;
-  }
-
   .container {
     display: flex;
     flex-direction: column;
     height: 100%;
     width: 100%;
+    background: #f7f8f9;
+    font-family: sans-serif;
   }
 
   .main {
@@ -470,5 +462,25 @@
     height: 4px;
     background: #00acc1;
     transition: width 0.3s;
+  }
+
+  .loading-spinner-container {
+    padding: 100px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .loading-spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #00acc1;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    animation: spin 2s linear infinite;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
   }
 </style>

@@ -101,6 +101,14 @@ WHERE id = sqlc.arg(id) LIMIT 1;
 SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
 ORDER BY date DESC, created_at DESC;
 
+-- name: ListEntriesAdmin :many
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
+ORDER BY date DESC, created_at DESC
+LIMIT ? OFFSET ?;
+
+-- name: CountAllEntries :one
+SELECT count(*) FROM entries;
+
 -- name: FindScheduledEntriesToPublish :many
 SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
 WHERE status = 'scheduled' AND (publish_at IS NULL OR publish_at <= sqlc.arg(now))

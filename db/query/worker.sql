@@ -44,3 +44,10 @@ AND retry_count >= max_retries;
 
 -- name: CountJobs :one
 SELECT count(*) FROM jobs;
+
+-- name: ListJobs :many
+SELECT j.*, jt.name as job_type_name
+FROM jobs j
+JOIN job_types jt ON j.job_type_id = jt.id
+ORDER BY j.created_at DESC
+LIMIT ? OFFSET ?;

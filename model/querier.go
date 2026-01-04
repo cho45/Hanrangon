@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	CountAllEntries(ctx context.Context) (int64, error)
 	CountEntries(ctx context.Context) (int64, error)
 	CountEntriesByDate(ctx context.Context, date string) (int64, error)
 	CountJobs(ctx context.Context) (int64, error)
@@ -49,11 +50,13 @@ type Querier interface {
 	// ensure string return and we cannot change the schema to TEXT because we reuse
 	// existing data files.
 	ListEntries(ctx context.Context, arg ListEntriesParams) ([]ListEntriesRow, error)
+	ListEntriesAdmin(ctx context.Context, arg ListEntriesAdminParams) ([]ListEntriesAdminRow, error)
 	ListEntriesByCategory(ctx context.Context, arg ListEntriesByCategoryParams) ([]ListEntriesByCategoryRow, error)
 	ListEntriesByDates(ctx context.Context, dates []string) ([]ListEntriesByDatesRow, error)
 	ListEntriesByIds(ctx context.Context, ids []int64) ([]ListEntriesByIdsRow, error)
 	ListEntriesByYearMonthDay(ctx context.Context, arg ListEntriesByYearMonthDayParams) ([]ListEntriesByYearMonthDayRow, error)
 	ListImagesByEntryID(ctx context.Context, entryID int64) ([]Image, error)
+	ListJobs(ctx context.Context, arg ListJobsParams) ([]ListJobsRow, error)
 	ListRelatedEntries(ctx context.Context, entryID int64) ([]ListRelatedEntriesRow, error)
 	ListSimilarImages(ctx context.Context, arg ListSimilarImagesParams) ([]ListSimilarImagesRow, error)
 	ListTrackbackEntries(ctx context.Context, entryID sql.NullInt64) ([]ListTrackbackEntriesRow, error)

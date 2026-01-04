@@ -12,6 +12,17 @@ import (
 	"time"
 )
 
+const countAllEntries = `-- name: CountAllEntries :one
+SELECT count(*) FROM entries
+`
+
+func (q *Queries) CountAllEntries(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countAllEntries)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countEntries = `-- name: CountEntries :one
 SELECT count(*) FROM entries WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP)
 `
@@ -464,6 +475,66 @@ func (q *Queries) ListEntries(ctx context.Context, arg ListEntriesParams) ([]Lis
 	var items []ListEntriesRow
 	for rows.Next() {
 		var i ListEntriesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Body,
+			&i.FormattedBody,
+			&i.Path,
+			&i.Format,
+			&i.Date,
+			&i.CreatedAt,
+			&i.ModifiedAt,
+			&i.PublishAt,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEntriesAdmin = `-- name: ListEntriesAdmin :many
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
+ORDER BY date DESC, created_at DESC
+LIMIT ? OFFSET ?
+`
+
+type ListEntriesAdminParams struct {
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+type ListEntriesAdminRow struct {
+	ID            int64        `json:"id"`
+	Title         string       `json:"title"`
+	Body          string       `json:"body"`
+	FormattedBody string       `json:"formatted_body"`
+	Path          string       `json:"path"`
+	Format        string       `json:"format"`
+	Date          string       `json:"date"`
+	CreatedAt     time.Time    `json:"created_at"`
+	ModifiedAt    time.Time    `json:"modified_at"`
+	PublishAt     sql.NullTime `json:"publish_at"`
+	Status        string       `json:"status"`
+}
+
+func (q *Queries) ListEntriesAdmin(ctx context.Context, arg ListEntriesAdminParams) ([]ListEntriesAdminRow, error) {
+	rows, err := q.db.QueryContext(ctx, listEntriesAdmin, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListEntriesAdminRow
+	for rows.Next() {
+		var i ListEntriesAdminRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,

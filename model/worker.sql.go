@@ -170,6 +170,70 @@ func (q *Queries) GrabJob(ctx context.Context, arg GrabJobParams) error {
 	return err
 }
 
+const listJobs = `-- name: ListJobs :many
+SELECT j.id, j.job_type_id, j.arg, j.uniqkey, j.retry_count, j.max_retries, j.created_at, j.run_after, j.grabbed_at, j.status, j.error_message, jt.name as job_type_name
+FROM jobs j
+JOIN job_types jt ON j.job_type_id = jt.id
+ORDER BY j.created_at DESC
+LIMIT ? OFFSET ?
+`
+
+type ListJobsParams struct {
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+type ListJobsRow struct {
+	ID           int64          `json:"id"`
+	JobTypeID    int64          `json:"job_type_id"`
+	Arg          string         `json:"arg"`
+	Uniqkey      sql.NullString `json:"uniqkey"`
+	RetryCount   int64          `json:"retry_count"`
+	MaxRetries   int64          `json:"max_retries"`
+	CreatedAt    time.Time      `json:"created_at"`
+	RunAfter     time.Time      `json:"run_after"`
+	GrabbedAt    sql.NullTime   `json:"grabbed_at"`
+	Status       string         `json:"status"`
+	ErrorMessage sql.NullString `json:"error_message"`
+	JobTypeName  string         `json:"job_type_name"`
+}
+
+func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]ListJobsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listJobs, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListJobsRow
+	for rows.Next() {
+		var i ListJobsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.JobTypeID,
+			&i.Arg,
+			&i.Uniqkey,
+			&i.RetryCount,
+			&i.MaxRetries,
+			&i.CreatedAt,
+			&i.RunAfter,
+			&i.GrabbedAt,
+			&i.Status,
+			&i.ErrorMessage,
+			&i.JobTypeName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markJobCompleted = `-- name: MarkJobCompleted :exec
 DELETE FROM jobs WHERE id = ?
 `
