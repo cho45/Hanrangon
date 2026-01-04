@@ -10,7 +10,9 @@
 	<id>tag:lowreal.net,2005:feed</id>
 	{{range .Entries}}
 	<entry>
-		<title>{{.Title}}</title>
+		{{$cleanTitle := cleanTitle .Title}}
+		{{if eq $cleanTitle ""}}{{$cleanTitle = "✖"}}{{end}}
+		<title>{{$cleanTitle}}</title>
 		<link href="https://lowreal.net/{{.Path}}"/>
 		<id>tag:lowreal.net,2005:entry:{{.ID}}</id>
 		<updated>{{.ModifiedAt.Format "2006-01-02T15:04:05Z07:00"}}</updated>
