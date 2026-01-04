@@ -9,11 +9,10 @@ require (
 	github.com/corona10/goimagehash v1.1.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/sessions v1.4.0
-	github.com/ikawaha/kagome-dict/ipa v1.2.5
-	github.com/ikawaha/kagome/v2 v2.10.2
 	github.com/labstack/echo-contrib v0.17.4
 	github.com/labstack/echo/v4 v4.14.0
 	github.com/mattn/go-sqlite3 v1.14.32
+	github.com/nyarla/go-japanese-segmenter v0.1.0
 	github.com/sergi/go-diff v1.4.0
 	github.com/stretchr/testify v1.11.1
 	github.com/yuin/goldmark v1.7.13
@@ -31,7 +30,6 @@ require (
 	github.com/gorilla/context v1.1.2 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/huandu/xstrings v1.5.0 // indirect
-	github.com/ikawaha/kagome-dict v1.1.6 // indirect
 	github.com/labstack/gommon v0.4.2 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect

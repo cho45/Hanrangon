@@ -4,39 +4,33 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"log"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/cho45/hanrangon/model"
-	"github.com/ikawaha/kagome-dict/ipa"
-	"github.com/ikawaha/kagome/v2/tokenizer"
+	"github.com/nyarla/go-japanese-segmenter/dicts/tinyseg"
+	"github.com/nyarla/go-japanese-segmenter/segmenter"
 )
 
 // Calculator handles TF-IDF calculations
 type Calculator struct {
 	db      *sql.DB
 	queries *model.Queries
-	tok     *tokenizer.Tokenizer
 }
 
 // NewCalculator creates a new Calculator
 func NewCalculator(db *sql.DB, queries *model.Queries) (*Calculator, error) {
-	// Initialize kagome tokenizer with IPA dictionary
-	tok, err := tokenizer.New(ipa.Dict())
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize tokenizer: %w", err)
-	}
-
 	return &Calculator{
 		db:      db,
 		queries: queries,
-		tok:     tok,
 	}, nil
 }
 
 // ExtractTerms extracts terms from title and body text
-// It removes HTML tags, tokenizes Japanese text with kagome, and splits alphanumeric words
+// It removes HTML tags, tokenizes Japanese text with go-japanese-segmenter, and splits alphanumeric words
 func (c *Calculator) ExtractTerms(title, body string) map[string]int {
 	terms := make(map[string]int)
 
@@ -46,30 +40,35 @@ func (c *Calculator) ExtractTerms(title, body string) map[string]int {
 	// Remove HTML tags
 	text = c.removeHTMLTags(text)
 
-	// Extract Japanese terms with kagome
-	tokens := c.tok.Tokenize(text)
-	for _, token := range tokens {
-		features := token.Features()
-		if len(features) < 2 {
-			continue
+	// Extract Japanese terms with go-japanese-segmenter (TinySegmenter based)
+	src := strings.NewReader(text)
+	dst := new(strings.Builder)
+	dict := segmenter.BiasCalculatorFunc(tinyseg.CalculateBias)
+	seg := segmenter.New(dst, src)
+
+	for {
+		err := seg.Segment(dict)
+		if err != nil {
+			if err != io.EOF {
+				log.Printf("error during segmentation: %v", err)
+			}
+			break
 		}
 
-		// Extract nouns, verbs, and adjectives
-		pos := features[0] // Part of speech
-		if pos == "名詞" || pos == "動詞" || pos == "形容詞" {
-			surface := token.Surface
-			if len(surface) > 1 { // Skip single character terms
-				terms[surface]++
-			}
+		surface := strings.TrimSpace(dst.String())
+		// Only use terms with 2 or more characters
+		if utf8.RuneCountInString(surface) >= 2 {
+			terms[surface]++
 		}
+		dst.Reset()
 	}
 
 	// Extract alphanumeric words (English, numbers)
 	alphanumericPattern := regexp.MustCompile(`[a-zA-Z0-9]+`)
 	matches := alphanumericPattern.FindAllString(text, -1)
 	for _, match := range matches {
-		if len(match) > 1 { // Skip single character terms
-			match = strings.ToLower(match)
+		match = strings.ToLower(match)
+		if utf8.RuneCountInString(match) >= 2 {
 			terms[match]++
 		}
 	}

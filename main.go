@@ -123,8 +123,9 @@ func mustOpenDB(driver, path string) *sql.DB {
 		log.Fatalf("failed to open db (%s): %v", dsn, err)
 	}
 
-	db.SetMaxOpenConns(5)
-	db.SetMaxIdleConns(2)
+	// 接続数を制限
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
 	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
 		log.Printf("warn: failed to set WAL mode for %s: %v", path, err)
 	}
