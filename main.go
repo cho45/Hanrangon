@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	_ "net/http/pprof"
+
 	"github.com/cho45/hanrangon/app"
 	"github.com/cho45/hanrangon/jobqueue"
 	"github.com/cho45/hanrangon/jobs"
@@ -23,6 +25,10 @@ import (
 )
 
 func main() {
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+
 	// 1. Determine subcommand
 	cmd := "serve"
 	subArgs := os.Args[1:]
@@ -117,7 +123,8 @@ func mustOpenDB(driver, path string) *sql.DB {
 		log.Fatalf("failed to open db (%s): %v", dsn, err)
 	}
 
-	db.SetMaxOpenConns(25)
+	db.SetMaxOpenConns(5)
+	db.SetMaxIdleConns(2)
 	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
 		log.Printf("warn: failed to set WAL mode for %s: %v", path, err)
 	}
