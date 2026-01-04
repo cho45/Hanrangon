@@ -4,6 +4,8 @@ set -e
 # Change to the project root directory
 cd "$(dirname "$0")/.."
 
+make
+
 ./deploy/compress-static.sh
 
 echo "Restarting hanrangon.service..."
