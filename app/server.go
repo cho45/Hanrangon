@@ -60,7 +60,8 @@ func NewServer(app App) *echo.Echo {
 
 	// Auth
 	e.GET("/login", app.HandleLogin)
-	e.POST("/login", app.HandleLoginPost)
+	// Rate limit login attempts to 1 request per second per IP
+	e.POST("/login", app.HandleLoginPost, middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(1)))
 	e.GET("/logout", app.HandleLogout)
 
 	// Admin
