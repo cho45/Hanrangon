@@ -77,10 +77,24 @@ func (app *AppImpl) HandleEdit(c echo.Context) error {
 	}
 
 	data := &view.EditData{
+		LayoutData: view.LayoutData{
+			PageTitle: "エントリ編集",
+			IsAuth:    true,
+		},
 		EntryJSON:  string(entryBytes),
 		SessionKey: sk,
 	}
-	return app.templates.Render(c.Response(), "edit.html", data)
+	return app.templates.RenderWithLayout(c.Response(), "admin/layout.html", "admin/edit.html", data)
+}
+
+func (app *AppImpl) HandleAdminIndex(c echo.Context) error {
+	data := &view.AdminIndexData{
+		LayoutData: view.LayoutData{
+			PageTitle: "管理トップ",
+			IsAuth:    true,
+		},
+	}
+	return app.templates.RenderWithLayout(c.Response(), "admin/layout.html", "admin/index.html", data)
 }
 
 func (app *AppImpl) HandleLogin(c echo.Context) error {
@@ -99,7 +113,7 @@ func (app *AppImpl) HandleLogin(c echo.Context) error {
 		ReturnPath: returnPath,
 		SessionKey: sk,
 	}
-	return app.templates.Render(c.Response(), "login.html", data)
+	return app.templates.Render(c.Response(), "admin/login.html", data)
 }
 
 func (app *AppImpl) HandleLoginPost(c echo.Context) error {
@@ -130,7 +144,7 @@ func (app *AppImpl) HandleLoginPost(c echo.Context) error {
 		ErrorMsg:   "Invalid Username or Password",
 		ReturnPath: returnPath,
 	}
-	return app.templates.Render(c.Response(), "login.html", data)
+	return app.templates.Render(c.Response(), "admin/login.html", data)
 }
 
 func (app *AppImpl) HandleLogout(c echo.Context) error {

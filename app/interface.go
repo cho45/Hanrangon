@@ -57,6 +57,7 @@ type App interface {
 	HandleRootParam(c echo.Context) error
 
 	// Admin handlers
+	HandleAdminIndex(c echo.Context) error
 	HandleEdit(c echo.Context) error
 	HandleLogin(c echo.Context) error
 	HandleLoginPost(c echo.Context) error

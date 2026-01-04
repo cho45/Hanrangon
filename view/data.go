@@ -29,6 +29,7 @@ type ArchiveData struct {
 
 // LoginData holds data for the login page
 type LoginData struct {
+	LayoutData
 	ErrorMsg   string
 	ReturnPath string
 	SessionKey string
@@ -36,8 +37,14 @@ type LoginData struct {
 
 // EditData holds data for the edit page
 type EditData struct {
+	LayoutData
 	EntryJSON  string
 	SessionKey string
+}
+
+// AdminIndexData holds data for the admin index page
+type AdminIndexData struct {
+	LayoutData
 }
 
 // FeedData holds data for the Atom feed

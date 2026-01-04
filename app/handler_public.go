@@ -85,9 +85,19 @@ func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 		}
 	}
 
+	var pageTitle string
+	if dd != "" {
+		pageTitle = fmt.Sprintf("%s年%s月%s日", yyyy, mm, dd)
+	} else if mm != "" {
+		pageTitle = fmt.Sprintf("%s年%s月", yyyy, mm)
+	} else {
+		pageTitle = fmt.Sprintf("%s年", yyyy)
+	}
+
 	data := &view.IndexData{
 		LayoutData: view.LayoutData{
-			IsAuth: app.IsAuth(c),
+			PageTitle: pageTitle,
+			IsAuth:    app.IsAuth(c),
 		},
 		Entries:  entries,
 		IsDetail: false,
@@ -152,10 +162,16 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 		nextPage = fmt.Sprintf("/.page/%s/%d", nextDate, limit)
 	}
 
+	var pageTitle string
+	if dateStr != "" {
+		pageTitle = "過去の記事"
+	}
+
 	if len(dates) == 0 {
 		data := &view.IndexData{
 			LayoutData: view.LayoutData{
-				IsAuth: app.IsAuth(c),
+				PageTitle: pageTitle,
+				IsAuth:    app.IsAuth(c),
 			},
 			Entries:  []model.Entry{},
 			IsDetail: false,
@@ -186,7 +202,8 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 	// HTMLレンダリング
 	data := &view.IndexData{
 		LayoutData: view.LayoutData{
-			IsAuth: app.IsAuth(c),
+			PageTitle: pageTitle,
+			IsAuth:    app.IsAuth(c),
 		},
 		Entries:  entries,
 		IsDetail: false,
@@ -249,7 +266,8 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 
 	data := &view.IndexData{
 		LayoutData: view.LayoutData{
-			IsAuth: app.IsAuth(c),
+			PageTitle: category + " カテゴリ",
+			IsAuth:    app.IsAuth(c),
 		},
 		Entries:  entries,
 		IsDetail: false,
@@ -547,9 +565,10 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 		nextPtr = &n
 	}
 
+	cleanTitle, _ := view.ParseTitle(entry.Title)
 	data := &view.IndexData{
 		LayoutData: view.LayoutData{
-			PageTitle: entry.Title,
+			PageTitle: cleanTitle,
 			IsAuth:    app.IsAuth(c),
 		},
 		Entries:    []model.Entry{entry},

@@ -45,6 +45,7 @@ func NewServer(app App) *echo.Echo {
 	e.GET("/logout", app.HandleLogout)
 
 	// Admin
+	e.GET("/admin/", app.HandleAdminIndex, app.RequireAuth)
 	e.GET("/edit", app.HandleEdit, app.RequireAuth)
 
 	// Public Routes
