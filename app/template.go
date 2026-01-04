@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -159,7 +160,11 @@ func (t *Templates) RenderWithLayout(w io.Writer, layoutName, contentName string
 		return err
 	}
 
-	return layoutTmpl.Execute(w, data)
+	err = layoutTmpl.Execute(w, data)
+	if err != nil {
+		log.Printf("Template execution error (RenderWithLayout): %v", err)
+	}
+	return err
 }
 
 // Render renders a template by name
@@ -168,7 +173,11 @@ func (t *Templates) Render(w io.Writer, name string, data interface{}) error {
 	if err != nil {
 		return err
 	}
-	return templates.ExecuteTemplate(w, name, data)
+	err = templates.ExecuteTemplate(w, name, data)
+	if err != nil {
+		log.Printf("Template execution error (Render): %v", err)
+	}
+	return err
 }
 
 // formatDate formats a date string from "2006-01-02" to "2006年 01月 02日"
