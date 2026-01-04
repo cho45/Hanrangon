@@ -19,7 +19,15 @@
   }
 
   let entry: Entry = $state({ id: null, title: '', body: '', status: null });
-  let form = $state({ id: null as number | null, title: '', body: '', publishLater: false });
+  let form = $state({
+    id: null as number | null,
+    title: '',
+    body: '',
+    format: 'Hatena',
+    status: 'public',
+    publishLater: false,
+    publishAt: ''
+  });
   let saving = $state(false);
   let loading = $state(false);
   let progress = $state('');
@@ -40,7 +48,14 @@
       form.id = parsed.id;
       form.title = parsed.title;
       form.body = parsed.body;
+      form.format = parsed.format || 'Hatena';
+      form.status = parsed.status;
       form.publishLater = parsed.status === 'scheduled';
+      if (parsed.publish_at?.Valid) {
+        form.publishAt = strftime('%Y-%m-%dT%H:%M', new Date(parsed.publish_at.Time));
+      } else {
+        form.publishAt = strftime('%Y-%m-%dT%H:%M', new Date(Date.now() + 86400 * 30 * 1000));
+      }
       checkBackup();
     } catch (e) {
       console.error(e);
@@ -59,7 +74,10 @@
       form.id = null;
       form.title = '';
       form.body = '';
+      form.format = 'Hatena';
+      form.status = 'public';
       form.publishLater = false;
+      form.publishAt = strftime('%Y-%m-%dT%H:%M', new Date(Date.now() + 86400 * 30 * 1000));
       checkBackup();
     }
 
@@ -97,14 +115,15 @@
     progress = 'リクエスト中';
 
     const data = new FormData();
-    data.set('id', form.id || '');
+    data.set('id', form.id ? String(form.id) : '');
     data.set('title', form.title);
     data.set('body', form.body);
+    data.set('format', form.format);
     data.set('sk', sk);
 
     if (form.publishLater) {
-      const epoch = entry.publish_at_epoch || entry.publish_at || (Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 30));
-      data.set('publish_at', String(epoch));
+      const date = new Date(form.publishAt);
+      data.set('publish_at', date.toISOString());
       data.set('status', 'scheduled');
     } else {
       data.set('status', 'public');
@@ -262,6 +281,11 @@
     <div class="toolbar">
       <button type="button" onclick={() => tagDialog.showModal()}>🏷️ タグ</button>
       <button type="button" onclick={openUploadDialog}>📷 写真</button>
+      <select bind:value={form.format} class="format-select">
+        {#each ['Hatena', 'Markdown', 'HTML', 'tDiary'] as fmt}
+          <option value={fmt}>{fmt}</option>
+        {/each}
+      </select>
     </div>
     <div class="body-container">
       <textarea
@@ -281,10 +305,13 @@
     {/if}
     <div class="buttons">
       <div class="options">
-        <label>
+        <label title="チェックを入れると指定した日時に公開されます（公開済みの記事も予約に戻せます）">
           <input type="checkbox" bind:checked={form.publishLater}>
           公開を遅延
         </label>
+        {#if form.publishLater}
+          <input type="datetime-local" bind:value={form.publishAt} class="datetime-input">
+        {/if}
       </div>
       <button
         type="button"
@@ -366,6 +393,13 @@
     cursor: pointer;
   }
 
+  .format-select {
+    margin-left: auto;
+    border: 1px solid #dfe5e7;
+    border-radius: 3px;
+    padding: 0 8px;
+  }
+
   input[type="text"], textarea {
     margin: 0;
     font-family: inherit;
@@ -403,7 +437,16 @@
     padding-bottom: 16px;
     display: flex;
     gap: 16px;
+    align-items: center;
   }
+
+  .datetime-input {
+    border: 1px solid #dfe5e7;
+    border-radius: 3px;
+    padding: 4px 8px;
+    font-family: inherit;
+  }
+
 
   .submit-button {
     color: #fff;
