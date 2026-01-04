@@ -9,7 +9,7 @@
     retry_count: number;
     created_at: string;
     run_after: string;
-    error_message: string;
+    error_message: { String: string; Valid: boolean };
   }
 
   let jobs = $state<Job[]>([]);
@@ -34,6 +34,20 @@
 
   onMount(fetchJobs);
 
+  function next() {
+    if (offset + limit < total) {
+      offset += limit;
+      fetchJobs();
+    }
+  }
+
+  function prev() {
+    if (offset - limit >= 0) {
+      offset -= limit;
+      fetchJobs();
+    }
+  }
+
   function formatTime(iso: string) {
     return strftime('%Y-%m-%d %H:%M:%S', new Date(iso));
   }
@@ -42,7 +56,12 @@
 <div class="job-list">
   <div class="header">
     <h2>ジョブ一覧 ({total})</h2>
-    <button class="refresh-btn" onclick={fetchJobs}>更新</button>
+    <div class="pagination">
+      <button disabled={offset === 0 || loading} onclick={prev}>前へ</button>
+      <span>{offset + 1} - {Math.min(offset + limit, total)} / {total}</span>
+      <button disabled={offset + limit >= total || loading} onclick={next}>次へ</button>
+      <button class="refresh-btn" onclick={fetchJobs} style="margin-left: 10px;">更新</button>
+    </div>
   </div>
 
   {#if loading}
@@ -70,8 +89,8 @@
             <td>{job.retry_count}</td>
             <td class="time">{formatTime(job.created_at)}</td>
             <td class="error">
-              {#if job.error_message}
-                <div class="error-text" title={job.error_message}>{job.error_message}</div>
+              {#if job.error_message?.Valid}
+                <div class="error-text" title={job.error_message.String}>{job.error_message.String}</div>
               {/if}
             </td>
           </tr>
@@ -93,6 +112,12 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 20px;
+  }
+
+  .pagination {
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
 
   .refresh-btn {
