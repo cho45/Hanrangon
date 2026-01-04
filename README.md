@@ -80,9 +80,23 @@ Hanrangon は以下のサブコマンドをサポートしています。
 go run -tags "sqlite_math_functions" . update-password
 ```
 
+## 管理画面 (Admin Panel)
+
+SPA (Single Page Application) として実装されたモダンな管理画面を提供します。
+
+- **技術スタック:** Svelte 5, Vite, TypeScript
+- **主な機能:**
+    - **エントリ管理:** 記事の作成・編集・削除。オートセーブ機能や画像アップロード、公開予約に対応。
+    - **ジョブ監視:** 内蔵ジョブキューの実行状況、エラーログの確認。
+    - **システム情報 (Info):** アプリケーションのハッシュ、稼働時間、メモリ使用量、構成設定の確認。
+- **開発とビルド:**
+    - `admin-frontend/` ディレクトリで `npm run dev` を実行することで HMR (Hot Module Replacement) 有効な開発が可能です。
+    - `npm run build` を実行すると、ビルドされた成果物が `static/admin/` に出力され、Go サーバー経由で配信されます。
+
 ## Project Structure
 
 - `app/`: アプリケーションのコアロジック（ハンドラー、サーバー構成、設定）。
+- `admin-frontend/`: Svelte 5 による SPA 管理画面のソースコード。
 - `model/`: `sqlc` によって生成されたデータベースモデルとクエリ。
 - `view/`: `html/template` による HTML/XML テンプレート。
 - `db/`: SQL スキーマ (`schema/`) とクエリ定義 (`query/`)。

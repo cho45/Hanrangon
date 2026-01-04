@@ -65,6 +65,7 @@ type App interface {
 	HandleAdminApiEntries(c echo.Context) error
 	HandleAdminApiEntry(c echo.Context) error
 	HandleAdminApiJobs(c echo.Context) error
+	HandleAdminApiInfo(c echo.Context) error
 	HandleAdminApiEdit(c echo.Context) error
 	HandleAdminApiUploadImage(c echo.Context) error
 	HandleAdminApiEditProgress(c echo.Context) error

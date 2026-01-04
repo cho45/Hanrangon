@@ -3,6 +3,7 @@
   import EntryList from './components/EntryList.svelte';
   import AppEditor from './components/AppEditor.svelte';
   import JobList from './components/JobList.svelte';
+  import InfoPage from './components/InfoPage.svelte';
 
   let currentPath = $state(window.location.pathname);
   let searchParams = $state(new URLSearchParams(window.location.search));
@@ -34,6 +35,7 @@
   const page = $derived.by(() => {
     if (currentPath === '/admin/edit') return 'edit';
     if (currentPath === '/admin/jobs') return 'jobs';
+    if (currentPath === '/admin/info') return 'info';
     return 'list';
   });
 
@@ -45,6 +47,7 @@
     <a href="/admin/" class:active={page === 'list'} onclick={(e) => navigate('/admin/', e)}>エントリ一覧</a>
     <a href="/admin/edit" class:active={page === 'edit' && !entryId} onclick={(e) => navigate('/admin/edit', e)}>新規作成</a>
     <a href="/admin/jobs" class:active={page === 'jobs'} onclick={(e) => navigate('/admin/jobs', e)}>ジョブ一覧</a>
+    <a href="/admin/info" class:active={page === 'info'} onclick={(e) => navigate('/admin/info', e)}>情報</a>
   </nav>
 
   <main class="content">
@@ -52,6 +55,8 @@
       <AppEditor {sk} id={entryId} onSave={(loc) => window.location.href = loc} />
     {:else if page === 'jobs'}
       <JobList {sk} />
+    {:else if page === 'info'}
+      <InfoPage />
     {:else}
       <EntryList {sk} onEdit={(id) => navigate(`/admin/edit?id=${id}`)} />
     {/if}

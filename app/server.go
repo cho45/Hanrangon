@@ -70,6 +70,7 @@ func NewServer(app App) *echo.Echo {
 	e.GET("/admin/api/entries", app.HandleAdminApiEntries, app.RequireAuth)
 	e.GET("/admin/api/entry/:id", app.HandleAdminApiEntry, app.RequireAuth)
 	e.GET("/admin/api/jobs", app.HandleAdminApiJobs, app.RequireAuth)
+	e.GET("/admin/api/info", app.HandleAdminApiInfo, app.RequireAuth)
 	e.POST("/admin/api/edit", app.HandleAdminApiEdit, app.RequireAuth)
 	e.POST("/admin/api/upload/image", app.HandleAdminApiUploadImage, app.RequireAuth)
 	e.GET("/admin/api/edit/progress", app.HandleAdminApiEditProgress, app.RequireAuth)

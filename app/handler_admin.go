@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -468,5 +469,44 @@ func (app *AppImpl) HandleAdminApiJobs(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"jobs":  jobs,
 		"total": total,
+	})
+}
+
+var startTime = time.Now()
+
+func (app *AppImpl) HandleAdminApiInfo(c echo.Context) error {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	// Sanitize config
+	configMap := map[string]interface{}{
+		"data_db_path":      app.config.DataDBPath,
+		"images_db_path":    app.config.ImagesDBPath,
+		"tfidf_db_path":     app.config.TFIDFDBPath,
+		"worker_db_path":    app.config.WorkerDBPath,
+		"static_dir":        app.config.StaticDir,
+		"username":          app.config.Username,
+		"upload_dir":        app.config.UploadDir,
+		"upload_url_prefix": app.config.UploadURLPrefix,
+		"base_url":          app.config.BaseURL,
+		"listen":            app.config.Listen,
+		"environment":       app.config.Environment,
+		"node_path":         app.config.NodePath,
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"is_development": app.config.IsDevelopment(),
+		"app_hash":       AppHash,
+		"config":         configMap,
+		"debug_info": map[string]interface{}{
+			"go_version":      runtime.Version(),
+			"num_goroutine":   runtime.NumGoroutine(),
+			"start_time":      startTime.Format(time.RFC3339),
+			"uptime":          time.Since(startTime).String(),
+			"mem_alloc":       m.Alloc,
+			"mem_total_alloc": m.TotalAlloc,
+			"mem_sys":         m.Sys,
+			"num_gc":          m.NumGC,
+		},
 	})
 }
