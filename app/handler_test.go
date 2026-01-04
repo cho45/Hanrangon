@@ -556,8 +556,8 @@ func TestHandleEdit(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Errorf("want status 200, got %d", rec.Code)
 		}
-		if !strings.Contains(rec.Body.String(), "<app-editor") {
-			t.Errorf("body does not contain app-editor element")
+		if !strings.Contains(rec.Body.String(), `id="admin-root"`) {
+			t.Errorf("body does not contain admin-root element")
 		}
 	})
 }
