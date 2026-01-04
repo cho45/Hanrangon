@@ -1,5 +1,7 @@
 # Hanrangon (Go Implementation)
 
+[![CI](https://github.com/cho45/hanrangon/actions/workflows/ci.yml/badge.svg)](https://github.com/cho45/hanrangon/actions/workflows/ci.yml)
+
 Perl 版 Nogag (氾濫原) の Go (Golang) によるリライトプロジェクト。
 "Hanra-n-Go-n" (氾濫原 + Go).
 
