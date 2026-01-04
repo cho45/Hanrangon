@@ -5,7 +5,7 @@ GO_TAGS=sqlite_math_functions
 
 all: build
 
-build:
+build: fmt
 	go build -tags "$(GO_TAGS)" -o $(BINARY_NAME) main.go
 
 run:

@@ -23,6 +23,27 @@ cp config.toml.sample config.toml
 head /dev/random| sha256sum
 ```
 
+
+config.toml
+```
+data_db_path = "var/db/data.db"
+images_db_path = "var/db/images.db"
+tfidf_db_path = "var/db/tfidf.db"
+worker_db_path = "var/db/worker.db"
+static_dir = "static"
+upload_dir = "/data/public/images"
+
+# Network
+listen = ":5000"
+base_url = "https://lowreal.net"
+
+# Authentication
+username = "admin"
+password = "changeme"
+session_secret = "your-random-secret-here"
+
+```
+
 ### 1.3 Node.js 依存関係のインストール
 ```bash
 cd postprocess
@@ -32,7 +53,7 @@ cd ..
 
 ### 1.4 バイナリのビルド
 ```bash
-go build -o hanrangon .
+make
 ```
 
 ## 2. データベースの初期化・移行
@@ -59,11 +80,6 @@ rm -f var/db/tfidf.db
 sqlite3 var/db/tfidf.db < db/schema/tfidf.sql
 ```
 
-## 3. 物理リソースの移行
-
-### 3.1 画像ファイルの同期
-
-XXX: /data/public/images に保存されているのをそのままつかう
 
 ## 4. インデックスの再構築
 

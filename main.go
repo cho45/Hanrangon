@@ -85,6 +85,11 @@ func main() {
 			log.Fatalf("recalc-tfidf failed: %v", err)
 		}
 
+	case "backup":
+		if err := subcommands.Backup(ctx, application, subArgs); err != nil {
+			log.Fatalf("backup failed: %v", err)
+		}
+
 	default:
 		log.Fatalf("unknown command: %s", cmd)
 	}
