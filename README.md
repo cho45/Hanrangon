@@ -6,11 +6,28 @@ Perl 版 Nogag (氾濫原) の Go (Golang) によるリライトプロジェク�
 ## 特徴
 
 - **高速・省メモリ:** Go によるネイティブ実装。
-- **SQLite 活用:** Data, Images, TF-IDF, Worker の 4 つのデータベースに分離して管理。
+- **SQLite 活用:** Data, Images, TF-IDF, Worker の 4 つに分離。記事本体 (Data) のバックアップを最小限に抑えつつ、再生成可能なインデックスやメタデータによるファイル肥大化の影響を隔離。
 - **マルチフォーマット:** はてな記法、tDiary 記法、Markdown、HTML に対応。
-- **高度なテキスト処理:** Kagome による分かち書きと SQL を活用した高速な TF-IDF 計算（関連記事抽出）。
-- **モダンなレンダリング:** `html/template` によるサーバーサイドレンダリングと、Node.js による MathJax/Syntax Highlight のポストプロセス。
-- **内蔵ジョブキュー:** アプリケーションと統合された SQLite ベースの非同期ジョブ実行システム。
+- **関連記事表示:** `go-japanese-segmenter` (TinySegmenter) による分かち書きと SQL を活用した高速な TF-IDF 計算。
+- **ポストプロセス:** Node.js による記事保存時の事前整形。MathJax や Highlight.js などの成熟した JS エコシステムを活用しつつ、サーバー側で静的な HTML へ変換しておくことで、閲覧時のクライアント負荷を排除しコンテンツの最速表示を実現。
+- **内蔵ジョブキュー:** SQLite ベースの非同期実行システム。
+外部ミドルウェア（Redis 等）を不要にし、単一バイナリと DB ファイルのみで完結する運用性を追求。
+
+## Architecture
+
+システムの構造と処理フロー。
+
+### Backend Architecture
+システムのコンポーネント構成と非同期ジョブのフロー。
+![Backend Architecture](docs/arch_diagram.png)
+
+### Frontend Architecture
+公開側（SSR）と管理画面（Svelte SPA）の構成。
+![Frontend Architecture](docs/frontend_arch_diagram.png)
+
+### Content Pipeline
+記事の投稿からフォーマット、ポストプロセス、保存、そして進捗通知（SSE）の流れ。
+![Content Pipeline](docs/content_pipeline_diagram.png)
 
 ## Prerequisites
 
@@ -50,7 +67,7 @@ make generate
 
 ### 3. 設定
 
-`config.toml.sample` を `config.toml` にコピーし、必要に応じて編集します。
+`config.toml.sample` を `config.toml` にコピーして編集。
 
 ```bash
 cp config.toml.sample config.toml
@@ -62,11 +79,11 @@ cp config.toml.sample config.toml
 make run
 ```
 
-デフォルトで http://localhost:5555 でリッスンします。
+デフォルトで http://localhost:5555 で動作。
 
 ## Subcommands
 
-Hanrangon は以下のサブコマンドをサポートしています。
+以下のサブコマンドをサポート。
 
 - `serve`: サーバーの起動（デフォルト）
 - `reformat`: 全記事の再フォーマット
@@ -77,21 +94,22 @@ Hanrangon は以下のサブコマンドをサポートしています。
 
 実行例:
 ```bash
-go run -tags "sqlite_math_functions" . update-password
+make
+./hanrangon update-password
 ```
 
 ## 管理画面 (Admin Panel)
 
-SPA (Single Page Application) として実装されたモダンな管理画面を提供します。
+Svelte による SPA 管理画面。
 
 - **技術スタック:** Svelte 5, Vite, TypeScript
 - **主な機能:**
-    - **エントリ管理:** 記事の作成・編集・削除。オートセーブ機能や画像アップロード、公開予約に対応。
+    - **エントリ管理:** 記事の作成・編集・削除。オートセーブ、画像アップロード、公開予約に対応。
     - **ジョブ監視:** 内蔵ジョブキューの実行状況、エラーログの確認。
     - **システム情報 (Info):** アプリケーションのハッシュ、稼働時間、メモリ使用量、構成設定の確認。
 - **開発とビルド:**
-    - `admin-frontend/` ディレクトリで `npm run dev` を実行することで HMR (Hot Module Replacement) 有効な開発が可能です。
-    - `npm run build` を実行すると、ビルドされた成果物が `static/admin/` に出力され、Go サーバー経由で配信されます。
+    - `admin-frontend/` ディレクトリで `npm run dev` を実行することで HMR 有効な開発が可能。
+    - `npm run build` により、ビルド成果物が `static/admin/` に出力され、Go サーバー経由で配信。
 
 ## Project Structure
 
@@ -103,14 +121,14 @@ SPA (Single Page Application) として実装されたモダンな管理画面�
 - `formatter/`: 各種記法（Hatena, tDiary 等）のパーサ。
 - `jobqueue/`: ジョブキューの基盤実装（Worker 監視ループ等）。
 - `jobs/`: 具体的なジョブハンドラーの実装。
-- `tfidf/`: TF-IDF 計算と形態素解析（Kagome）。
+- `tfidf/`: TF-IDF 計算と形態素解析（TinySegmenter）。
 - `postprocess/`: Node.js による HTML ポストプロセススクリプト。
 - `static/`: CSS, JS, 画像などの静的アセット。
 - `main.go`: エントリーポイント。
 
 ## Testing
 
-インメモリ SQLite を使用した統合テストが可能です。SQLite の数学関数を使用するため、`sqlite_math_functions` タグが必要です。
+インメモリ SQLite を使用した統合テストが可能。SQLite の数学関数を使用するため、`sqlite_math_functions` タグが必要。
 
 ```bash
 make test

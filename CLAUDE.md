@@ -41,24 +41,6 @@ go test -tags "sqlite_math_functions" ./formatter/...
 go test -v -tags "sqlite_math_functions" ./formatter/...
 ```
 
-### マイグレーションテスト
-
-旧Perl実装からの移行検証ツール:
-
-```bash
-# 全エントリのフォーマット出力を旧実装と比較
-go run cmd/migration-test/main.go
-
-# 特定ID のエントリのみテスト（詳細diff表示）
-go run cmd/migration-test/main.go -id 123
-
-# 特定フォーマットのみテスト
-go run cmd/migration-test/main.go -format Hatena
-
-# 詳細表示モード
-go run cmd/migration-test/main.go -v
-```
-
 ### 開発サーバー起動
 
 ```bash

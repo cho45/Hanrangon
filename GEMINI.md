@@ -1,29 +1,74 @@
-# Hanrangon (Go Implementation)
+# Hanrangon (Hanra-n-Go-n)
 
-Perl版 Nogag の Go 言語によるリライトプロジェクト。
+Hanrangon is a modern rewrite of the Nogag CMS (originally Perl) in Go. It is designed to be a fast, memory-efficient, and self-contained blogging platform with advanced features like full-text search similarity (TF-IDF) and robust image handling.
+
+## Project Overview
+
+*   **Core Logic:** Go (Golang) 1.24+
+*   **Web Framework:** Echo v4
+*   **Database:** SQLite (partitioned into Data, Images, TF-IDF, and Worker DBs).
+*   **Data Access:** `sqlc` is used for type-safe SQL execution.
+*   **Frontend (Public):** Server-side rendered `html/template`.
+*   **Frontend (Admin):** Single Page Application (SPA) built with Svelte 5 and Vite.
+*   **Post-processing:** Node.js sidecar process for heavy content rendering (MathJax, Syntax Highlighting).
+
+## Architecture
+
+1.  **Backend (Go):** Handles HTTP requests, database operations, and an internal job queue (TheSchwartz-like implementation on SQLite).
+2.  **Admin UI:** A Svelte-based SPA living in `admin-frontend/`. It compiles to static assets served by the Go backend.
+3.  **Content Pipeline:**
+    *   Input: Markdown, Hatena, or tDiary format.
+    *   Processing: Parsed by Go, then piped to a Node.js script (`postprocess/main.js`) for final HTML generation (math, highlighting) before storage.
+    *   Storage: SQLite.
 
 ## Development Guidelines
 
-### 1. Code Formatting & Imports
-Goのコードを変更・作成した際は、必ず `make fmt` (内部で `goimports` を使用) を実行してフォーマットとインポートの整理を行うこと。手動でのインポート修正は禁止。
+### 1. Build & Run
 
-### 2. Testing
-インメモリモード (`:memory:`) を使用して統合テストを行う。スキーマファイルは `db/schema/` から読み込む。
-SQLite の数学関数を使用するため、テストの実行には `sqlite_math_functions` タグが必要。
+*   **Run Server:** `make run` (runs on `http://localhost:5555`)
+*   **Build Binary:** `make build`
+*   **Test:** `make test` (Requires `sqlite_math_functions` build tag, handled by Makefile)
 
-```bash
-make test
-```
+### 2. Database & SQL
 
-### 3. Database
-- Schema: `db/schema/*.sql`
-- Query: `db/query/*.sql`
-- Code Gen: `make generate`
+*   **Schema:** Located in `db/schema/`.
+*   **Queries:** Located in `db/query/`.
+*   **Code Generation:** After modifying SQL files, **ALWAYS** run:
+    ```bash
+    make generate
+    ```
+    This updates the Go code in `model/` via `sqlc`.
 
-### 4. Templating
-標準の `html/template` を使用。テンプレートは `view/*.html` および `view/*.xml`。
-開発モードではリクエストごとにディスクから再読み込みされる。
+### 3. Formatting
 
-### 5. Post-processing
-MathJax やシンタックスハイライトなどの最終整形には Node.js を使用する。
-`postprocess/main.js` が記事保存時に `exec` 経由で実行される。
+*   **Go:** Run `make fmt` (uses `goimports`).
+*   **Do not manually format imports.**
+
+### 4. Admin Frontend Development
+
+*   Navigate to `admin-frontend/`.
+*   Run `npm install` then `npm run dev` for hot-reloading development.
+*   The Go server expects built assets in `static/admin/`. Run `npm run build` to update them.
+
+### 5. Post-process Development
+
+*   Logic resides in `postprocess/`.
+*   Test changes with `make postprocess-test`.
+
+## Project Structure
+
+*   `app/`: Core application logic, HTTP handlers, and server setup.
+*   `cmd/`: Migration and utility commands.
+*   `db/`: SQL schemas and queries.
+*   `formatter/`: Text format parsers (Markdown, Hatena, etc.).
+*   `jobqueue/` & `jobs/`: Asynchronous background worker system.
+*   `model/`: Generated database code (`sqlc`).
+*   `view/`: Public-facing HTML templates.
+*   `admin-frontend/`: Svelte 5 admin panel source.
+*   `postprocess/`: Node.js rendering script.
+*   `static/`: Public static assets (CSS, JS, Images).
+
+## Configuration
+
+*   Copy `config.toml.sample` to `config.toml` to customize database paths and credentials.
+*   Default credentials (dev): `admin` / `changeme`.
