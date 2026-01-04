@@ -16,6 +16,7 @@ import (
 	"github.com/cho45/hanrangon/tfidf"
 	"github.com/labstack/echo/v4"
 	_ "github.com/mattn/go-sqlite3"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func setupTestDB(t *testing.T) (*sql.DB, *sql.DB, *sql.DB, *sql.DB) {
@@ -85,11 +86,13 @@ func setupTest(t *testing.T) *testEnv {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("testpass"), bcrypt.DefaultCost)
+
 	config := &Config{
 		StaticDir:     "../static",
 		UploadDir:     tmpDir,
 		Username:      "testuser",
-		Password:      "testpass",
+		Password:      string(hashedPassword),
 		SessionSecret: "testsecret",
 		BaseURL:       "http://localhost:5555",
 	}
