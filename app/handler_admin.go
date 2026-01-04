@@ -380,8 +380,9 @@ func (app *AppImpl) HandleAdminApiUploadImage(c echo.Context) error {
 	defer src.Close()
 
 	now := time.Now()
-	// Normalize filename to NFC and add timestamp prefix
-	filename := fmt.Sprintf("%s-%s", now.Format("20060102150405"), norm.NFC.String(file.Filename))
+	// Normalize filename to NFC and add timestamp prefix.
+	// Use filepath.Base to prevent path traversal.
+	filename := fmt.Sprintf("%s-%s", now.Format("20060102150405"), filepath.Base(norm.NFC.String(file.Filename)))
 
 	destPath := filepath.Join(app.config.UploadDir, filename)
 

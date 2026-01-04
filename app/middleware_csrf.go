@@ -36,10 +36,8 @@ func (app *AppImpl) CSRF(next echo.HandlerFunc) echo.HandlerFunc {
 				Path:     "/",
 				HttpOnly: true,
 				Secure:   c.IsTLS(),
-				SameSite: http.StatusMovedPermanently, // 暫定
+				SameSite: http.SameSiteLaxMode,
 			}
-			// Use Lax for better compatibility with standard form submissions
-			newCookie.SameSite = http.SameSiteLaxMode
 			c.SetCookie(newCookie)
 		} else {
 			sk = cookie.Value
