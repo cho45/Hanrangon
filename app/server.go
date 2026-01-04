@@ -39,15 +39,6 @@ func NewServer(app App) *echo.Echo {
 	e.Static("/admin", filepath.Join(config.StaticDir, "admin"))
 	e.Static("/images", filepath.Join(config.StaticDir, "images"))
 
-	// Auth
-	e.GET("/login", app.HandleLogin)
-	e.POST("/login", app.HandleLoginPost)
-	e.GET("/logout", app.HandleLogout)
-
-	// Admin
-	e.GET("/admin/", app.HandleAdminIndex, app.RequireAuth)
-	e.GET("/edit", app.HandleEdit, app.RequireAuth)
-
 	// Public Routes
 	e.GET("/", app.HandleIndex)
 	e.GET("/.page/:date/:limit", app.HandleIndex)
@@ -66,12 +57,17 @@ func NewServer(app App) *echo.Echo {
 
 	e.GET("/api/similar", app.HandleApiSimilar)
 
-	// Admin API
+	// Auth
+	e.GET("/login", app.HandleLogin)
+	e.POST("/login", app.HandleLoginPost)
+	e.GET("/logout", app.HandleLogout)
 
-	e.POST("/api/edit", app.HandleApiEdit, app.RequireAuth)
-	e.POST("/api/upload/image", app.HandleApiUploadImage, app.RequireAuth)
-
-	e.GET("/api/edit/progress", app.HandleApiEditProgress, app.RequireAuth)
+	// Admin
+	e.GET("/admin/", app.HandleAdminIndex, app.RequireAuth)
+	e.GET("/admin/edit", app.HandleAdminEdit, app.RequireAuth)
+	e.POST("/admin/api/edit", app.HandleAdminApiEdit, app.RequireAuth)
+	e.POST("/admin/api/upload/image", app.HandleAdminApiUploadImage, app.RequireAuth)
+	e.GET("/admin/api/edit/progress", app.HandleAdminApiEditProgress, app.RequireAuth)
 
 	// Catch-all route for entries by path (must be last)
 	e.GET("/*", app.HandlePath)

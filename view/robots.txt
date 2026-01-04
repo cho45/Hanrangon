@@ -1,6 +1,4 @@
 User-agent: *
 Disallow: /admin/
 Disallow: /login
-Disallow: /edit
-Disallow: /api/
 Sitemap: https://lowreal.net/sitemap.xml

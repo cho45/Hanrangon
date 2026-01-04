@@ -58,13 +58,13 @@ type App interface {
 
 	// Admin handlers
 	HandleAdminIndex(c echo.Context) error
-	HandleEdit(c echo.Context) error
+	HandleAdminEdit(c echo.Context) error
 	HandleLogin(c echo.Context) error
 	HandleLoginPost(c echo.Context) error
 	HandleLogout(c echo.Context) error
-	HandleApiEdit(c echo.Context) error
-	HandleApiUploadImage(c echo.Context) error
-	HandleApiEditProgress(c echo.Context) error
+	HandleAdminApiEdit(c echo.Context) error
+	HandleAdminApiUploadImage(c echo.Context) error
+	HandleAdminApiEditProgress(c echo.Context) error
 	PublishScheduledEntries(ctx context.Context) error
 	EnqueuePublishedEntryJobs(ctx context.Context, entryID int64) error
 }

@@ -3410,7 +3410,7 @@ function ui(e, t) {
     } else
       c.set("status", "public");
     try {
-      const q = (await (await fetch("/api/edit", {
+      const q = (await (await fetch("/admin/api/edit", {
         method: "POST",
         headers: { "X-Requested-With": "fetch" },
         body: c
@@ -3423,7 +3423,7 @@ function ui(e, t) {
     }
   }
   function A(c) {
-    const $ = new EventSource(`/api/edit/progress?sid=${c}`);
+    const $ = new EventSource(`/admin/api/edit/progress?sid=${c}`);
     $.onmessage = (O) => {
       const q = JSON.parse(O.data);
       switch (q.type) {
@@ -3462,7 +3462,7 @@ function ui(e, t) {
       const $ = new FormData();
       $.append("file", c.files[0]), $.append("sk", n());
       try {
-        const q = await (await fetch("/api/upload/image", {
+        const q = await (await fetch("/admin/api/upload/image", {
           method: "POST",
           headers: { "X-Requested-With": "fetch" },
           body: $

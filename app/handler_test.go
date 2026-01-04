@@ -435,7 +435,7 @@ func TestHandleApiEdit(t *testing.T) {
 
 	t.Run("Create new entry with auto path", func(t *testing.T) {
 		payload := `{"title":"New Entry", "body":"Hello <![CDATA[<b>world</b>]]>", "format":"HTML"}`
-		req := httptest.NewRequest(http.MethodPost, "/api/edit", strings.NewReader(payload))
+		req := httptest.NewRequest(http.MethodPost, "/admin/api/edit", strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-Requested-With", "fetch")
 		req.Header.Set("Cookie", cookie)
@@ -461,7 +461,7 @@ func TestHandleApiEdit(t *testing.T) {
 		errChan := make(chan error, 1)
 
 		go func() {
-			progReq := httptest.NewRequest(http.MethodGet, "/api/edit/progress?sid="+res.SessionID, nil)
+			progReq := httptest.NewRequest(http.MethodGet, "/admin/api/edit/progress?sid="+res.SessionID, nil)
 			progReq.Header.Set("Cookie", cookie)
 			progRec := httptest.NewRecorder()
 
@@ -534,7 +534,7 @@ func TestHandleEdit(t *testing.T) {
 	defer env.close()
 
 	t.Run("Redirect unauthenticated", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/edit", nil)
+		req := httptest.NewRequest(http.MethodGet, "/admin/edit", nil)
 		rec := httptest.NewRecorder()
 		env.server.ServeHTTP(rec, req)
 
@@ -548,7 +548,7 @@ func TestHandleEdit(t *testing.T) {
 
 	t.Run("Render for authenticated", func(t *testing.T) {
 		cookie := env.login(t)
-		req := httptest.NewRequest(http.MethodGet, "/edit", nil)
+		req := httptest.NewRequest(http.MethodGet, "/admin/edit", nil)
 		req.Header.Set("Cookie", cookie)
 		rec := httptest.NewRecorder()
 		env.server.ServeHTTP(rec, req)
@@ -580,7 +580,7 @@ func TestHandleApiUploadImage(t *testing.T) {
 	_, _ = part.Write([]byte("fake-image-content"))
 	writer.Close()
 
-	req := httptest.NewRequest(http.MethodPost, "/api/upload/image", body)
+	req := httptest.NewRequest(http.MethodPost, "/admin/api/upload/image", body)
 	req.Header.Set(echo.HeaderContentType, writer.FormDataContentType())
 	req.Header.Set("X-Requested-With", "fetch")
 	req.Header.Set("Cookie", cookie)
@@ -801,7 +801,7 @@ func TestUpdateModifiedAt(t *testing.T) {
 		Status: "public",
 	}
 	payload, _ := json.Marshal(updateReq)
-	req := httptest.NewRequest(http.MethodPost, "/api/edit", strings.NewReader(string(payload)))
+	req := httptest.NewRequest(http.MethodPost, "/admin/api/edit", strings.NewReader(string(payload)))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Requested-With", "fetch")
 	req.Header.Set("Cookie", cookie)
@@ -818,7 +818,7 @@ func TestUpdateModifiedAt(t *testing.T) {
 	}
 
 	// Wait for completion via SSE
-	progReq := httptest.NewRequest(http.MethodGet, "/api/edit/progress?sid="+res.SessionID, nil)
+	progReq := httptest.NewRequest(http.MethodGet, "/admin/api/edit/progress?sid="+res.SessionID, nil)
 	progReq.Header.Set("Cookie", cookie)
 	progRec := httptest.NewRecorder()
 	env.server.ServeHTTP(progRec, progReq)

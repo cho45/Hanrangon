@@ -342,8 +342,6 @@ func (app *AppImpl) HandleRobotsTxt(c echo.Context) error {
 	content := `User-agent: *
 Disallow: /admin/
 Disallow: /login
-Disallow: /edit
-Disallow: /api/
 Sitemap: https://lowreal.net/sitemap.xml
 `
 	return c.String(http.StatusOK, content)

@@ -119,7 +119,7 @@
     }
 
     try {
-      const response = await fetch('/api/edit', {
+      const response = await fetch('/admin/api/edit', {
         method: 'POST',
         headers: {
           'X-Requested-With': 'fetch'
@@ -141,7 +141,7 @@
   }
 
   function startSSE(sessionID: string) {
-    const eventSource = new EventSource(`/api/edit/progress?sid=${sessionID}`);
+    const eventSource = new EventSource(`/admin/api/edit/progress?sid=${sessionID}`);
 
     eventSource.onmessage = (e) => {
       const msg = JSON.parse(e.data);
@@ -206,7 +206,7 @@
       formData.append('sk', sk);
 
       try {
-        const response = await fetch('/api/upload/image', {
+        const response = await fetch('/admin/api/upload/image', {
           method: 'POST',
           headers: {
             'X-Requested-With': 'fetch'

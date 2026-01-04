@@ -102,7 +102,7 @@ Nogag = {
 				var button = document.querySelector('.nogag-new');
 				if (button) {
 					button.addEventListener('click', function () {
-						location.href = "/edit";
+						location.href = "/admin/edit";
 					});
 				}
 			}
@@ -202,7 +202,7 @@ Nogag = {
 			var button = entry.querySelector('.nogag-edit');
 			if (button) {
 				button.addEventListener('click', function () {
-					location.href = "/edit?id=" + entry.getAttribute('data-id')
+					location.href = "/admin/edit?id=" + entry.getAttribute('data-id')
 				});
 			}
 		}

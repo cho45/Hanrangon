@@ -37,7 +37,7 @@ type EditResponse struct {
 	SessionID string `json:"session_id"` // session_id のみに簡略化
 }
 
-func (app *AppImpl) HandleEdit(c echo.Context) error {
+func (app *AppImpl) HandleAdminEdit(c echo.Context) error {
 	idStr := c.QueryParam("id")
 	var entry model.Entry
 
@@ -135,7 +135,7 @@ func (app *AppImpl) HandleLoginPost(c echo.Context) error {
 		sess.Save(c.Request(), c.Response())
 
 		if returnPath == "/" {
-			returnPath = "/edit"
+			returnPath = "/admin/edit"
 		}
 		return c.Redirect(http.StatusFound, returnPath)
 	}
@@ -154,7 +154,7 @@ func (app *AppImpl) HandleLogout(c echo.Context) error {
 	return c.Redirect(http.StatusFound, "/")
 }
 
-func (app *AppImpl) HandleApiEditProgress(c echo.Context) error {
+func (app *AppImpl) HandleAdminApiEditProgress(c echo.Context) error {
 	sessionID := c.QueryParam("sid")
 	if sessionID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "session ID required")
@@ -217,7 +217,7 @@ func (app *AppImpl) HandleApiEditProgress(c echo.Context) error {
 	}
 }
 
-func (app *AppImpl) HandleApiEdit(c echo.Context) error {
+func (app *AppImpl) HandleAdminApiEdit(c echo.Context) error {
 	// 1. リクエスト検証
 	req := new(EditRequest)
 	if err := c.Bind(req); err != nil {
@@ -377,7 +377,7 @@ func (app *AppImpl) HandleApiEdit(c echo.Context) error {
 	})
 }
 
-func (app *AppImpl) HandleApiUploadImage(c echo.Context) error {
+func (app *AppImpl) HandleAdminApiUploadImage(c echo.Context) error {
 	file, err := c.FormFile("file")
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "Missing file").SetInternal(err)
