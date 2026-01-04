@@ -20,6 +20,7 @@ import (
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
+	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -114,7 +115,7 @@ func (app *AppImpl) HandleLoginPost(c echo.Context) error {
 	username := c.FormValue("username")
 	password := c.FormValue("password")
 
-	if username == app.config.Username && password == app.config.Password {
+	if username == app.config.Username && bcrypt.CompareHashAndPassword([]byte(app.config.Password), []byte(password)) == nil {
 		sess, _ := session.Get("session", c)
 		sess.Options = &sessions.Options{
 			Path:     "/",

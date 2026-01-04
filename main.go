@@ -95,6 +95,11 @@ func main() {
 			log.Fatalf("index-images failed: %v", err)
 		}
 
+	case "update-password":
+		if err := subcommands.UpdatePassword(ctx, application, subArgs); err != nil {
+			log.Fatalf("update-password failed: %v", err)
+		}
+
 	default:
 		log.Fatalf("unknown command: %s", cmd)
 	}
