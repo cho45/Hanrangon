@@ -120,7 +120,11 @@ func (app *AppImpl) IsAuth(c echo.Context) bool {
 // MathJax、シンタックスハイライト、画像処理、ウィジェット処理を行う
 func (app *AppImpl) Postprocess(ctx context.Context, html string) (string, error) {
 	start := time.Now()
-	log.Printf("[postprocess] Starting postprocess (input size: %d bytes)", len(html))
+	nodePath, err := exec.LookPath("node")
+	if err != nil {
+		return "", fmt.Errorf("node binary not found in PATH: %w", err)
+	}
+	log.Printf("[postprocess] Starting postprocess using %s (input size: %d bytes)", nodePath, len(html))
 
 	// タイムアウト設定（30秒）
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -129,7 +133,7 @@ func (app *AppImpl) Postprocess(ctx context.Context, html string) (string, error
 	// Node.js スクリプトのパス（プロジェクトルートからの相対パス）
 	scriptPath := filepath.Join(app.config.StaticDir, "../postprocess/main.js")
 
-	cmd := exec.CommandContext(ctx, "node", scriptPath)
+	cmd := exec.CommandContext(ctx, nodePath, scriptPath)
 	cmd.Stdin = bytes.NewReader([]byte(html))
 
 	var stdout bytes.Buffer
@@ -163,7 +167,11 @@ func (app *AppImpl) Postprocess(ctx context.Context, html string) (string, error
 // PostprocessWithProgress は進捗通知付きでpostprocessを実行する
 func (app *AppImpl) PostprocessWithProgress(ctx context.Context, html string, session *ProgressSession) (string, error) {
 	start := time.Now()
-	log.Printf("[postprocess] Starting postprocess (input size: %d bytes)", len(html))
+	nodePath, err := exec.LookPath("node")
+	if err != nil {
+		return "", fmt.Errorf("node binary not found in PATH: %w", err)
+	}
+	log.Printf("[postprocess] Starting postprocess using %s (input size: %d bytes)", nodePath, len(html))
 
 	// タイムアウト設定（30秒）
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -172,7 +180,7 @@ func (app *AppImpl) PostprocessWithProgress(ctx context.Context, html string, se
 	// Node.js スクリプトのパス
 	scriptPath := filepath.Join(app.config.StaticDir, "../postprocess/main.js")
 
-	cmd := exec.CommandContext(ctx, "node", scriptPath)
+	cmd := exec.CommandContext(ctx, nodePath, scriptPath)
 	cmd.Stdin = bytes.NewReader([]byte(html))
 
 	var stdout bytes.Buffer
