@@ -27,7 +27,7 @@ func (q *Queries) CreateImage(ctx context.Context, arg CreateImageParams) (int64
 }
 
 const createNgram = `-- name: CreateNgram :exec
-INSERT INTO ngram (image_id, word) VALUES (?, ?)
+INSERT OR REPLACE INTO ngram (image_id, word) VALUES (?, ?)
 `
 
 type CreateNgramParams struct {

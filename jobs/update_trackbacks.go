@@ -62,20 +62,27 @@ func (j *UpdateTrackbacksJob) Execute(ctx context.Context, arg json.RawMessage) 
 	}
 
 	// Update trackbacks
+	tx, err := j.app.DB().BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	qtx := j.app.Queries().WithTx(tx)
+
 	// 1. Delete old ones where this entry is the source (trackback_entry_id)
-	if err := j.app.Queries().DeleteTrackbacksBySourceEntryId(ctx, sql.NullInt64{Int64: a.EntryID, Valid: true}); err != nil {
+	if err := qtx.DeleteTrackbacksBySourceEntryId(ctx, sql.NullInt64{Int64: a.EntryID, Valid: true}); err != nil {
 		return err
 	}
 
 	// 2. Insert new ones
 	for _, path := range paths {
-		target, err := j.app.Queries().GetEntryByPath(ctx, path)
+		target, err := qtx.GetEntryByPath(ctx, path)
 		if err != nil {
 			// If target entry not found, just skip it
 			continue
 		}
 
-		if err := j.app.Queries().CreateTrackback(ctx, model.CreateTrackbackParams{
+		if err := qtx.CreateTrackback(ctx, model.CreateTrackbackParams{
 			EntryID:          sql.NullInt64{Int64: target.ID, Valid: true},
 			TrackbackEntryID: sql.NullInt64{Int64: a.EntryID, Valid: true},
 		}); err != nil {
@@ -83,5 +90,5 @@ func (j *UpdateTrackbacksJob) Execute(ctx context.Context, arg json.RawMessage) 
 		}
 	}
 
-	return nil
+	return tx.Commit()
 }

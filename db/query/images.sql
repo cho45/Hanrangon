@@ -11,7 +11,7 @@ DELETE FROM ngram WHERE image_id IN (SELECT id FROM images WHERE entry_id = ?);
 DELETE FROM ngram WHERE image_id = ?;
 
 -- name: CreateNgram :exec
-INSERT INTO ngram (image_id, word) VALUES (?, ?);
+INSERT OR REPLACE INTO ngram (image_id, word) VALUES (?, ?);
 
 -- name: ListImagesByEntryID :many
 SELECT * FROM images WHERE entry_id = ?;

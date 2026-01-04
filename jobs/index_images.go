@@ -74,11 +74,19 @@ func (j *IndexImagesJob) IndexImagesForEntry(ctx context.Context, entryID int64)
 		}
 	}
 
-	// Delete old records
-	if err := j.app.ImagesQueries().DeleteNgramsByEntryID(ctx, entryID); err != nil {
+	// Start transaction for images database
+	tx, err := j.app.ImagesDB().BeginTx(ctx, nil)
+	if err != nil {
 		return err
 	}
-	if err := j.app.ImagesQueries().DeleteImagesByEntryID(ctx, entryID); err != nil {
+	defer tx.Rollback()
+	qtx := j.app.ImagesQueries().WithTx(tx)
+
+	// Delete old records
+	if err := qtx.DeleteNgramsByEntryID(ctx, entryID); err != nil {
+		return err
+	}
+	if err := qtx.DeleteImagesByEntryID(ctx, entryID); err != nil {
 		return err
 	}
 
@@ -97,7 +105,7 @@ func (j *IndexImagesJob) IndexImagesForEntry(ctx context.Context, entryID int64)
 		sig := make([]byte, 8)
 		binary.BigEndian.PutUint64(sig, hash.GetHash())
 
-		imageID, err := j.app.ImagesQueries().CreateImage(ctx, model.CreateImageParams{
+		imageID, err := qtx.CreateImage(ctx, model.CreateImageParams{
 			Uri:     rawURL,
 			EntryID: entryID,
 			Sig:     sig,
@@ -114,7 +122,7 @@ func (j *IndexImagesJob) IndexImagesForEntry(ctx context.Context, entryID int64)
 			binary.BigEndian.PutUint16(word[0:2], i)       // Position
 			binary.BigEndian.PutUint16(word[2:4], segment) // Value
 
-			if err := j.app.ImagesQueries().CreateNgram(ctx, model.CreateNgramParams{
+			if err := qtx.CreateNgram(ctx, model.CreateNgramParams{
 				ImageID: imageID,
 				Word:    word,
 			}); err != nil {
@@ -123,7 +131,7 @@ func (j *IndexImagesJob) IndexImagesForEntry(ctx context.Context, entryID int64)
 		}
 	}
 
-	return nil
+	return tx.Commit()
 }
 
 func (j *IndexImagesJob) loadImage(rawURL string) (image.Image, error) {
