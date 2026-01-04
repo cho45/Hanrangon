@@ -90,6 +90,11 @@ func main() {
 			log.Fatalf("backup failed: %v", err)
 		}
 
+	case "index-images":
+		if err := subcommands.IndexImages(ctx, application, subArgs); err != nil {
+			log.Fatalf("index-images failed: %v", err)
+		}
+
 	default:
 		log.Fatalf("unknown command: %s", cmd)
 	}

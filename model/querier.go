@@ -21,6 +21,7 @@ type Querier interface {
 	CreateNgram(ctx context.Context, arg CreateNgramParams) error
 	CreateTrackback(ctx context.Context, arg CreateTrackbackParams) error
 	DeleteImagesByEntryID(ctx context.Context, entryID int64) error
+	DeleteNgramsByEntryID(ctx context.Context, entryID int64) error
 	DeleteNgramsByImageID(ctx context.Context, imageID int64) error
 	DeletePostingsByEntryID(ctx context.Context, entryID int64) error
 	DeleteRelatedEntriesByEntryID(ctx context.Context, entryID int64) error

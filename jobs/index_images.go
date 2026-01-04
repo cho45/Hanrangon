@@ -53,7 +53,11 @@ func (j *IndexImagesJob) Execute(ctx context.Context, arg json.RawMessage) error
 		return fmt.Errorf("failed to unmarshal arg: %w", err)
 	}
 
-	entry, err := j.app.Queries().GetEntryById(ctx, a.EntryID)
+	return j.IndexImagesForEntry(ctx, a.EntryID)
+}
+
+func (j *IndexImagesJob) IndexImagesForEntry(ctx context.Context, entryID int64) error {
+	entry, err := j.app.Queries().GetEntryById(ctx, entryID)
 	if err != nil {
 		return err
 	}
@@ -71,7 +75,10 @@ func (j *IndexImagesJob) Execute(ctx context.Context, arg json.RawMessage) error
 	}
 
 	// Delete old records
-	if err := j.app.ImagesQueries().DeleteImagesByEntryID(ctx, a.EntryID); err != nil {
+	if err := j.app.ImagesQueries().DeleteNgramsByEntryID(ctx, entryID); err != nil {
+		return err
+	}
+	if err := j.app.ImagesQueries().DeleteImagesByEntryID(ctx, entryID); err != nil {
 		return err
 	}
 
@@ -92,7 +99,7 @@ func (j *IndexImagesJob) Execute(ctx context.Context, arg json.RawMessage) error
 
 		imageID, err := j.app.ImagesQueries().CreateImage(ctx, model.CreateImageParams{
 			Uri:     rawURL,
-			EntryID: a.EntryID,
+			EntryID: entryID,
 			Sig:     sig,
 		})
 		if err != nil {

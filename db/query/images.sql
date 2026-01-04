@@ -4,6 +4,9 @@ INSERT INTO images (uri, entry_id, sig) VALUES (?, ?, ?) RETURNING id;
 -- name: DeleteImagesByEntryID :exec
 DELETE FROM images WHERE entry_id = ?;
 
+-- name: DeleteNgramsByEntryID :exec
+DELETE FROM ngram WHERE image_id IN (SELECT id FROM images WHERE entry_id = ?);
+
 -- name: DeleteNgramsByImageID :exec
 DELETE FROM ngram WHERE image_id = ?;
 

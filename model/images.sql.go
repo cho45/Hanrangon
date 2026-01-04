@@ -49,6 +49,15 @@ func (q *Queries) DeleteImagesByEntryID(ctx context.Context, entryID int64) erro
 	return err
 }
 
+const deleteNgramsByEntryID = `-- name: DeleteNgramsByEntryID :exec
+DELETE FROM ngram WHERE image_id IN (SELECT id FROM images WHERE entry_id = ?)
+`
+
+func (q *Queries) DeleteNgramsByEntryID(ctx context.Context, entryID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteNgramsByEntryID, entryID)
+	return err
+}
+
 const deleteNgramsByImageID = `-- name: DeleteNgramsByImageID :exec
 DELETE FROM ngram WHERE image_id = ?
 `
