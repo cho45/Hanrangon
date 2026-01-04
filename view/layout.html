@@ -1,3 +1,15 @@
+---
+links = [
+  { url = "/css/style.css", rel = "preload", as = "style" },
+  { url = "/images/hanrangen.svg", rel = "preload", as = "image" },
+  { url = "/js/daterelative.js", rel = "preload", as = "script" },
+  { url = "/js/budoux-ja.min.js", rel = "preload", as = "script" },
+  { url = "/js/abcjs_basic_5.1.1-min.js", rel = "preload", as = "script" },
+  { url = "/js/nogag.js", rel = "preload", as = "script" },
+  { url = "https://fonts.googleapis.com", rel = "preconnect", crossorigin = true },
+  { url = "https://fonts.gstatic.com", rel = "preconnect", crossorigin = true }
+]
+---
 <!DOCTYPE html>
 <html lang="ja" data-auth="{{if .IsAuth}}true{{else}}false{{end}}">
 <head>
@@ -10,7 +22,6 @@
 
 	<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin=""/>
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
-	<link rel="preconnect" href="https://googleads.g.doubleclick.net" crossorigin=""/>
 
 	<link rel="alternate" type="application/atom+xml" title="Feed" href="/feed"/>
 

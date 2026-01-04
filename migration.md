@@ -81,15 +81,48 @@ sqlite3 var/db/tfidf.db < db/schema/tfidf.sql
 ```
 
 
+## 3. コンテンツの再フォーマット (任意)
+
+必要に応じて、既存エントリの HTML を再生成します。
+```bash
+./hanrangon reformat --force
+```
+
 ## 4. インデックスの再構築
 
-```
-hanrangon recalc-tfidf --force
+TF-IDF 検索および類似画像検索のためのインデックスを構築します。
+
+```bash
+# TF-IDF インデックスの構築
+./hanrangon recalc-tfidf --force
+
+# 画像ハッシュインデックスの構築
+./hanrangon index-images --force
 ```
 
-## 5. サービスの起動
+## 5. 旧サービスの停止と新サービスの起動
 
-### 5.1 systemd ユニットの設置
+### 5.1 旧サービスの完全停止
+ポート 5000 を解放し、新サービスへ切り替える準備をします。
+
+```bash
+# 各サービスディレクトリに down ファイルを作成（再起動時の自動開始を防止）
+sudo touch /service/backend/down
+sudo touch /service/postprocess-js-daemon/down
+sudo touch /service/worker/down
+
+# 実行中のサービスを停止し、supervise プロセスを終了させる
+sudo svc -dx /service/backend
+sudo svc -dx /service/postprocess-js-daemon
+sudo svc -dx /service/worker
+
+# svscan の管理対象から外すため、ディレクトリをリネーム（. で始まる名前は無視される）
+sudo mv /service/backend /service/.backend
+sudo mv /service/postprocess-js-daemon /service/.postprocess-js-daemon
+sudo mv /service/worker /service/.worker
+```
+
+### 5.2 systemd ユニットの設置
 ```bash
 sudo cp deploy/hanrangon.service /etc/systemd/system/
 sudo systemctl daemon-reload
@@ -97,7 +130,7 @@ sudo systemctl enable hanrangon
 sudo systemctl start hanrangon
 ```
 
-### 5.2 ログの監視
+### 5.3 ログの監視
 ジョブが順次実行される様子を監視します。
 ```bash
 sudo journalctl -u hanrangon -f

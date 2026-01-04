@@ -51,7 +51,7 @@ func (app *AppImpl) HandleAdminEdit(c echo.Context) error {
 		},
 		SessionKey: sk,
 	}
-	return app.templates.RenderWithLayout(c.Response(), "admin/layout.html", "admin/index.html", data)
+	return app.templates.RenderWithLayout(c, "admin/layout.html", "admin/index.html", data)
 }
 
 func (app *AppImpl) HandleAdminIndex(c echo.Context) error {
@@ -68,7 +68,7 @@ func (app *AppImpl) HandleAdminIndex(c echo.Context) error {
 		},
 		SessionKey: sk,
 	}
-	return app.templates.RenderWithLayout(c.Response(), "admin/layout.html", "admin/index.html", data)
+	return app.templates.RenderWithLayout(c, "admin/layout.html", "admin/index.html", data)
 }
 
 func (app *AppImpl) HandleLogin(c echo.Context) error {
@@ -95,7 +95,7 @@ func (app *AppImpl) HandleLogin(c echo.Context) error {
 		ReturnPath: returnPath,
 		SessionKey: sk,
 	}
-	return app.templates.Render(c.Response(), "admin/login.html", data)
+	return app.templates.Render(c, "admin/login.html", data)
 }
 
 func (app *AppImpl) HandleLoginPost(c echo.Context) error {
@@ -134,7 +134,7 @@ func (app *AppImpl) HandleLoginPost(c echo.Context) error {
 		ErrorMsg:   "Invalid Username or Password",
 		ReturnPath: returnPath,
 	}
-	return app.templates.Render(c.Response(), "admin/login.html", data)
+	return app.templates.Render(c, "admin/login.html", data)
 }
 
 func (app *AppImpl) HandleLogout(c echo.Context) error {

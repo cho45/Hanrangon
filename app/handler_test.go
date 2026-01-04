@@ -44,6 +44,11 @@ func TestHandleIndex(t *testing.T) {
 		t.Logf("Response body: %s", rec.Body.String())
 	}
 
+	linkHeader := rec.Header().Get("Link")
+	if !strings.Contains(linkHeader, "</css/style.css>; rel=preload; as=style") {
+		t.Errorf("Link header does not contain style.css preload, got: %s", linkHeader)
+	}
+
 	body := rec.Body.String()
 	if !strings.Contains(body, "Test Entry 1") {
 		t.Errorf("body does not contain 'Test Entry 1'")

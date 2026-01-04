@@ -103,7 +103,7 @@ func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 		IsDetail: false,
 		NextPage: "",
 	}
-	return app.templates.RenderWithLayout(c.Response(), "layout.html", "entries.html", data)
+	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
 
 func (app *AppImpl) HandleArchive(c echo.Context) error {
@@ -121,7 +121,7 @@ func (app *AppImpl) HandleArchive(c echo.Context) error {
 		},
 		Archives: view.ConvertArchives(archives),
 	}
-	return app.templates.RenderWithLayout(c.Response(), "layout.html", "archive.html", data)
+	return app.templates.RenderWithLayout(c, "layout.html", "archive.html", data)
 }
 
 func (app *AppImpl) HandleIndex(c echo.Context) error {
@@ -177,9 +177,8 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 			IsDetail: false,
 			NextPage: "",
 		}
-		return app.templates.RenderWithLayout(c.Response(), "layout.html", "entries.html", data)
+		return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 	}
-
 	// 2. 取得した日付に含まれる全記事を取得
 	rows, err := app.queries.ListEntriesByDates(ctx, dates)
 	if err != nil {
@@ -209,9 +208,8 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 		IsDetail: false,
 		NextPage: nextPage,
 	}
-	return app.templates.RenderWithLayout(c.Response(), "layout.html", "entries.html", data)
+	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
-
 func (app *AppImpl) HandleCategory(c echo.Context) error {
 	ctx := c.Request().Context()
 	category := c.Param("category")
@@ -273,7 +271,7 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 		IsDetail: false,
 		NextPage: nextPage,
 	}
-	return app.templates.RenderWithLayout(c.Response(), "layout.html", "entries.html", data)
+	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
 
 func (app *AppImpl) HandleFeed(c echo.Context) error {
@@ -306,7 +304,7 @@ func (app *AppImpl) HandleFeed(c echo.Context) error {
 		Entries: entries,
 		Updated: updated.Format(time.RFC3339),
 	}
-	return app.templates.Render(c.Response(), "feed.xml", data)
+	return app.templates.Render(c, "feed.xml", data)
 }
 
 func (app *AppImpl) HandleSitemap(c echo.Context) error {
@@ -334,7 +332,7 @@ func (app *AppImpl) HandleSitemap(c echo.Context) error {
 	data := &view.SitemapData{
 		Entries: entries,
 	}
-	return app.templates.Render(c.Response(), "sitemap.xml", data)
+	return app.templates.Render(c, "sitemap.xml", data)
 }
 
 func (app *AppImpl) HandleRobotsTxt(c echo.Context) error {
@@ -396,7 +394,7 @@ func (app *AppImpl) HandleApiSimilar(c echo.Context) error {
 			data := &view.SimilarEntriesData{
 				Entries: similarEntries,
 			}
-			if err := app.templates.Render(&buf, "similar-entries.html", data); err != nil {
+			if err := app.templates.RenderTo(&buf, "similar-entries.html", data); err != nil {
 				continue
 			}
 
@@ -461,7 +459,7 @@ func (app *AppImpl) HandleApiSimilar(c echo.Context) error {
 		data := &view.SimilarImagesData{
 			Images: viewImages,
 		}
-		if err := app.templates.Render(&buf, "similar-images.html", data); err != nil {
+		if err := app.templates.RenderTo(&buf, "similar-images.html", data); err != nil {
 			continue
 		}
 		result[idStr] = buf.String()
@@ -575,9 +573,8 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 		Prev:       prevPtr,
 		Next:       nextPtr,
 	}
-	return app.templates.RenderWithLayout(c.Response(), "layout.html", "entries.html", data)
+	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
-
 func getLatestModTime(entries []model.Entry) time.Time {
 	if len(entries) == 0 {
 		return time.Time{}

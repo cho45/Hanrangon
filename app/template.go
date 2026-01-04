@@ -9,14 +9,27 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/BurntSushi/toml"
 	"github.com/Masterminds/sprig/v3"
 	"github.com/cho45/hanrangon/view"
+	"github.com/labstack/echo/v4"
 )
+
+// TemplateMetadata holds metadata parsed from template front matter
+type TemplateMetadata struct {
+	Links []struct {
+		URL         string `toml:"url"`
+		Rel         string `toml:"rel"`
+		As          string `toml:"as"`
+		CrossOrigin bool   `toml:"crossorigin"`
+	} `toml:"links"`
+}
 
 // Templates manages HTML templates
 type Templates struct {
 	config    *Config
 	templates *template.Template // 本番モード用キャッシュ (未実行)
+	metadata  map[string]*TemplateMetadata
 }
 
 // buildFuncMap builds the function map for templates
@@ -56,6 +69,7 @@ func (t *Templates) LoadTemplates() (*template.Template, error) {
 	tmpl := template.New("")
 	funcMap := buildFuncMap()
 	tmpl.Funcs(funcMap)
+	t.metadata = make(map[string]*TemplateMetadata)
 
 	basePath := "view/"
 	if _, err := os.Stat(basePath); os.IsNotExist(err) {
@@ -86,7 +100,21 @@ func (t *Templates) LoadTemplates() (*template.Template, error) {
 			return err
 		}
 
-		_, err = tmpl.New(rel).Parse(string(b))
+		content := string(b)
+		if strings.HasPrefix(content, "---\n") {
+			parts := strings.SplitN(content, "---\n", 3)
+			if len(parts) == 3 {
+				var meta TemplateMetadata
+				if _, err := toml.Decode(parts[1], &meta); err == nil {
+					t.metadata[rel] = &meta
+					content = parts[2]
+				} else {
+					log.Printf("Error parsing TOML front matter in %s: %v", path, err)
+				}
+			}
+		}
+
+		_, err = tmpl.New(rel).Parse(content)
 		if err != nil {
 			return err
 		}
@@ -104,7 +132,8 @@ func (t *Templates) LoadTemplates() (*template.Template, error) {
 // InitTemplates initializes the template system
 func InitTemplates(config *Config) (*Templates, error) {
 	t := &Templates{
-		config: config,
+		config:   config,
+		metadata: make(map[string]*TemplateMetadata),
 	}
 
 	if !config.IsDevelopment() {
@@ -137,8 +166,29 @@ func (t *Templates) getTemplates() (*template.Template, error) {
 	return t.templates.Clone()
 }
 
+func (t *Templates) setHeaders(c echo.Context, names ...string) {
+	for _, name := range names {
+		if meta, ok := t.metadata[name]; ok {
+			for _, l := range meta.Links {
+				rel := l.Rel
+				if rel == "" {
+					rel = "preload"
+				}
+				link := fmt.Sprintf("<%s>; rel=%s", l.URL, rel)
+				if l.As != "" {
+					link += fmt.Sprintf("; as=%s", l.As)
+				}
+				if l.CrossOrigin {
+					link += "; crossorigin"
+				}
+				c.Response().Header().Add("Link", link)
+			}
+		}
+	}
+}
+
 // RenderWithLayout renders a template with the specified layout
-func (t *Templates) RenderWithLayout(w io.Writer, layoutName, contentName string, data interface{}) error {
+func (t *Templates) RenderWithLayout(c echo.Context, layoutName, contentName string, data interface{}) error {
 	templates, err := t.getTemplates()
 	if err != nil {
 		return err
@@ -160,7 +210,9 @@ func (t *Templates) RenderWithLayout(w io.Writer, layoutName, contentName string
 		return err
 	}
 
-	err = layoutTmpl.Execute(w, data)
+	t.setHeaders(c, layoutName, contentName)
+
+	err = layoutTmpl.Execute(c.Response(), data)
 	if err != nil {
 		log.Printf("Template execution error (RenderWithLayout): %v", err)
 	}
@@ -168,14 +220,30 @@ func (t *Templates) RenderWithLayout(w io.Writer, layoutName, contentName string
 }
 
 // Render renders a template by name
-func (t *Templates) Render(w io.Writer, name string, data interface{}) error {
+func (t *Templates) Render(c echo.Context, name string, data interface{}) error {
+	templates, err := t.getTemplates()
+	if err != nil {
+		return err
+	}
+
+	t.setHeaders(c, name)
+
+	err = templates.ExecuteTemplate(c.Response(), name, data)
+	if err != nil {
+		log.Printf("Template execution error (Render): %v", err)
+	}
+	return err
+}
+
+// RenderTo renders a template to an io.Writer (no header setting)
+func (t *Templates) RenderTo(w io.Writer, name string, data interface{}) error {
 	templates, err := t.getTemplates()
 	if err != nil {
 		return err
 	}
 	err = templates.ExecuteTemplate(w, name, data)
 	if err != nil {
-		log.Printf("Template execution error (Render): %v", err)
+		log.Printf("Template execution error (RenderTo): %v", err)
 	}
 	return err
 }
