@@ -26,14 +26,24 @@ func ParseTitle(rawTitle string) (string, []string) {
 	return strings.TrimSpace(cleanTitle), tags
 }
 
-func Summary(html string, length int) string {
+func Summary(html string, length interface{}) string {
+	var l int
+	switch v := length.(type) {
+	case int:
+		l = v
+	case int64:
+		l = int(v)
+	default:
+		l = 100
+	}
+
 	text := htmlTagRegexp.ReplaceAllString(html, "")
 	text = strings.ReplaceAll(text, "\n", " ")
 	text = strings.ReplaceAll(text, "\r", "")
 	text = strings.TrimSpace(text)
 	runes := []rune(text)
-	if len(runes) > length {
-		return string(runes[:length]) + "..."
+	if len(runes) > l {
+		return string(runes[:l]) + "..."
 	}
 	return string(runes)
 }

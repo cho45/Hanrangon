@@ -12,23 +12,7 @@
 		{{if or (eq $i 0) (not (isSameDay (index $entries (sub $i 1)).Date $e.Date))}}
 			<div class="date"><a href="{{datePath $e.Date}}">{{formatDate $e.Date}}</a></div>
 		{{end}}
-		{{template "article" dict "Entry" $e "IsAuth" $isAuth "IsPermalink" $isDetail}}
-	{{end}}
-
-	{{if .IsDetail}}
-		{{if .Trackbacks}}
-			<div class="trackbacks">
-				<h3>この記事への言及</h3>
-				<ul>
-					{{range .Trackbacks}}
-						<li>
-							<a href="/{{.Path}}">{{.Title}}</a>
-							<span class="date">({{formatDate .Date}})</span>
-						</li>
-					{{end}}
-				</ul>
-			</div>
-		{{end}}
+		{{template "article" dict "Entry" $e "IsAuth" $isAuth "IsPermalink" $isDetail "IsFirst" (eq $i 0) "Trackbacks" $.Trackbacks}}
 	{{end}}
 </div>
 
@@ -51,11 +35,12 @@
 
 {{define "article"}}
 {{$cleanTitle := cleanTitle .Entry.Title}}
+{{if eq $cleanTitle ""}}{{$cleanTitle = "✖"}}{{end}}
 {{$tags := getTags .Entry.Title}}
 {{$canonical := printf "/%s" .Entry.Path}}
 <article
 	id="post-{{.Entry.CreatedAt.Unix}}"
-	class="{{range $tags}}{{.}} {{end}}status-public"
+	class="{{range $tags}}{{.}} {{end}}{{if .IsFirst}}first {{end}}status-{{.Entry.Status}}"
 	data-id="{{.Entry.ID}}"
 	{{if not .IsPermalink}}
 	itemprop="blogPosts"
@@ -70,18 +55,89 @@
 				<a href="/{{.}}/"><span itemprop="keywords">{{.}}</span></a>
 			{{end}}
 			|
-			<time data-epoch="{{$.Entry.CreatedAt.Unix}}" datetime="{{$.Entry.CreatedAt.UTC.Format "2006-01-02T15:04:05Z"}}" itemprop="datePublished">
-				{{$.Entry.CreatedAt.Format "15:04"}}
+			<time data-epoch="{{.Entry.CreatedAt.Unix}}" datetime="{{.Entry.CreatedAt.UTC.Format "2006-01-02T15:04:05Z"}}" itemprop="datePublished">
+				{{.Entry.CreatedAt.Format "15:04"}}
 			</time>
-			{{if $.IsAuth}}
+
+			{{if eq .Entry.Status "scheduled"}}
+				| {{if .Entry.PublishAt.Valid}}<time data-epoch="{{.Entry.PublishAt.Time.Unix}}" datetime="{{.Entry.PublishAt.Time.UTC.Format "2006-01-02T15:04:05Z"}}">{{.Entry.PublishAt.Time.Format "2006-01-02 15:04"}}</time>{{else}}未来{{end}}に公開
+			{{end}}
+
+			{{if .IsAuth}}
 				| <a href="javascript:void(0)" class="nogag-edit">編集</a>
 			{{end}}
+
+			<div style="display: none">
+				<meta itemscope itemprop="mainEntityOfPage"  itemType="https://schema.org/WebPage" content="{{$canonical}}">
+				<span itemprop="headline">{{summary .Entry.FormattedBody 100}}</span>
+
+				<span itemprop="author" itemscope itemtype="https://schema.org/Person">
+					<a href="http://www.lowreal.net/" itemprop="url">
+						<span itemprop="name">cho45</span>
+					</a>
+				</span>
+
+				<div itemprop="publisher" itemscope itemtype="https://schema.org/Organization">
+					<div itemprop="logo" itemscope itemtype="https://schema.org/ImageObject">
+						<meta itemprop="url" content="https://www.lowreal.net/images/logo.png">
+						<meta itemprop="width" content="189">
+						<meta itemprop="height" content="105">
+					</div>
+					<meta itemprop="name" content="cho45">
+				</div>
+
+				<meta itemprop="datePublished" content="{{.Entry.CreatedAt.UTC.Format "2006-01-02T15:04:05Z"}}">
+				<meta itemprop="dateModified" content="{{.Entry.ModifiedAt.UTC.Format "2006-01-02T15:04:05Z"}}">
+
+				<div itemprop="image" itemscope itemtype="https://schema.org/ImageObject">
+					<meta itemprop="url" content="https://www.lowreal.net/images/logo.png">
+					<meta itemprop="width" content="189">
+					<meta itemprop="height" content="105">
+				</div>
+			</div>
 		</div>
 	</header>
 
 	<div class="content" itemprop="articleBody">
 		{{.Entry.FormattedBody | safeHTML}}
+
+		{{range $tags}}
+		<ol itemscope itemtype="http://schema.org/BreadcrumbList">
+			<li itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem">
+				<a itemprop="item" href="/"><span itemprop="name">トップ</span></a>
+				<meta itemprop="position" content="1">
+			</li>
+			<li itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem">
+				<a itemprop="item" href="/{{.}}/"><span itemprop="name">{{.}}</span></a>
+				<meta itemprop="position" content="2">
+			</li>
+			<li itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem">
+				<a itemprop="item" href="{{$canonical}}"><span itemprop="name">{{$cleanTitle}}</span></a>
+				<meta itemprop="position" content="3">
+			</li>
+		</ol>
+		{{end}}
 	</div>
+
+	{{if .Trackbacks}}
+	<div class="content trackbacks">
+		<h3>このエントリを参照するエントリ</h3>
+		{{range .Trackbacks}}
+		<ul>
+			<li data-id="{{.ID}}">
+				<a href="/{{.Path}}">
+					<b>{{if .Title}}{{.Title}}{{else}}✖{{end}}</b><br>
+					<span class="summary">{{summary .Body 140}}</span>
+
+					<time data-epoch="{{.CreatedAt.Unix}}" datetime="{{.CreatedAt.UTC.Format "2006-01-02T15:04:05Z"}}" itemprop="datePublished">
+						{{.CreatedAt.Format "15:04"}}
+					</time>
+				</a>
+			</li>
+		</ul>
+		{{end}}
+	</div>
+	{{end}}
 
 	<div class="content similar-entries"></div>
 
