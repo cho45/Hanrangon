@@ -102,6 +102,14 @@ func (app *AppImpl) HandleLogin(c echo.Context) error {
 	if returnPath == "" {
 		returnPath = "/"
 	}
+
+	if app.IsAuth(c) {
+		if returnPath == "/" {
+			returnPath = "/admin/edit"
+		}
+		return c.Redirect(http.StatusFound, returnPath)
+	}
+
 	cookie, _ := c.Cookie(CSRFCookieName)
 	sk := ""
 	if cookie != nil {
@@ -117,12 +125,20 @@ func (app *AppImpl) HandleLogin(c echo.Context) error {
 }
 
 func (app *AppImpl) HandleLoginPost(c echo.Context) error {
-	username := c.FormValue("username")
-	password := c.FormValue("password")
 	returnPath := c.FormValue("return")
 	if returnPath == "" {
 		returnPath = "/"
 	}
+
+	if app.IsAuth(c) {
+		if returnPath == "/" {
+			returnPath = "/admin/edit"
+		}
+		return c.Redirect(http.StatusFound, returnPath)
+	}
+
+	username := c.FormValue("username")
+	password := c.FormValue("password")
 
 	if username == app.config.Username && password == app.config.Password {
 		sess, _ := session.Get("session", c)
