@@ -14,9 +14,10 @@ Perl 版 Nogag (氾濫原) の Go (Golang) によるリライトプロジェク�
 
 ## Prerequisites
 
-- Go 1.23+
-- Node.js (記事保存時のポストプロセスに使用)
-- `sqlc` CLI
+- Go 1.24+
+- Node.js (記事保存時のポストプロセスおよび管理画面のビルドに使用)
+- `sqlc` CLI (DB コード生成に使用)
+- `goimports` (コードのフォーマットに使用)
 
 ## Setup & Run
 
@@ -26,7 +27,10 @@ Perl 版 Nogag (氾濫原) の Go (Golang) によるリライトプロジェク�
 # sqlc (DB コード生成)
 go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
 
-# Admin Frontend (Vite/Lit)
+# goimports (コードフォーマット)
+go install golang.org/x/tools/cmd/goimports@latest
+
+# Admin Frontend (Vite/Svelte 5)
 cd admin-frontend
 npm install
 npm run build
@@ -41,8 +45,7 @@ cd ..
 ### 2. コード生成
 
 ```bash
-# SQL クエリからの Go コード生成
-sqlc generate
+make generate
 ```
 
 ### 3. 設定
@@ -56,10 +59,26 @@ cp config.toml.sample config.toml
 ### 4. サーバーの起動
 
 ```bash
-go run .
+make run
 ```
 
 デフォルトで http://localhost:5555 でリッスンします。
+
+## Subcommands
+
+Hanrangon は以下のサブコマンドをサポートしています。
+
+- `serve`: サーバーの起動（デフォルト）
+- `reformat`: 全記事の再フォーマット
+- `recalc-tfidf`: TF-IDF の再計算
+- `backup`: データベースのバックアップ
+- `index-images`: 画像のインデックス作成
+- `update-password`: 管理者パスワードの更新
+
+実行例:
+```bash
+go run -tags "sqlite_math_functions" . update-password
+```
 
 ## Project Structure
 
@@ -77,8 +96,14 @@ go run .
 
 ## Testing
 
-インメモリ SQLite を使用した統合テストが可能です。
+インメモリ SQLite を使用した統合テストが可能です。SQLite の数学関数を使用するため、`sqlite_math_functions` タグが必要です。
 
 ```bash
-go test ./...
+make test
+```
+
+Node.js によるポストプロセスのテスト:
+
+```bash
+make postprocess-test
 ```

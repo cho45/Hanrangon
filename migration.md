@@ -124,7 +124,7 @@ sudo mv /service/worker /service/.worker
 
 ### 5.2 systemd ユニットの設置
 ```bash
-sudo cp deploy/hanrangon.service /etc/systemd/system/
+sudo ln -sf $PWD/deploy/hanrangon.service /etc/systemd/system/hanrangon.service
 sudo systemctl daemon-reload
 sudo systemctl enable hanrangon
 sudo systemctl start hanrangon
