@@ -344,29 +344,41 @@ func (app *AppImpl) HandleFeed(c echo.Context) error {
 func (app *AppImpl) HandleSitemap(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	entries, err := app.queries.ListAllEntriesForSitemap(ctx)
+	rows, err := app.queries.ListAllEntriesForSitemap(ctx)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries for sitemap").SetInternal(err)
 	}
 
-	if len(entries) > 0 {
-		latest := entries[0].ModifiedAt
-		for _, e := range entries {
-			if e.ModifiedAt.After(latest) {
-				latest = e.ModifiedAt
-			}
-		}
-		etag := GenerateListETag(latest, len(entries), "sitemap", app.IsAuth(c))
-		if app.CheckCache(c, latest, etag) {
-			return nil
-		}
+	var latestMod string
+	if len(rows) > 0 {
+		latestMod = rows[0].ModifiedAt.Format(time.RFC3339)
 	}
 
-	c.Response().Header().Set(echo.HeaderContentType, "application/xml; charset=utf-8")
-	data := &view.SitemapData{
-		Entries: entries,
+	urls := []view.SitemapURL{
+		{Loc: "https://lowreal.net/", LastMod: latestMod},
+		{Loc: "https://lowreal.net/archive", LastMod: latestMod},
+		{Loc: "https://lowreal.net/photo/", LastMod: latestMod},
 	}
-	return app.templates.Render(c, "sitemap.xml", data)
+
+	for _, row := range rows {
+		urls = append(urls, view.SitemapURL{
+			Loc:     "https://lowreal.net/" + row.Path,
+			LastMod: row.ModifiedAt.Format(time.RFC3339),
+		})
+	}
+
+	sitemap := view.SitemapXML{
+		URLs: urls,
+	}
+
+	c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationXMLCharsetUTF8)
+	c.Response().WriteHeader(http.StatusOK)
+	if _, err := c.Response().Write([]byte(xml.Header)); err != nil {
+		return err
+	}
+	enc := xml.NewEncoder(c.Response().Writer)
+	enc.Indent("", "\t")
+	return enc.Encode(sitemap)
 }
 
 func (app *AppImpl) HandleRobotsTxt(c echo.Context) error {

@@ -84,9 +84,14 @@ type AtomContent struct {
 	Body string `xml:",cdata"`
 }
 
-// SitemapData holds data for the sitemap
-type SitemapData struct {
-	Entries []model.ListAllEntriesForSitemapRow
+type SitemapXML struct {
+	XMLName xml.Name     `xml:"http://www.sitemaps.org/schemas/sitemap/0.9 urlset"`
+	URLs    []SitemapURL `xml:"url"`
+}
+
+type SitemapURL struct {
+	Loc     string `xml:"loc"`
+	LastMod string `xml:"lastmod,omitempty"`
 }
 
 // SimilarEntry represents an entry with similarity score
