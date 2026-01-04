@@ -120,9 +120,14 @@ func (app *AppImpl) IsAuth(c echo.Context) bool {
 // MathJax、シンタックスハイライト、画像処理、ウィジェット処理を行う
 func (app *AppImpl) Postprocess(ctx context.Context, html string) (string, error) {
 	start := time.Now()
-	nodePath, err := exec.LookPath("node")
-	if err != nil {
-		return "", fmt.Errorf("node binary not found in PATH: %w", err)
+
+	nodePath := app.config.NodePath
+	if nodePath == "" {
+		var err error
+		nodePath, err = exec.LookPath("node")
+		if err != nil {
+			return "", fmt.Errorf("node binary not found in PATH and node_path is not configured: %w", err)
+		}
 	}
 	log.Printf("[postprocess] Starting postprocess using %s (input size: %d bytes)", nodePath, len(html))
 
@@ -167,9 +172,14 @@ func (app *AppImpl) Postprocess(ctx context.Context, html string) (string, error
 // PostprocessWithProgress は進捗通知付きでpostprocessを実行する
 func (app *AppImpl) PostprocessWithProgress(ctx context.Context, html string, session *ProgressSession) (string, error) {
 	start := time.Now()
-	nodePath, err := exec.LookPath("node")
-	if err != nil {
-		return "", fmt.Errorf("node binary not found in PATH: %w", err)
+
+	nodePath := app.config.NodePath
+	if nodePath == "" {
+		var err error
+		nodePath, err = exec.LookPath("node")
+		if err != nil {
+			return "", fmt.Errorf("node binary not found in PATH and node_path is not configured: %w", err)
+		}
 	}
 	log.Printf("[postprocess] Starting postprocess using %s (input size: %d bytes)", nodePath, len(html))
 

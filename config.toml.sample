@@ -15,3 +15,6 @@ base_url = "http://localhost:5555"
 username = "admin"
 password = "changeme"
 session_secret = "your-random-secret-here"
+
+# Path to node binary (optional)
+# node_path = "/usr/local/bin/node"

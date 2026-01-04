@@ -22,6 +22,7 @@ type Config struct {
 	BaseURL         string `toml:"base_url"`
 	Listen          string `toml:"listen"`
 	Environment     string `toml:"environment"` // "development" or "production"
+	NodePath        string `toml:"node_path"`
 }
 
 func LoadConfig() *Config {
@@ -82,6 +83,9 @@ func LoadConfig() *Config {
 	}
 	if env := os.Getenv("HANRANGON_ENV"); env != "" {
 		cfg.Environment = env
+	}
+	if env := os.Getenv("HANRANGON_NODE_PATH"); env != "" {
+		cfg.NodePath = env
 	}
 
 	// デフォルトは development (開発効率優先)
