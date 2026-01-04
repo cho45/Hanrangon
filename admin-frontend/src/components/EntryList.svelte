@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import strftime from 'strftime';
 
   let { onEdit } = $props<{ onEdit: (id: number) => void }>();
 
@@ -9,6 +10,10 @@
     path: string;
     status: string;
     date: string;
+    format: string;
+    created_at: string;
+    modified_at: string;
+    publish_at: { Time: string; Valid: boolean };
   }
 
   let entries = $state<Entry[]>([]);
@@ -46,6 +51,11 @@
       fetchEntries();
     }
   }
+
+  function formatTime(iso: string) {
+    if (!iso) return '-';
+    return strftime('%y/%m/%d %H:%M', new Date(iso));
+  }
 </script>
 
 <div class="entry-list">
@@ -71,6 +81,10 @@
             <th>日付</th>
             <th>ステータス</th>
             <th>タイトル / パス</th>
+            <th>形式</th>
+            <th>作成</th>
+            <th>更新</th>
+            <th>公開</th>
             <th>操作</th>
           </tr>
         </thead>
@@ -86,6 +100,10 @@
                 <div class="title">{entry.title}</div>
                 <div class="path"><a href="/{entry.path}" target="_blank">/{entry.path}</a></div>
               </td>
+              <td class="small">{entry.format}</td>
+              <td class="time">{formatTime(entry.created_at)}</td>
+              <td class="time">{formatTime(entry.modified_at)}</td>
+              <td class="time">{entry.publish_at?.Valid ? formatTime(entry.publish_at.Time) : '-'}</td>
               <td>
                 <button class="edit-btn" onclick={() => onEdit(entry.id)}>編集</button>
               </td>
@@ -105,7 +123,7 @@
 <style>
   .entry-list {
     padding: 20px;
-    max-width: 1000px;
+    max-width: 1200px;
     margin: 0 auto;
   }
 
@@ -154,6 +172,17 @@
   .date {
     white-space: nowrap;
     font-family: monospace;
+  }
+
+  .time {
+    white-space: nowrap;
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: #666;
+  }
+
+  .small {
+    font-size: 0.8rem;
   }
 
   .title {
