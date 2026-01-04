@@ -7,23 +7,10 @@ import (
 	"github.com/cho45/hanrangon/model"
 )
 
-var titleTagRegexp = regexp.MustCompile(`\s*\[([^\]]+)\]\s*`)
 var htmlTagRegexp = regexp.MustCompile(`<[^>]*>`)
 
 func IsSameDay(t1Str, t2Str string) bool {
 	return t1Str == t2Str
-}
-
-func ParseTitle(rawTitle string) (string, []string) {
-	tags := []string{}
-	cleanTitle := titleTagRegexp.ReplaceAllStringFunc(rawTitle, func(match string) string {
-		submatch := titleTagRegexp.FindStringSubmatch(match)
-		if len(submatch) > 1 {
-			tags = append(tags, submatch[1])
-		}
-		return ""
-	})
-	return strings.TrimSpace(cleanTitle), tags
 }
 
 func Summary(html string, length interface{}) string {

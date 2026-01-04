@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"database/sql"
+	"encoding/xml"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -72,9 +73,10 @@ func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
 	}
 
-	entries := make([]model.Entry, len(rows))
+	entries := make([]*model.Entry, len(rows))
 	for i, r := range rows {
-		entries[i] = model.Entry(r)
+		e := model.Entry(r)
+		entries[i] = &e
 	}
 
 	if len(entries) > 0 {
@@ -173,7 +175,7 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 				PageTitle: pageTitle,
 				IsAuth:    app.IsAuth(c),
 			},
-			Entries:  []model.Entry{},
+			Entries:  []*model.Entry{},
 			IsDetail: false,
 			NextPage: "",
 		}
@@ -185,9 +187,10 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
 	}
 
-	entries := make([]model.Entry, len(rows))
+	entries := make([]*model.Entry, len(rows))
 	for i, r := range rows {
-		entries[i] = model.Entry(r)
+		e := model.Entry(r)
+		entries[i] = &e
 	}
 
 	if len(entries) > 0 {
@@ -249,9 +252,10 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 		nextPage = fmt.Sprintf("/%s/.page/%s/%d", category, nextDate, limit)
 	}
 
-	entries := make([]model.Entry, len(rows))
+	entries := make([]*model.Entry, len(rows))
 	for i, r := range rows {
-		entries[i] = model.Entry(r)
+		e := model.Entry(r)
+		entries[i] = &e
 	}
 
 	if len(entries) > 0 {
@@ -285,26 +289,56 @@ func (app *AppImpl) HandleFeed(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
 	}
 
-	entries := make([]model.Entry, len(rows))
+	entries := make([]*model.Entry, len(rows))
 	for i, r := range rows {
-		entries[i] = model.Entry(r)
+		e := model.Entry(r)
+		entries[i] = &e
 	}
 
-	updated := time.Now()
-	if len(entries) > 0 {
-		updated = getLatestModTime(entries)
-		etag := GenerateListETag(updated, len(entries), "feed", app.IsAuth(c))
-		if app.CheckCache(c, updated, etag) {
-			return nil
+	updated := getLatestModTime(entries)
+	if updated.IsZero() {
+		updated = time.Now()
+	}
+
+	atomEntries := make([]view.AtomEntry, len(entries))
+	for i, e := range entries {
+		atomEntries[i] = view.AtomEntry{
+			Title: e.DisplayTitle(),
+			Link: view.AtomLink{
+				Href: "https://lowreal.net/" + e.Path,
+			},
+			ID:        fmt.Sprintf("tag:lowreal.net,2005:entry:%d", e.ID),
+			Updated:   e.ModifiedAt.Format(time.RFC3339),
+			Published: e.CreatedAt.Format(time.RFC3339),
+			Content: view.AtomContent{
+				Type: "html",
+				Body: e.FormattedBody,
+			},
 		}
 	}
 
-	c.Response().Header().Set(echo.HeaderContentType, "application/atom+xml; charset=utf-8")
-	data := &view.FeedData{
-		Entries: entries,
+	feed := view.AtomFeed{
+		Title: "氾濫原",
+		Link: []view.AtomLink{
+			{Href: "https://lowreal.net/"},
+			{Href: "https://lowreal.net/feed", Rel: "self", Type: "application/atom+xml"},
+		},
 		Updated: updated.Format(time.RFC3339),
+		Author:  view.AtomAuthor{Name: "cho45"},
+		ID:      "tag:lowreal.net,2005:feed",
+		Entries: atomEntries,
 	}
-	return app.templates.Render(c, "feed.xml", data)
+
+	feed.Entries = atomEntries
+
+	c.Response().Header().Set(echo.HeaderContentType, "application/atom+xml")
+	c.Response().WriteHeader(http.StatusOK)
+	if _, err := c.Response().Write([]byte(xml.Header)); err != nil {
+		return err
+	}
+	enc := xml.NewEncoder(c.Response().Writer)
+	enc.Indent("", "\t")
+	return enc.Encode(feed)
 }
 
 func (app *AppImpl) HandleSitemap(c echo.Context) error {
@@ -379,7 +413,7 @@ func (app *AppImpl) HandleApiSimilar(c echo.Context) error {
 			for _, r := range rows {
 				e := model.Entry(r)
 				similarEntries = append(similarEntries, view.SimilarEntry{
-					Entry: e,
+					Entry: &e,
 					Score: scoreMap[e.ID],
 				})
 			}
@@ -518,9 +552,14 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 		return nil
 	}
 
-	trackbacks, err := app.queries.ListTrackbackEntries(ctx, sql.NullInt64{Int64: entry.ID, Valid: true})
+	rows, err := app.queries.ListTrackbackEntries(ctx, sql.NullInt64{Int64: entry.ID, Valid: true})
 	if err != nil && err != sql.ErrNoRows {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch trackbacks").SetInternal(err)
+	}
+	trackbacks := make([]*model.ListTrackbackEntriesRow, len(rows))
+	for i, r := range rows {
+		row := r
+		trackbacks[i] = &row
 	}
 
 	prevRow, err := app.queries.GetPrevEntry(ctx, entry.CreatedAt)
@@ -561,13 +600,12 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 		nextPtr = &n
 	}
 
-	cleanTitle, _ := view.ParseTitle(entry.Title)
 	data := &view.IndexData{
 		LayoutData: view.LayoutData{
-			PageTitle: cleanTitle,
+			PageTitle: entry.DisplayTitle(),
 			IsAuth:    app.IsAuth(c),
 		},
-		Entries:    []model.Entry{entry},
+		Entries:    []*model.Entry{&entry},
 		IsDetail:   true,
 		Trackbacks: trackbacks,
 		Prev:       prevPtr,
@@ -575,7 +613,7 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 	}
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
-func getLatestModTime(entries []model.Entry) time.Time {
+func getLatestModTime(entries []*model.Entry) time.Time {
 	if len(entries) == 0 {
 		return time.Time{}
 	}

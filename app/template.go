@@ -11,6 +11,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/Masterminds/sprig/v3"
+	"github.com/cho45/hanrangon/model"
 	"github.com/cho45/hanrangon/view"
 	"github.com/labstack/echo/v4"
 )
@@ -47,15 +48,15 @@ func buildFuncMap() template.FuncMap {
 	funcMap["datePath"] = datePath
 	// parseTitleはエラー戻り値付きに変換
 	funcMap["parseTitle"] = func(title string) (interface{}, error) {
-		clean, tags := view.ParseTitle(title)
+		clean, tags := model.ParseTitle(title)
 		return []interface{}{clean, tags}, nil
 	}
 	funcMap["cleanTitle"] = func(title string) string {
-		clean, _ := view.ParseTitle(title)
+		clean, _ := model.ParseTitle(title)
 		return clean
 	}
 	funcMap["getTags"] = func(title string) []string {
-		_, tags := view.ParseTitle(title)
+		_, tags := model.ParseTitle(title)
 		return tags
 	}
 	funcMap["summary"] = view.Summary

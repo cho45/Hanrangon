@@ -1,6 +1,8 @@
 package view
 
 import (
+	"encoding/xml"
+
 	"github.com/cho45/hanrangon/model"
 )
 
@@ -13,12 +15,12 @@ type LayoutData struct {
 // IndexData holds data for both index and entry detail pages
 type IndexData struct {
 	LayoutData
-	Entries    []model.Entry                   // For index: multiple entries, for detail: single entry
-	IsDetail   bool                            // true for entry detail page, false for list page
-	NextPage   string                          // For index pagination
-	Trackbacks []model.ListTrackbackEntriesRow // For entry detail
-	Prev       *model.Entry                    // For entry detail navigation
-	Next       *model.Entry                    // For entry detail navigation
+	Entries    []*model.Entry                   // For index: multiple entries, for detail: single entry
+	IsDetail   bool                             // true for entry detail page, false for list page
+	NextPage   string                           // For index pagination
+	Trackbacks []*model.ListTrackbackEntriesRow // For entry detail
+	Prev       *model.Entry                     // For entry detail navigation
+	Next       *model.Entry                     // For entry detail navigation
 }
 
 // ArchiveData holds data for the archive page
@@ -48,10 +50,38 @@ type AdminIndexData struct {
 	SessionKey string
 }
 
-// FeedData holds data for the Atom feed
-type FeedData struct {
-	Entries []model.Entry
-	Updated string // RFC3339形式
+type AtomFeed struct {
+	XMLName xml.Name    `xml:"http://www.w3.org/2005/Atom feed"`
+	Title   string      `xml:"title"`
+	Link    []AtomLink  `xml:"link"`
+	Updated string      `xml:"updated"`
+	Author  AtomAuthor  `xml:"author"`
+	ID      string      `xml:"id"`
+	Entries []AtomEntry `xml:"entry"`
+}
+
+type AtomLink struct {
+	Href string `xml:"href,attr"`
+	Rel  string `xml:"rel,attr,omitempty"`
+	Type string `xml:"type,attr,omitempty"`
+}
+
+type AtomAuthor struct {
+	Name string `xml:"name"`
+}
+
+type AtomEntry struct {
+	Title     string      `xml:"title"`
+	Link      AtomLink    `xml:"link"`
+	ID        string      `xml:"id"`
+	Updated   string      `xml:"updated"`
+	Published string      `xml:"published"`
+	Content   AtomContent `xml:"content"`
+}
+
+type AtomContent struct {
+	Type string `xml:"type,attr"`
+	Body string `xml:",cdata"`
 }
 
 // SitemapData holds data for the sitemap
@@ -61,7 +91,7 @@ type SitemapData struct {
 
 // SimilarEntry represents an entry with similarity score
 type SimilarEntry struct {
-	model.Entry
+	*model.Entry
 	Score float64
 }
 

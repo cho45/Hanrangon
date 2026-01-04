@@ -20,10 +20,10 @@
 	{{if .IsDetail}}
 		{{/* Entry detail navigation */}}
 		{{if .Next}}
-			<a href="/{{.Next.Path}}" rel="prev"> {{.Next.Title}} &#x25B6;</a>
+			<a href="/{{.Next.Path}}" rel="prev"> {{.Next.DisplayTitle}} &#x25B6;</a>
 		{{end}}
 		{{if .Prev}}
-			<a href="/{{.Prev.Path}}" rel="next">&#x25C0; {{.Prev.Title}}</a>
+			<a href="/{{.Prev.Path}}" rel="next">&#x25C0; {{.Prev.DisplayTitle}}</a>
 		{{end}}
 	{{else}}
 		{{/* Index pagination */}}
@@ -34,9 +34,8 @@
 </div>
 
 {{define "article"}}
-{{$cleanTitle := cleanTitle .Entry.Title}}
-{{if eq $cleanTitle ""}}{{$cleanTitle = "✖"}}{{end}}
-{{$tags := getTags .Entry.Title}}
+{{$cleanTitle := .Entry.DisplayTitle}}
+{{$tags := .Entry.Tags}}
 {{$canonical := printf "/%s" .Entry.Path}}
 <article
 	id="post-{{.Entry.CreatedAt.Unix}}"
@@ -126,7 +125,7 @@
 		<ul>
 			<li data-id="{{.ID}}">
 				<a href="/{{.Path}}">
-					<b>{{if .Title}}{{.Title}}{{else}}✖{{end}}</b><br>
+					<b>{{.DisplayTitle}}</b><br>
 					<span class="summary">{{summary .Body 140}}</span>
 
 					<time data-epoch="{{.CreatedAt.Unix}}" datetime="{{.CreatedAt.UTC.Format "2006-01-02T15:04:05Z"}}" itemprop="datePublished">
