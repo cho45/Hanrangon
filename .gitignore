@@ -32,3 +32,5 @@ postprocess/node_modules/
 MathJax-demos-node/
 MathJax/
 todo.md
+static/**/*.gz
+static/**/*.br
