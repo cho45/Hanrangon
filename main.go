@@ -13,8 +13,6 @@ import (
 	"syscall"
 	"time"
 
-	_ "net/http/pprof"
-
 	"github.com/cho45/hanrangon/app"
 	"github.com/cho45/hanrangon/jobqueue"
 	"github.com/cho45/hanrangon/jobs"
@@ -25,10 +23,6 @@ import (
 )
 
 func main() {
-	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
-
 	// 1. Determine subcommand
 	cmd := "serve"
 	subArgs := os.Args[1:]
