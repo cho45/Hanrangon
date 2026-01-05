@@ -3,6 +3,7 @@ package app
 import (
 	"log"
 	"path/filepath"
+	"strings"
 
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/session"
@@ -31,6 +32,22 @@ func NewServer(app App) *echo.Echo {
 	}))
 	e.Use(middleware.Recover())
 	e.Use(middleware.Gzip())
+	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			c.Response().Before(func() {
+				if app.IsAuth(c) {
+					h := c.Response().Header()
+					cc := h.Get("Cache-Control")
+					if cc == "" {
+						h.Set("Cache-Control", "private")
+					} else if !strings.Contains(cc, "private") {
+						h.Set("Cache-Control", "private, "+cc)
+					}
+				}
+			})
+			return next(c)
+		}
+	})
 	e.Use(app.CSRF)
 
 	// Static files
