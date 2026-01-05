@@ -443,40 +443,6 @@ body > * {
 	font-weight: normal;
 }
 
-.headline {
-	margin: 0 0 3em 0;
-	padding: 0;
-}
-
-.headline .date {
-	display: block;
-	clear: both;
-	font-family:
-		'Noto Serif JP',
-		YuMincho,
-		"Hiragino Mincho ProN",
-		"HG明朝E",
-		serif;
-	font-weight: 400;
-	font-size: 80%;
-	margin: 0;
-	text-align: left;
-	border-width: 0 0 1px 0;
-	border-style: solid;
-	border-color: #eee;
-	padding: 3px 0;
-	color: #333;
-}
-
-.headline .date a {
-	color: inherit;
-	text-decoration: none;
-}
-
-.headline .headline-item {
-	padding-left: 2em;
-}
-
 .entries {
 	margin: 0 0 3em 0;
 	padding: 0;
@@ -957,18 +923,6 @@ figure.http:after {
 	margin: 0;
 }
 
-.google-plus-button {
-	display: inline-block;
-	height: 20px;
-	padding: 0 2px;
-	position: relative;
-}
-.google-plus-button img {
-	position: relative;
-	top: 1px;
-	vertical-align: top;
-}
-
 .button {
 	display: inline-block;
 	position: relative;
@@ -1075,38 +1029,6 @@ figure.http:after {
 	color: #fff;
 	background: #000 !important;
 }
-
-.adsense {
-	text-align: center;
-	margin: 0;
-	padding: 0;
-}
-
-.adsense-responsive {
-	display: block;
-	width: 728px; height: 90px;
-}
-
-.af {
-	font-feature-settings: "palt";
-	margin-top: 0.5em;
-}
-
-.af .notice {
-	font-color: #777;
-	font-weight: bold;
-	font-size: 16px;
-}
-
-.af a {
-	font-weight: bold;
-}
-
-.af a:link ,
-.af a:visited {
-	color: #000088;
-}
-
 
 ol[itemtype*="BreadcrumbList"] {
 	display: none;
@@ -1410,24 +1332,8 @@ ol[itemtype*="BreadcrumbList"] li:first-child:before {
 		color: #fff;
 	}
 
-	.entries article .adsense ,
-	.adsense {
-		text-align: center;
-		padding: 0;
-		margin: 1em auto;
-		overflow: hidden;
-	}
-
-	.adsense iframe {
-		margin: auto;
-	}
-
 	.share-buttons .share-button[href*="line.me"] {
 		display: inline-block;
-	}
-
-	.adsense-responsive {
-		width: 468px; height: 60px;
 	}
 
 	.entries article .content.similar-entries ul.similar-images a {
@@ -1436,11 +1342,5 @@ ol[itemtype*="BreadcrumbList"] li:first-child:before {
 		height: 100px;
 		background-position: center;
 		background-size: cover;
-	}
-}
-
-@media only screen and (max-width : 500px) {
-	.adsense-responsive {
-		width: 320px; height: 100px;
 	}
 }
