@@ -39,9 +39,11 @@ func NewServer(app App) *echo.Echo {
 					h := c.Response().Header()
 					cc := h.Get("Cache-Control")
 					if cc == "" {
-						h.Set("Cache-Control", "private")
+						h.Set("Cache-Control", "private, no-cache")
 					} else if !strings.Contains(cc, "private") {
-						h.Set("Cache-Control", "private, "+cc)
+						h.Set("Cache-Control", "private, no-cache, "+cc)
+					} else if !strings.Contains(cc, "no-cache") {
+						h.Set("Cache-Control", cc+", no-cache")
 					}
 				}
 			})

@@ -40,15 +40,15 @@ func TestCacheControlPrivateWhenAuth(t *testing.T) {
 		}
 
 		cc := rec.Header().Get("Cache-Control")
-		if cc != "private" {
-			t.Errorf("want Cache-Control: private for authenticated request, got %q", cc)
+		if cc != "private, no-cache" {
+			t.Errorf("want Cache-Control: private, no-cache for authenticated request, got %q", cc)
 		}
 	})
 
 	t.Run("Authenticated request with handler-set Cache-Control", func(t *testing.T) {
-		// Create a temporary route that sets Cache-Control: no-cache
+		// Create a temporary route that sets Cache-Control: no-store
 		env.server.GET("/test-cache-control", func(c echo.Context) error {
-			c.Response().Header().Set("Cache-Control", "no-cache")
+			c.Response().Header().Set("Cache-Control", "no-store")
 			return c.String(http.StatusOK, "ok")
 		})
 
@@ -58,9 +58,9 @@ func TestCacheControlPrivateWhenAuth(t *testing.T) {
 		env.server.ServeHTTP(rec, req)
 
 		cc := rec.Header().Get("Cache-Control")
-		// Order might be "private, no-cache"
-		if cc != "private, no-cache" {
-			t.Errorf("want Cache-Control: private, no-cache, got %q", cc)
+		// Order might be "private, no-cache, no-store"
+		if cc != "private, no-cache, no-store" {
+			t.Errorf("want Cache-Control: private, no-cache, no-store, got %q", cc)
 		}
 	})
 }

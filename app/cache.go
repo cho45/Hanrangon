@@ -52,6 +52,7 @@ func (app *AppImpl) CheckCache(c echo.Context, lastMod time.Time, etag string) b
 	}
 
 	// Set headers
+	res.Header().Set("Cache-Control", "no-cache")
 	if !lastMod.IsZero() {
 		res.Header().Set("Last-Modified", lastMod.UTC().Format(http.TimeFormat))
 	}
