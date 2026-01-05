@@ -2,10 +2,9 @@
 links = [
   { url = "/css/style.css", rel = "preload", as = "style" },
   { url = "/images/hanrangen.svg", rel = "preload", as = "image" },
-  { url = "/js/daterelative.js", rel = "preload", as = "script" },
   { url = "/js/budoux-ja.min.js", rel = "preload", as = "script" },
-  { url = "/js/abcjs_basic_5.1.1-min.js", rel = "preload", as = "script" },
-  { url = "/js/nogag.js", rel = "preload", as = "script" },
+  { url = "/js/nogag.js", rel = "modulepreload" },
+  { url = "/js/daterelative.js", rel = "modulepreload" },
   { url = "https://fonts.googleapis.com", rel = "preconnect", crossorigin = true },
   { url = "https://fonts.gstatic.com", rel = "preconnect", crossorigin = true }
 ]
@@ -38,10 +37,8 @@ links = [
 
 	<link rel="stylesheet" href="/css/style.css"/>
 
-	<script src="/js/daterelative.js" defer></script>
 	<script src="/js/budoux-ja.min.js" defer></script>
-	<script src="/js/abcjs_basic_5.1.1-min.js" defer></script>
-	<script src="/js/nogag.js" defer></script>
+	<script type="module" src="/js/nogag.js"></script>
 </head>
 <body>
 	<header id="global-header">

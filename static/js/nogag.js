@@ -1,63 +1,44 @@
-if (typeof IntersectionObserver === "undefined") {
-	window.IntersectionObserver = function () { };
-	window.IntersectionObserver.prototype = {
-		observe: function () {}
-	};
-}
+import { DateRelative } from './daterelative.js';
 
-Nogag = {
-	data : function (key) {
-		return document.documentElement.getAttribute('data-' + key);
+const Nogag = {
+	data(key) {
+		return document.documentElement.getAttribute(`data-${key}`);
 	},
 
-	initImages : function () {
-		var canvas = document.createElement('canvas');
-		var ctx = canvas.getContext('2d');
+	initImages() {
+		const canvas = document.createElement('canvas');
+		const ctx = canvas.getContext('2d');
 
-		/*
-		var observer = new IntersectionObserver( function (entries) {
-			for (let entry of entries) {
-				if (entry.isIntersecting && entry.intersectionRatio > 0.90) {
-					console.log(entry.intersectionRatio);
-					entry.target.classList.add("intersecting");
-				} else {
-					entry.target.classList.remove("intersecting");
-				}
-			}
-		}, {
-			threshold: [0.25, 0.89, 0.90, 1.0]
-		});
-		*/
+		const photos = document.querySelectorAll('a.picasa');
+		const placeholders = {};
 
-		var photos = document.querySelectorAll('a.picasa');
-		var placeholders = {};
-		for (var i = 0, it; (it = photos[i]); i++) (function (anchor) {
-			var img = anchor.querySelector('img');
-			var src = img.getAttribute('src');
+		for (const anchor of photos) {
+			const img = anchor.querySelector('img');
+			let src = img.getAttribute('src');
 			anchor.setAttribute('data-href', anchor.href);
 
-			// observer.observe(it);
-
 			// Loading placeholder
-			var width = img.getAttribute('width');
-			var height = img.getAttribute('height');
-			var wRatio = width  / window.innerWidth;
-			var hRatio = height / window.innerHeight;
-			var ratio = Math.max(wRatio, hRatio);
+			let width = parseInt(img.getAttribute('width'), 10);
+			let height = parseInt(img.getAttribute('height'), 10);
+			const wRatio = width / window.innerWidth;
+			const hRatio = height / window.innerHeight;
+			const ratio = Math.max(wRatio, hRatio);
+
 			if (ratio > 1) {
-				width  = Math.round(width  / ratio);
+				width = Math.round(width / ratio);
 				height = Math.round(height / ratio);
 			}
-			// console.log('fill empty image', width, height, wRatio, hRatio);
+
 			if (width && height) {
-				if (!placeholders[ width + 'x' + height ]) {
+				const key = `${width}x${height}`;
+				if (!placeholders[key]) {
 					canvas.width = width;
 					canvas.height = height;
 					ctx.fillStyle = "#dddddd";
 					ctx.fillRect(0, 0, width, height);
-					placeholders[ width + 'x' + height ] = canvas.toDataURL('image/png');
+					placeholders[key] = canvas.toDataURL('image/png');
 				}
-				img.src = placeholders[ width + 'x' + height ];
+				img.src = placeholders[key];
 			}
 
 			if (window.innerWidth > 1650) {
@@ -65,29 +46,25 @@ Nogag = {
 				src = src.replace(/\/s\d+\//, '/s0/');
 			}
 
-			var link = src.replace(/\/s(9[06]0|1280|2048)\//, '/s0/');
-
+			const link = src.replace(/\/s(9[06]0|1280|2048)\//, '/s0/');
 			anchor.href = link;
 
 			if (src !== img.getAttribute('src')) {
 				anchor.classList.add("loading");
-				var loader = new Image();
-				// console.log('upgrade loading ' + src);
-				loader.onload = function () {
+				const loader = new Image();
+				loader.onload = () => {
 					img.src = src;
-					// console.log('upgraded');
-					anchor.classList.remove('loading')
+					anchor.classList.remove('loading');
 				};
 				loader.src = src;
 			}
-		})(it);
-
+		}
 	},
 
-	init : function () {
-		var articles = document.querySelectorAll('article');
-		for (var i = 0, it; (it = articles[i]); i++) {
-			Nogag.initEntry(it);
+	init() {
+		const articles = document.querySelectorAll('article');
+		for (const article of articles) {
+			Nogag.initEntry(article);
 		}
 
 		DateRelative.updateAll();
@@ -97,77 +74,101 @@ Nogag = {
 		this.initBudouX();
 		this.initABC();
 
-		(function () {
-			if (Nogag.data('auth')) {
-				var button = document.querySelector('.nogag-new');
-				if (button) {
-					button.addEventListener('click', function () {
-						location.href = "/admin/edit";
-					});
-				}
+		if (Nogag.data('auth')) {
+			const button = document.querySelector('.nogag-new');
+			if (button) {
+				button.addEventListener('click', () => {
+					location.href = "/admin/edit";
+				});
 			}
-		})();
+		}
 	},
 
-	initSimilarEntries : async function () {
-		const similar = document.getElementById('preload-similar-entries').href;
+	async initSimilarEntries() {
+		const similarLink = document.getElementById('preload-similar-entries');
+		if (!similarLink) return;
+
+		const similar = similarLink.href;
 		console.log('fetch', similar);
-		const res = await fetch(similar);
-		const data = await res.json();
+		
+		try {
+			const res = await fetch(similar);
+			const data = await res.json();
 
-		const ids = similar.match(/id=(\d+)/g);
-		for (let i = 0, it; (it = ids[i]); i++) {
-			const key = it.replace(/^id=/, '')
-			let val = data.result[key] || '';
-			if (data.ad)  {
-				val += data.ad;
-				data.ad = ""; // display once
-			}
-			if (!val) continue;
+			const ids = similar.match(/id=(\d+)/g);
+			if (!ids) return;
 
-			const article = document.querySelector('article[data-id="' + key + '"]');
-			const container = article.querySelector('.similar-entries');
-			container.innerHTML = val;
+			for (const idStr of ids) {
+				const key = idStr.replace(/^id=/, '');
+				let val = data.result[key] || '';
+				if (data.ad) {
+					val += data.ad;
+					data.ad = ""; // display once
+				}
+				if (!val) continue;
 
-			const trackbacks = article.querySelector('.content.trackbacks');
-			if (trackbacks) {
-				const links = trackbacks.getElementsByTagName('li');
-				for (let j = 0, link; (link = links[j]); j++) {
-					const duplicate = container.querySelector('li[data-id="' + link.getAttribute('data-id') + '"]');
-					if (duplicate) {
-						duplicate.parentNode.removeChild(duplicate);
+				const article = document.querySelector(`article[data-id="${key}"]`);
+				if (!article) continue;
+
+				const container = article.querySelector('.similar-entries');
+				if (!container) continue;
+
+				container.innerHTML = val;
+
+				const trackbacks = article.querySelector('.content.trackbacks');
+				if (trackbacks) {
+					const links = trackbacks.getElementsByTagName('li');
+					for (const link of links) {
+						const duplicate = container.querySelector(`li[data-id="${link.getAttribute('data-id')}"]`);
+						if (duplicate) {
+							duplicate.remove();
+						}
+					}
+					if (!container.getElementsByTagName('li').length) {
+						container.remove();
 					}
 				}
-				if (!container.getElementsByTagName('li').length) {
-					container.parentNode.removeChild(container);
-				}
+
+				DateRelative.updateAll(container);
 			}
-
-			DateRelative.updateAll(container);
+		} catch (e) {
+			console.error('Failed to load similar entries', e);
 		}
 	},
 
-	initExif: async function () {
-		const exif = document.getElementById('preload-exif-entries').href;
-		const res = await fetch(exif);
-		const data = await res.json();
+	async initExif() {
+		const exifLink = document.getElementById('preload-exif-entries');
+		if (!exifLink) return;
 
-		for (let key in data.result) if (data.result.hasOwnProperty(key)) {
-			const val = data.result[key];
-			if (!val || !val.model) continue;
-			const target = document.querySelector('[data-href="' + key + '"]');
-			const info =
-				val.model + ' (' + val.make + ') ' +
-				val.focallength + 'mm ' +
-				'F' + val.fnumber + ' ' +
-				'ISO' + val.iso + ' ' +
-				(val.speed < 1 ? '1/' + Math.round(1/val.speed): val.speed ) + 'sec ';
-			target.title = info;
+		const exif = exifLink.href;
+		try {
+			const res = await fetch(exif);
+			const data = await res.json();
+
+			for (const key in data.result) {
+				if (!Object.prototype.hasOwnProperty.call(data.result, key)) continue;
+				
+				const val = data.result[key];
+				if (!val || !val.model) continue;
+				
+				const target = document.querySelector(`[data-href="${key}"]`);
+				if (!target) continue;
+
+				const info =
+					`${val.model} (${val.make}) ` +
+					`${val.focallength}mm ` +
+					`F${val.fnumber} ` +
+					`ISO${val.iso} ` +
+					`${(val.speed < 1 ? '1/' + Math.round(1 / val.speed) : val.speed)}sec `;
+				target.title = info;
+			}
+		} catch (e) {
+			console.error('Failed to load exif', e);
 		}
 	},
 
-	initBudouX: function () {
-		const targets = document.querySelectorAll([
+	initBudouX() {
+		const selector = [
 			'.entries article header h1 a',
 			'.entries article header h2 a',
 			'.entries article .content h1',
@@ -176,41 +177,47 @@ Nogag = {
 			'.entries article .content h4',
 			'.entries article .content h5',
 			'.entries article .content h6'
-		].join(','));
-		for (var i = 0, it; (it = targets[i]); i++) {
-			it.innerHTML = '<budoux-ja>' + it.innerHTML + '</budoux-ja>';
+		].join(',');
+		
+		const targets = document.querySelectorAll(selector);
+		for (const target of targets) {
+			target.innerHTML = `<budoux-ja>${target.innerHTML}</budoux-ja>`;
 		}
 	},
 
-	initABC : function () {
+	initABC() {
 		const targets = document.querySelectorAll('pre.lang-abc');
-		for (var i = 0, it; (it = targets[i]); i++) {
-			const notation = it.textContent;
+		for (const target of targets) {
+			const notation = target.textContent;
 			const container = document.createElement('div');
-			container.setAttribute("class", "lang-abc");
-			ABCJS.renderAbc(container, notation, {
-				staffwidth: container.offsetWidth,
-				add_classes: true,
-				responsive: "resize"
-			});
-			it.parentNode.replaceChild(container, it);
+			container.className = "lang-abc";
+			
+			// ABCJS is expected to be loaded globally
+			if (typeof ABCJS !== 'undefined') {
+				ABCJS.renderAbc(container, notation, {
+					staffwidth: container.offsetWidth,
+					add_classes: true,
+					responsive: "resize"
+				});
+				target.replaceWith(container);
+			}
 		}
 	},
 
-	initEntry : function (entry) {
+	initEntry(entry) {
 		if (Nogag.data('auth')) {
-			var button = entry.querySelector('.nogag-edit');
+			const button = entry.querySelector('.nogag-edit');
 			if (button) {
-				button.addEventListener('click', function () {
-					location.href = "/admin/edit?id=" + entry.getAttribute('data-id')
+				button.addEventListener('click', () => {
+					location.href = `/admin/edit?id=${entry.getAttribute('data-id')}`;
 				});
 			}
 		}
 	},
 
-	loadScript : function (url) {
-		return new Promise( function (resolve, reject) {
-			var script = document.createElement('script');
+	loadScript(url) {
+		return new Promise((resolve, reject) => {
+			const script = document.createElement('script');
 			script.onload = resolve;
 			script.onerror = reject;
 			script.src = url;
@@ -219,19 +226,25 @@ Nogag = {
 	}
 };
 
+// Expose to window as requested
+window.Nogag = Nogag;
+
 Nogag.initImages();
 
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', async () => {
 	Nogag.init();
 
-	var req = new XMLHttpRequest();
-	req.open("GET", '/.ip');
-	req.onload = function (e) {
-		var via = req.responseText;
-		if (via.indexOf('IPv') !== 0) return;
-		document.getElementById('global-navigation').setAttribute('data-ip-info', 'via ' + via);
-	};
-	req.onerror = function (e) {
-	};
-	req.send(null);
+	try {
+		const res = await fetch('/.ip');
+		if (!res.ok) throw new Error(res.statusText);
+		const via = await res.text();
+		if (via.indexOf('IPv') === 0) {
+			const nav = document.getElementById('global-navigation');
+			if (nav) {
+				nav.setAttribute('data-ip-info', `via ${via}`);
+			}
+		}
+	} catch (e) {
+		// Ignore error
+	}
 }, false);

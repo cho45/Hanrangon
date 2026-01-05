@@ -161,6 +161,7 @@ figure.quote figcaption {
 }
 
 .share-buttons {
+	contain: content;
 	vertical-align: middle;
 	line-height: 32px;
 	padding: 20px;
@@ -482,12 +483,14 @@ body > * {
 }
 
 .entries article {
+	contain: layout;
 	clear: both;
 	padding: 1em 0;
 	margin: 0 0 1em 0;
 }
 
 .entries .date {
+	contain: layout;
 	display: block;
 	clear: both;
 	font-family:
@@ -757,12 +760,14 @@ mjx-container.MathJax:not([display]) {
 }
 
 .entries article pre.code {
+	contain: content;
 	border-width: 0 0 0 3px;
 	margin: 1em 0;
 	padding: 20px 20px;
 }
 
 .entries article div.gist {
+	contain: content;
 	font-size: 75%;
 	margin: 20px 0;
 	padding: 0;
@@ -911,6 +916,8 @@ figure.http:after {
 }
 
 #global-footer {
+	content-visibility: auto;
+	contain-intrinsic-size: 1px 300px;
 	width: 728px;
 	margin: 0 auto;
 	padding: 0 0 5em 0;
@@ -933,6 +940,12 @@ figure.http:after {
 }
 
 #global-footer .author .image {
+}
+
+#global-footer .author .image img {
+	aspect-ratio: 1 / 1;
+	width: 160px;
+	height: auto;
 }
 
 #global-footer .author .desc {
