@@ -64,6 +64,20 @@ describe('processWidgets', () => {
       assert.strictEqual(iframe.allowFullscreen, true);
     });
 
+    it('should add loading="lazy" to YouTube iframes', async () => {
+      const html = `
+        <iframe src="http://www.youtube.com/embed/test"></iframe>
+      `;
+
+      const { window } = new JSDOM(html);
+      const dom = window.document.body;
+
+      await processWidgets(dom);
+
+      const iframe = dom.querySelector('iframe');
+      assert.strictEqual(iframe.getAttribute('loading'), 'lazy');
+    });
+
     it('should not affect non-YouTube iframes', async () => {
       const html = `
         <iframe src="http://example.com/video"></iframe>

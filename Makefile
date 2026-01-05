@@ -5,11 +5,19 @@ GO_TAGS=sqlite_math_functions
 
 all: build
 
-build: fmt
+build-fe:
+	cd admin-frontend && npm install && npm run build
+
+build: fmt build-fe
 	go build -tags "$(GO_TAGS)" -o $(BINARY_NAME) main.go
 
 run:
 	go run -tags "$(GO_TAGS)" .
+
+run-with-fe-dev:
+	trap 'kill 0' EXIT; \
+	(cd admin-frontend && npm run dev) & \
+	HANRANGON_FE_DEV=true go run -tags "$(GO_TAGS)" .
 
 test:
 	go test -tags "$(GO_TAGS)" ./...

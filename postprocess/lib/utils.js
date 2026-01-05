@@ -1,8 +1,9 @@
+import http from 'node:http';
 import https from 'node:https';
 import imageSize from 'image-size';
 
 /**
- * HTTPS GET リクエストを実行
+ * HTTP/HTTPS GET リクエストを実行
  * @param {string} url - リクエスト URL
  * @param {object} options - リクエストオプション
  * @param {number} options.timeout - タイムアウト（ミリ秒、デフォルト: 5000）
@@ -10,6 +11,7 @@ import imageSize from 'image-size';
  */
 export async function httpsGet(url, options = {}) {
   const timeout = options.timeout || 5000;
+  const protocol = url.startsWith('https') ? https : http;
 
   return new Promise((resolve, reject) => {
     let req;
@@ -20,7 +22,7 @@ export async function httpsGet(url, options = {}) {
 
     let body = '';
 
-    req = https.get(url, options, (res) => {
+    req = protocol.get(url, options, (res) => {
       res.on('data', (chunk) => {
         body += chunk;
       });
@@ -44,49 +46,67 @@ export async function httpsGet(url, options = {}) {
 
 /**
  * 画像の URL から画像サイズを取得
- * HTTP Range リクエストで先頭 128KB のみダウンロードして解析
+ * HTTP Range リクエストで先頭 256KB のみリクエスト
+ * Range を無視して全データを送ってくるサーバーに対しては 256KB 受信時点で強制切断する
  * @param {string} imgUrl - 画像 URL
  * @param {number} timeout - タイムアウト（ミリ秒、デフォルト: 5000）
  * @returns {Promise<{width: number, height: number}>}
  */
 export async function getImageSize(imgUrl, timeout = 5000) {
+  const protocol = imgUrl.startsWith('https') ? https : http;
+  const MAX_RECEIVE_SIZE = 262144; // 256KB
+
   return new Promise((resolve, reject) => {
     let req;
+    let receivedBytes = 0;
+    const chunks = [];
+    let completed = false;
+
     const timeoutId = setTimeout(() => {
       if (req) req.destroy();
       reject(new Error(`Image size request timeout: ${imgUrl}`));
     }, timeout);
 
-    const chunks = [];
+    const finish = () => {
+      if (completed) return;
+      completed = true;
+      clearTimeout(timeoutId);
 
-    req = https.get(imgUrl, {
+      try {
+        const buffer = Buffer.concat(chunks);
+        const size = imageSize(buffer);
+        resolve({
+          width: size.width,
+          height: size.height
+        });
+      } catch (err) {
+        reject(new Error(`Failed to get image size: ${err.message}`));
+      }
+    };
+
+    req = protocol.get(imgUrl, {
       headers: {
-        'Range': 'bytes=0-131071'  // 先頭 128KB のみリクエスト
+        'Range': `bytes=0-${MAX_RECEIVE_SIZE - 1}`
       }
     }, (res) => {
       res.on('data', (chunk) => {
         chunks.push(chunk);
-      });
+        receivedBytes += chunk.length;
 
-      res.on('end', () => {
-        clearTimeout(timeoutId);
-
-        try {
-          const buffer = Buffer.concat(chunks);
-          const size = imageSize(buffer);
-          resolve({
-            width: size.width,
-            height: size.height
-          });
-        } catch (err) {
-          reject(new Error(`Failed to get image size: ${err.message}`));
+        if (receivedBytes >= MAX_RECEIVE_SIZE) {
+          req.destroy();
+          finish();
         }
       });
+
+      res.on('end', finish);
     });
 
     req.on('error', (err) => {
+      if (completed) return;
       clearTimeout(timeoutId);
       reject(err);
     });
   });
 }
+

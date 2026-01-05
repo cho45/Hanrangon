@@ -44,13 +44,25 @@ export async function processImages(dom) {
     }
   }
 
-  // 4. 画像サイズの自動取得
+  // 4. 画像サイズの自動取得と表示最適化属性の追加
   const promises = [];
   {
     const imgs = dom.querySelectorAll('img[src]');
-    for (const img of imgs) {
-      if (!img.src) continue;
-      if (img.width || img.height) continue;  // 既にサイズが設定されている場合はスキップ
+    imgs.forEach((img, index) => {
+      if (!img.src) return;
+
+      // 1. decoding="async" は副作用がほぼないため全画像に適用
+      if (!img.hasAttribute('decoding')) {
+        img.setAttribute('decoding', 'async');
+      }
+
+      // 2. loading="lazy" は最初の1枚を避ける（LCP 悪化防止）
+      // 既に属性がある場合は尊重する
+      if (!img.hasAttribute('loading') && index > 0) {
+        img.setAttribute('loading', 'lazy');
+      }
+
+      if (img.width || img.height) return;  // 既にサイズが設定されている場合はスキップ
 
       const promise = getImageSize(img.src, 5000)
         .then((size) => {
@@ -64,7 +76,7 @@ export async function processImages(dom) {
         });
 
       promises.push(promise);
-    }
+    });
     console.error(`[images] Fetching size for ${promises.length} images in parallel`);
   }
 

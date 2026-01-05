@@ -130,6 +130,58 @@ describe('processImages', () => {
     // ここでは URL 正規化のロジックのみをテストする
   });
 
+  describe('Performance optimizations', () => {
+    it('should add decoding="async" to all images', async () => {
+      const html = `
+        <img src="https://example.com/1.jpg" />
+        <img src="https://example.com/2.jpg" />
+      `;
+
+      const { window } = new JSDOM(html);
+      const dom = window.document.body;
+
+      await processImages(dom);
+
+      const imgs = dom.querySelectorAll('img');
+      assert.strictEqual(imgs[0].getAttribute('decoding'), 'async');
+      assert.strictEqual(imgs[1].getAttribute('decoding'), 'async');
+    });
+
+    it('should implement smart lazy loading (skip first, add to others)', async () => {
+      const html = `
+        <img src="https://example.com/1.jpg" />
+        <img src="https://example.com/2.jpg" />
+        <img src="https://example.com/3.jpg" />
+      `;
+
+      const { window } = new JSDOM(html);
+      const dom = window.document.body;
+
+      await processImages(dom);
+
+      const imgs = dom.querySelectorAll('img');
+      assert.strictEqual(imgs[0].hasAttribute('loading'), false, 'First image should NOT have loading attribute');
+      assert.strictEqual(imgs[1].getAttribute('loading'), 'lazy', 'Second image should have loading="lazy"');
+      assert.strictEqual(imgs[2].getAttribute('loading'), 'lazy', 'Third image should have loading="lazy"');
+    });
+
+    it('should preserve existing loading attributes', async () => {
+      const html = `
+        <img src="https://example.com/1.jpg" loading="eager" />
+        <img src="https://example.com/2.jpg" />
+      `;
+
+      const { window } = new JSDOM(html);
+      const dom = window.document.body;
+
+      await processImages(dom);
+
+      const imgs = dom.querySelectorAll('img');
+      assert.strictEqual(imgs[0].getAttribute('loading'), 'eager');
+      assert.strictEqual(imgs[1].getAttribute('loading'), 'lazy');
+    });
+  });
+
   describe('Error handling', () => {
     it('should continue processing even if image size fetch fails', async () => {
       const html = `
