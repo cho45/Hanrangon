@@ -370,23 +370,17 @@ body > * {
 	border: none;
 }
 
-#global-navigation::after {
-	content: attr(data-ip-info);
+#global-navigation ip-info {
 	display: block;
 	position: absolute;
 	top: 0;
 	right: 0;
 	color: #ccc;
 	font-size: 11px;
-	font-feature-settings: "palt";
-	font-family:
-		'Noto Sans Japanese',
-		-apple-system,
-		BlinkMacSystemFont,
-		"Hiragino Kaku Gothic ProN",
-		MyYuGothicM,
-		Meiryo,
-		sans-serif;
+}
+
+#global-navigation::after {
+	content: attr(data-ip-info);
 }
 
 
@@ -753,35 +747,9 @@ mjx-container.MathJax:not([display]) {
 	display: block;
 	margin: 0;
 	border: none;
-	background: #fff;
+	background: #eee;
 	position: relative;
 	text-align: center;
-}
-
-.entries article a.picasa.loading::before {
-	position: absolute;
-	display: block;
-	top: 50%;
-	left: 50%;
-	content: "";
-
-	width: 40px;
-	height: 40px;
-	margin: 0;
-	background-color: #fff;
-
-	transform: translate(-50%, -50%);
-	animation: sk-scaleout 1.0s infinite ease-in-out;
-}
-
-@keyframes sk-scaleout {
-	0% {
-		transform: translate(-50%, -50%), scale(0);
-	}
-	100% {
-		transform: translate(-50%, -50%), scale(1.0);
-		opacity: 0;
-	}
 }
 
 .entries article a.picasa::after {

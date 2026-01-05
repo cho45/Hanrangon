@@ -1,64 +1,92 @@
-import { DateRelative } from './daterelative.js';
+customElements.define('relative-time', class extends HTMLElement {
+	static get observedAttributes() {
+		return ['datetime', 'epoch'];
+	}
+
+	constructor() {
+		super();
+		this._timer = null;
+	}
+
+	connectedCallback() {
+		this.update();
+		this._timer = setInterval(() => this.update(), 60 * 1000);
+	}
+
+	disconnectedCallback() {
+		if (this._timer) {
+			clearInterval(this._timer);
+			this._timer = null;
+		}
+	}
+
+	attributeChangedCallback() {
+		this.update();
+	}
+
+	get epoch() {
+		if (this.hasAttribute('epoch')) {
+			return parseInt(this.getAttribute('epoch'), 10) * 1000;
+		}
+		const datetime = this.getAttribute('datetime');
+		if (datetime) {
+			return Date.parse(datetime);
+		}
+		return null;
+	}
+
+	update() {
+		const epoch = this.epoch;
+		if (!epoch) return;
+
+		let diff = Math.floor((Date.now() - epoch) / 1000);
+		const future = diff < 0;
+		if (future) diff = -diff;
+
+		let number, unit;
+
+		if (diff < 60) {
+			number = diff;
+			unit = '秒';
+		} else if (diff < 3600) {
+			number = Math.floor(diff / 60);
+			unit = '分';
+		} else if (diff < 86400) {
+			number = Math.floor(diff / 3600);
+			unit = '時間';
+		} else if (diff < 2592000) {
+			number = Math.floor(diff / 86400);
+			unit = '日';
+		} else if (diff < 31536000) {
+			number = Math.floor(diff / 2592000);
+			unit = 'ヶ月';
+		} else {
+			number = Math.floor(diff / 31536000);
+			unit = '年';
+		}
+
+		this.textContent = `${number}${unit}${future ? '後' : '前'}`;
+	}
+});
+
+customElements.define('ip-info', class extends HTMLElement {
+	async connectedCallback() {
+		try {
+			const res = await fetch('/.ip');
+			if (!res.ok) throw new Error(res.statusText);
+			const via = await res.text();
+			if (via.indexOf('IPv') === 0) {
+				this.textContent = `via ${via}`;
+			}
+		} catch (e) {
+			// Ignore error
+		}
+	}
+});
 
 const Nogag = {
 	data(key) {
 		return document.documentElement.getAttribute(`data-${key}`);
-	},
-
-	initImages() {
-		const canvas = document.createElement('canvas');
-		const ctx = canvas.getContext('2d');
-
-		const photos = document.querySelectorAll('a.picasa');
-		const placeholders = {};
-
-		for (const anchor of photos) {
-			const img = anchor.querySelector('img');
-			let src = img.getAttribute('src');
-			anchor.setAttribute('data-href', anchor.href);
-
-			// Loading placeholder
-			let width = parseInt(img.getAttribute('width'), 10);
-			let height = parseInt(img.getAttribute('height'), 10);
-			const wRatio = width / window.innerWidth;
-			const hRatio = height / window.innerHeight;
-			const ratio = Math.max(wRatio, hRatio);
-
-			if (ratio > 1) {
-				width = Math.round(width / ratio);
-				height = Math.round(height / ratio);
-			}
-
-			if (width && height) {
-				const key = `${width}x${height}`;
-				if (!placeholders[key]) {
-					canvas.width = width;
-					canvas.height = height;
-					ctx.fillStyle = "#dddddd";
-					ctx.fillRect(0, 0, width, height);
-					placeholders[key] = canvas.toDataURL('image/png');
-				}
-				img.src = placeholders[key];
-			}
-
-			if (window.innerWidth > 1650) {
-				// use fullsize
-				src = src.replace(/\/s\d+\//, '/s0/');
-			}
-
-			const link = src.replace(/\/s(9[06]0|1280|2048)\//, '/s0/');
-			anchor.href = link;
-
-			if (src !== img.getAttribute('src')) {
-				anchor.classList.add("loading");
-				const loader = new Image();
-				loader.onload = () => {
-					img.src = src;
-					anchor.classList.remove('loading');
-				};
-				loader.src = src;
-			}
-		}
 	},
 
 	init() {
@@ -67,12 +95,9 @@ const Nogag = {
 			Nogag.initEntry(article);
 		}
 
-		DateRelative.updateAll();
-
 		this.initSimilarEntries();
 		// this.initExif();
 		this.initBudouX();
-		this.initABC();
 
 		if (Nogag.data('auth')) {
 			const button = document.querySelector('.nogag-new');
@@ -128,8 +153,6 @@ const Nogag = {
 						container.remove();
 					}
 				}
-
-				DateRelative.updateAll(container);
 			}
 		} catch (e) {
 			console.error('Failed to load similar entries', e);
@@ -169,8 +192,6 @@ const Nogag = {
 
 	initBudouX() {
 		const selector = [
-			'.entries article header h1 a',
-			'.entries article header h2 a',
 			'.entries article .content h1',
 			'.entries article .content h2',
 			'.entries article .content h3',
@@ -181,26 +202,9 @@ const Nogag = {
 		
 		const targets = document.querySelectorAll(selector);
 		for (const target of targets) {
-			target.innerHTML = `<budoux-ja>${target.innerHTML}</budoux-ja>`;
-		}
-	},
-
-	initABC() {
-		const targets = document.querySelectorAll('pre.lang-abc');
-		for (const target of targets) {
-			const notation = target.textContent;
-			const container = document.createElement('div');
-			container.className = "lang-abc";
-			
-			// ABCJS is expected to be loaded globally
-			if (typeof ABCJS !== 'undefined') {
-				ABCJS.renderAbc(container, notation, {
-					staffwidth: container.offsetWidth,
-					add_classes: true,
-					responsive: "resize"
-				});
-				target.replaceWith(container);
-			}
+			const wrapper = document.createElement('budoux-ja');
+			wrapper.append(...target.childNodes);
+			target.appendChild(wrapper);
 		}
 	},
 
@@ -213,38 +217,10 @@ const Nogag = {
 				});
 			}
 		}
-	},
-
-	loadScript(url) {
-		return new Promise((resolve, reject) => {
-			const script = document.createElement('script');
-			script.onload = resolve;
-			script.onerror = reject;
-			script.src = url;
-			document.body.appendChild(script);
-		});
 	}
 };
 
 // Expose to window as requested
 window.Nogag = Nogag;
 
-Nogag.initImages();
-
-document.addEventListener('DOMContentLoaded', async () => {
-	Nogag.init();
-
-	try {
-		const res = await fetch('/.ip');
-		if (!res.ok) throw new Error(res.statusText);
-		const via = await res.text();
-		if (via.indexOf('IPv') === 0) {
-			const nav = document.getElementById('global-navigation');
-			if (nav) {
-				nav.setAttribute('data-ip-info', `via ${via}`);
-			}
-		}
-	} catch (e) {
-		// Ignore error
-	}
-}, false);
+Nogag.init();
