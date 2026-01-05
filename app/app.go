@@ -136,9 +136,10 @@ func (app *AppImpl) Postprocess(ctx context.Context, html string) (string, error
 	defer cancel()
 
 	// Node.js スクリプトのパス（プロジェクトルートからの相対パス）
+	// Node.js スクリプトのパス（プロジェクトルートからの相対パス）
 	scriptPath := filepath.Join(app.config.StaticDir, "../postprocess/main.js")
 
-	cmd := exec.CommandContext(ctx, nodePath, scriptPath)
+	cmd := exec.CommandContext(ctx, nodePath, scriptPath, "--base-url", app.config.BaseURL)
 	cmd.Stdin = bytes.NewReader([]byte(html))
 
 	var stdout bytes.Buffer
@@ -188,9 +189,10 @@ func (app *AppImpl) PostprocessWithProgress(ctx context.Context, html string, se
 	defer cancel()
 
 	// Node.js スクリプトのパス
+	// Node.js スクリプトのパス（プロジェクトルートからの相対パス）
 	scriptPath := filepath.Join(app.config.StaticDir, "../postprocess/main.js")
 
-	cmd := exec.CommandContext(ctx, nodePath, scriptPath)
+	cmd := exec.CommandContext(ctx, nodePath, scriptPath, "--base-url", app.config.BaseURL)
 	cmd.Stdin = bytes.NewReader([]byte(html))
 
 	var stdout bytes.Buffer

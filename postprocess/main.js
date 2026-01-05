@@ -10,11 +10,12 @@ import { stdin, stdout, stderr } from 'node:process';
 /**
  * HTML を postprocess する統合処理
  * @param {string} html - 処理対象の HTML
+ * @param {string} baseURL - ベース URL
  * @returns {Promise<string>} - 処理後の HTML
  */
-async function processHTML(html) {
+async function processHTML(html, baseURL) {
   const startTime = Date.now();
-  console.error(`[main] Starting processHTML (input: ${html.length} bytes)`);
+  console.error(`[main] Starting processHTML (input: ${html.length} bytes, baseURL: ${baseURL})`);
 
   // 1. DOM 構築（一度だけ）
   let stepStart = Date.now();
@@ -44,7 +45,7 @@ async function processHTML(html) {
   // 4. 画像処理
   stepStart = Date.now();
   console.error('[main] Step 4/5: Image processing');
-  await processImages(dom);
+  await processImages(dom, baseURL);
   console.error(`[main] Image processing completed in ${Date.now() - stepStart}ms`);
 
   // 5. ウィジェット処理
@@ -63,13 +64,22 @@ async function processHTML(html) {
   return result;
 }
 
+// 引数の解析
+let baseURL = '';
+for (let i = 0; i < process.argv.length; i++) {
+  if (process.argv[i] === '--base-url' && process.argv[i + 1]) {
+    baseURL = process.argv[i + 1];
+    break;
+  }
+}
+
 // stdin から HTML を読み込み、処理して stdout に出力
 let html = '';
 stdin.setEncoding('utf8');
 stdin.on('data', chunk => html += chunk);
 stdin.on('end', async () => {
   try {
-    const result = await processHTML(html);
+    const result = await processHTML(html, baseURL);
     stdout.write(result);
   } catch (error) {
     stderr.write(`Error: ${error.message}\n${error.stack}\n`);

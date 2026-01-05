@@ -5,9 +5,10 @@ import { getImageSize } from './utils.js';
  * - URL の正規化（Google Photos, Hatena, Amazon）
  * - 画像サイズの自動取得
  * @param {Document} dom - JSDOM の document.body
+ * @param {string} baseURL - ベース URL
  * @returns {Promise<Document>}
  */
-export async function processImages(dom) {
+export async function processImages(dom, baseURL) {
   const startTime = Date.now();
   const allImages = dom.querySelectorAll('img[src]');
   console.error(`[images] Found ${allImages.length} images`);
@@ -64,15 +65,20 @@ export async function processImages(dom) {
 
       if (img.width || img.height) return;  // 既にサイズが設定されている場合はスキップ
 
-      const promise = getImageSize(img.src, 5000)
+      let imgUrl = img.src;
+      if (imgUrl.startsWith('/') && baseURL) {
+        imgUrl = baseURL.replace(/\/$/, '') + imgUrl;
+      }
+
+      const promise = getImageSize(imgUrl, 5000)
         .then((size) => {
           img.width = size.width;
           img.height = size.height;
-          console.error(`[images] Got size for ${img.src}: ${size.width}x${size.height}`);
+          console.error(`[images] Got size for ${imgUrl}: ${size.width}x${size.height}`);
         })
         .catch((err) => {
           // エラーは無視（サイズ取得できなくても続行）
-          console.error(`[images] Failed to get image size for ${img.src}: ${err.message}`);
+          console.error(`[images] Failed to get image size for ${imgUrl}: ${err.message}`);
         });
 
       promises.push(promise);
