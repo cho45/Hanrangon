@@ -278,6 +278,10 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
 
+func (app *AppImpl) JoinBaseURL(path string) string {
+	return strings.TrimSuffix(app.config.BaseURL, "/") + "/" + strings.TrimPrefix(path, "/")
+}
+
 func (app *AppImpl) HandleFeed(c echo.Context) error {
 	ctx := c.Request().Context()
 
@@ -305,7 +309,7 @@ func (app *AppImpl) HandleFeed(c echo.Context) error {
 		atomEntries[i] = view.AtomEntry{
 			Title: e.DisplayTitle(),
 			Link: view.AtomLink{
-				Href: "https://lowreal.net/" + e.Path,
+				Href: app.JoinBaseURL(e.Path),
 			},
 			ID:        fmt.Sprintf("tag:lowreal.net,2005:entry:%d", e.ID),
 			Updated:   e.ModifiedAt.Format(time.RFC3339),
@@ -320,8 +324,8 @@ func (app *AppImpl) HandleFeed(c echo.Context) error {
 	feed := view.AtomFeed{
 		Title: "氾濫原",
 		Link: []view.AtomLink{
-			{Href: "https://lowreal.net/"},
-			{Href: "https://lowreal.net/feed", Rel: "self", Type: "application/atom+xml"},
+			{Href: app.JoinBaseURL("/")},
+			{Href: app.JoinBaseURL("/feed"), Rel: "self", Type: "application/atom+xml"},
 		},
 		Updated: updated.Format(time.RFC3339),
 		Author:  view.AtomAuthor{Name: "cho45"},
@@ -355,14 +359,14 @@ func (app *AppImpl) HandleSitemap(c echo.Context) error {
 	}
 
 	urls := []view.SitemapURL{
-		{Loc: "https://lowreal.net/", LastMod: latestMod},
-		{Loc: "https://lowreal.net/archive", LastMod: latestMod},
-		{Loc: "https://lowreal.net/photo/", LastMod: latestMod},
+		{Loc: app.JoinBaseURL("/"), LastMod: latestMod},
+		{Loc: app.JoinBaseURL("/archive"), LastMod: latestMod},
+		{Loc: app.JoinBaseURL("/photo/"), LastMod: latestMod},
 	}
 
 	for _, row := range rows {
 		urls = append(urls, view.SitemapURL{
-			Loc:     "https://lowreal.net/" + row.Path,
+			Loc:     app.JoinBaseURL(row.Path),
 			LastMod: row.ModifiedAt.Format(time.RFC3339),
 		})
 	}
@@ -383,11 +387,11 @@ func (app *AppImpl) HandleSitemap(c echo.Context) error {
 
 func (app *AppImpl) HandleRobotsTxt(c echo.Context) error {
 	// Static content for robots.txt
-	content := `User-agent: *
+	content := fmt.Sprintf(`User-agent: *
 Disallow: /admin/
 Disallow: /login
-Sitemap: https://lowreal.net/sitemap.xml
-`
+Sitemap: %s
+`, app.JoinBaseURL("/sitemap.xml"))
 	return c.String(http.StatusOK, content)
 }
 
