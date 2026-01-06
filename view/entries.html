@@ -20,10 +20,16 @@
 	{{if .IsDetail}}
 		{{/* Entry detail navigation */}}
 		{{if .Prev}}
-			<a href="/{{.Prev.Path}}" rel="next" title="1つ古いエントリ">&#x25C0; {{.Prev.DisplayTitle}}</a>
+			<a href="/{{.Prev.Path}}" rel="next" class="prev">
+				<span class="label">OLDER</span>
+				<span class="title">{{.Prev.DisplayTitle}}</span>
+			</a>
 		{{end}}
 		{{if .Next}}
-			<a href="/{{.Next.Path}}" rel="prev" title="1つ新しいエントリ"> {{.Next.DisplayTitle}} &#x25B6;</a>
+			<a href="/{{.Next.Path}}" rel="prev" class="next">
+				<span class="label">NEWER</span>
+				<span class="title">{{.Next.DisplayTitle}}</span>
+			</a>
 		{{end}}
 	{{else}}
 		{{/* Index pagination */}}
