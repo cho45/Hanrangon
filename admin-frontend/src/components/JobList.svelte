@@ -30,14 +30,14 @@
 
   onMount(fetchJobs);
 
-  function next() {
+  function goOlder() {
     if (offset + limit < total) {
       offset += limit;
       fetchJobs();
     }
   }
 
-  function prev() {
+  function goNewer() {
     if (offset - limit >= 0) {
       offset -= limit;
       fetchJobs();
@@ -61,9 +61,9 @@
   <div class="header">
     <h2>ジョブ一覧 ({total})</h2>
     <div class="pagination">
-      <button disabled={offset === 0 || api.loading} onclick={prev}>前へ</button>
+      <button disabled={offset === 0 || api.loading} onclick={goNewer}>新しい方へ</button>
       <span>{offset + 1} - {Math.min(offset + limit, total)} / {total}</span>
-      <button disabled={offset + limit >= total || api.loading} onclick={next}>次へ</button>
+      <button disabled={offset + limit >= total || api.loading} onclick={goOlder}>古い方へ</button>
       <button class="refresh-btn" onclick={fetchJobs} style="margin-left: 10px;">更新</button>
     </div>
   </div>
