@@ -45,31 +45,6 @@ type App interface {
 	Postprocess(ctx context.Context, html string) (string, error)
 	PostprocessBatch(ctx context.Context) (*BatchProcessor, error)
 
-	// Handler methods
-	HandleIndex(c echo.Context) error
-	HandlePath(c echo.Context) error
-	HandleArchive(c echo.Context) error
-	HandleDateArchive(c echo.Context) error
-	HandleCategory(c echo.Context) error
-	HandleFeed(c echo.Context) error
-	HandleSitemap(c echo.Context) error
-	HandleRobotsTxt(c echo.Context) error
-	HandleApiSimilar(c echo.Context) error
-	HandleRootParam(c echo.Context) error
-
-	// Admin handlers
-	HandleAdminIndex(c echo.Context) error
-	HandleAdminEdit(c echo.Context) error
-	HandleLogin(c echo.Context) error
-	HandleLoginPost(c echo.Context) error
-	HandleLogout(c echo.Context) error
-	HandleAdminApiEntries(c echo.Context) error
-	HandleAdminApiEntry(c echo.Context) error
-	HandleAdminApiJobs(c echo.Context) error
-	HandleAdminApiInfo(c echo.Context) error
-	HandleAdminApiEdit(c echo.Context) error
-	HandleAdminApiUploadImage(c echo.Context) error
-	HandleAdminApiEditProgress(c echo.Context) error
 	PublishScheduledEntries(ctx context.Context) error
 	EnqueuePublishedEntryJobs(ctx context.Context, entryID int64) error
 }

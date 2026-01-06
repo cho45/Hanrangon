@@ -134,7 +134,7 @@ func mustOpenDB(driver, path string) *sql.DB {
 	return db
 }
 
-func RunServe(ctx context.Context, application app.App) error {
+func RunServe(ctx context.Context, application *app.AppImpl) error {
 	config := application.Config()
 	worker := application.JobQueue()
 	registry := worker.Registry()

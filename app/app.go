@@ -60,7 +60,7 @@ func NewApp(
 	calculator *tfidf.Calculator,
 	similarityCalculator *tfidf.SimilarityCalculator,
 	worker *jobqueue.Worker,
-) App {
+) *AppImpl {
 	templates, err := InitTemplates(config)
 	if err != nil {
 		log.Fatalf("failed to load templates: %v", err)

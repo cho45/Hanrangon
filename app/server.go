@@ -11,7 +11,7 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 )
 
-func NewServer(app App) *echo.Echo {
+func NewServer(app *AppImpl) *echo.Echo {
 	config := app.Config()
 	e := echo.New()
 	e.HideBanner = true
