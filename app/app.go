@@ -205,8 +205,11 @@ func (app *AppImpl) PostprocessWithProgress(ctx context.Context, html string, se
 		return "", fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
 
+	var wg sync.WaitGroup
+	wg.Add(1)
 	// stderr を行ごとにログ出力＆SSE送信する goroutine
 	go func() {
+		defer wg.Done()
 		scanner := bufio.NewScanner(stderrPipe)
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -217,17 +220,21 @@ func (app *AppImpl) PostprocessWithProgress(ctx context.Context, html string, se
 			msgJSON, _ := json.Marshal(msg)
 			select {
 			case session.Messages <- string(msgJSON):
-			case <-time.After(100 * time.Millisecond):
-				// クライアント接続が切れている場合はスキップ
+			case <-ctx.Done():
+				return
+			default:
+				// クライアントの読み取りが遅い、またはバッファがいっぱいの場合はスキップ
 			}
 		}
 	}()
 
 	if err := cmd.Run(); err != nil {
 		log.Printf("[postprocess] Failed after %v: %v", time.Since(start), err)
+		wg.Wait()
 		return "", fmt.Errorf("postprocess failed: %w", err)
 	}
 
+	wg.Wait()
 	elapsed := time.Since(start)
 	log.Printf("[postprocess] Completed successfully in %v (output size: %d bytes)", elapsed, stdout.Len())
 
