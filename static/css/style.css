@@ -294,6 +294,8 @@ article:not(.photo) .hatena-fotolife img {
 	max-height: 75vh;
 	width: auto !important;
 	max-width: 100%;
+	margin-left: auto !important;
+	margin-right: auto !important;
 }
 
 /* Specific internal padding for code blocks */
