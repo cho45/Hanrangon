@@ -100,7 +100,7 @@ func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 		LayoutData: app.newLayoutData(c, pageTitle),
 		Entries:    entries,
 		IsDetail:   false,
-		NextPage:   "",
+		OlderPage:  "",
 	}
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
@@ -147,15 +147,15 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch dates").SetInternal(err)
 	}
 
-	var nextPage string
+	var olderPage string
 	if len(dates) > limit {
 		// 次ページがある場合
 		lastDate := dates[len(dates)-1]
 		dates = dates[:limit]
 
 		// 次ページのURLを生成
-		nextDate := strings.ReplaceAll(lastDate, "-", "")
-		nextPage = fmt.Sprintf("/.page/%s/%d", nextDate, limit)
+		olderDate := strings.ReplaceAll(lastDate, "-", "")
+		olderPage = fmt.Sprintf("/.page/%s/%d", olderDate, limit)
 	}
 
 	var pageTitle string
@@ -168,7 +168,7 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 			LayoutData: app.newLayoutData(c, pageTitle),
 			Entries:    []*model.Entry{},
 			IsDetail:   false,
-			NextPage:   "",
+			OlderPage:  "",
 		}
 		return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 	}
@@ -197,7 +197,7 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 		LayoutData: app.newLayoutData(c, pageTitle),
 		Entries:    entries,
 		IsDetail:   false,
-		NextPage:   nextPage,
+		OlderPage:  olderPage,
 	}
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
@@ -231,13 +231,13 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
 	}
 
-	var nextPage string
+	var olderPage string
 	if len(rows) > limit {
 		lastRow := rows[len(rows)-1]
 		rows = rows[:limit]
 
-		nextDate := strings.ReplaceAll(lastRow.Date, "-", "")
-		nextPage = fmt.Sprintf("/%s/.page/%s/%d", category, nextDate, limit)
+		olderDate := strings.ReplaceAll(lastRow.Date, "-", "")
+		olderPage = fmt.Sprintf("/%s/.page/%s/%d", category, olderDate, limit)
 	}
 
 	entries := make([]*model.Entry, len(rows))
@@ -258,7 +258,7 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 		LayoutData: app.newLayoutData(c, category+" カテゴリ"),
 		Entries:    entries,
 		IsDetail:   false,
-		NextPage:   nextPage,
+		OlderPage:  olderPage,
 	}
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }

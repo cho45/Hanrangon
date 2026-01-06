@@ -18,7 +18,7 @@ type IndexData struct {
 	LayoutData
 	Entries    []*model.Entry                   // For index: multiple entries, for detail: single entry
 	IsDetail   bool                             // true for entry detail page, false for list page
-	NextPage   string                           // For index pagination
+	OlderPage  string                           // For index pagination
 	Trackbacks []*model.ListTrackbackEntriesRow // For entry detail
 	Older      *model.Entry                     // For entry detail navigation (past)
 	Newer      *model.Entry                     // For entry detail navigation (future)
