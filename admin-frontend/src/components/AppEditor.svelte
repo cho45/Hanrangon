@@ -308,7 +308,7 @@
         onclick={saveEntry}
         disabled={saving}
       >
-        {saving ? (progress || 'リクエスト中') : '更新'}
+        {saving ? (progress || 'リクエスト中') : (id ? '更新' : '作成')}
       </button>
       {#if draft.exists}
         <button id="restore" type="button" class="submit-button" onclick={() => restoreDialog.showModal()}>
@@ -335,8 +335,10 @@
         class:selected={selectedIndex === i}
         role="option"
         aria-selected={selectedIndex === i}
+        tabindex="-1"
         onclick={() => insertTag(tag)}
         onmouseenter={() => selectedIndex = i}
+        onkeydown={(e) => e.key === 'Enter' && insertTag(tag)}
       >
         {tag}
       </div>
