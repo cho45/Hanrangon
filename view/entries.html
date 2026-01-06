@@ -19,11 +19,11 @@
 <div class="pager">
 	{{if .IsDetail}}
 		{{/* Entry detail navigation */}}
-		{{if .Next}}
-			<a href="/{{.Next.Path}}" rel="prev"> {{.Next.DisplayTitle}} &#x25B6;</a>
-		{{end}}
 		{{if .Prev}}
-			<a href="/{{.Prev.Path}}" rel="next">&#x25C0; {{.Prev.DisplayTitle}}</a>
+			<a href="/{{.Prev.Path}}" rel="next" title="1つ古いエントリ">&#x25C0; {{.Prev.DisplayTitle}}</a>
+		{{end}}
+		{{if .Next}}
+			<a href="/{{.Next.Path}}" rel="prev" title="1つ新しいエントリ"> {{.Next.DisplayTitle}} &#x25B6;</a>
 		{{end}}
 	{{else}}
 		{{/* Index pagination */}}
