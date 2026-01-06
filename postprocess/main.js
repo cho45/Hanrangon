@@ -5,7 +5,8 @@ import { processMathJax } from './lib/mathjax.js';
 import { processHighlight } from './lib/highlight.js';
 import { processImages } from './lib/images.js';
 import { processWidgets } from './lib/widgets.js';
-import { stdin, stdout, stderr } from 'node:process';
+import { stdin, stdout, stderr, argv } from 'node:process';
+import readline from 'node:readline';
 
 /**
  * HTML を postprocess する統合処理
@@ -66,23 +67,47 @@ async function processHTML(html, baseURL) {
 
 // 引数の解析
 let baseURL = '';
-for (let i = 0; i < process.argv.length; i++) {
-  if (process.argv[i] === '--base-url' && process.argv[i + 1]) {
-    baseURL = process.argv[i + 1];
-    break;
+let batchMode = false;
+for (let i = 0; i < argv.length; i++) {
+  if (argv[i] === '--base-url' && argv[i + 1]) {
+    baseURL = argv[i + 1];
+  }
+  if (argv[i] === '--batch') {
+    batchMode = true;
   }
 }
 
-// stdin から HTML を読み込み、処理して stdout に出力
-let html = '';
-stdin.setEncoding('utf8');
-stdin.on('data', chunk => html += chunk);
-stdin.on('end', async () => {
-  try {
-    const result = await processHTML(html, baseURL);
-    stdout.write(result);
-  } catch (error) {
-    stderr.write(`Error: ${error.message}\n${error.stack}\n`);
-    process.exit(1);
-  }
-});
+if (batchMode) {
+  const rl = readline.createInterface({
+    input: stdin,
+    terminal: false
+  });
+
+  rl.on('line', async (line) => {
+    if (!line.trim()) return;
+    let inputID;
+    try {
+      const input = JSON.parse(line);
+      inputID = input.id;
+      const resultHTML = await processHTML(input.html, baseURL);
+      stdout.write(JSON.stringify({ id: input.id, html: resultHTML }) + '\n');
+    } catch (error) {
+      stderr.write(`Error processing line: ${error.message}\n`);
+      stdout.write(JSON.stringify({ id: inputID, error: error.message }) + '\n');
+    }
+  });
+} else {
+  // stdin から HTML を読み込み、処理して stdout に出力
+  let html = '';
+  stdin.setEncoding('utf8');
+  stdin.on('data', chunk => html += chunk);
+  stdin.on('end', async () => {
+    try {
+      const result = await processHTML(html, baseURL);
+      stdout.write(result);
+    } catch (error) {
+      stderr.write(`Error: ${error.message}\n${error.stack}\n`);
+      process.exit(1);
+    }
+  });
+}

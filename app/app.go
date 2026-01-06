@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os/exec"
@@ -231,6 +232,101 @@ func (app *AppImpl) PostprocessWithProgress(ctx context.Context, html string, se
 	log.Printf("[postprocess] Completed successfully in %v (output size: %d bytes)", elapsed, stdout.Len())
 
 	return stdout.String(), nil
+}
+
+type BatchProcessor struct {
+	cmd    *exec.Cmd
+	stdin  io.WriteCloser
+	stdout *bufio.Scanner
+	cancel context.CancelFunc
+}
+
+func (p *BatchProcessor) Process(id int64, html string) (string, error) {
+	input, _ := json.Marshal(map[string]interface{}{
+		"id":   id,
+		"html": html,
+	})
+	if _, err := p.stdin.Write(append(input, '\n')); err != nil {
+		return "", err
+	}
+
+	if !p.stdout.Scan() {
+		return "", fmt.Errorf("batch processor stdout closed unexpectedly")
+	}
+
+	var output struct {
+		ID    int64  `json:"id"`
+		HTML  string `json:"html"`
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(p.stdout.Bytes(), &output); err != nil {
+		return "", err
+	}
+
+	if output.Error != "" {
+		return "", fmt.Errorf("node error: %s", output.Error)
+	}
+
+	return output.HTML, nil
+}
+
+func (p *BatchProcessor) Close() error {
+	p.stdin.Close()
+	err := p.cmd.Wait()
+	p.cancel()
+	return err
+}
+
+func (app *AppImpl) PostprocessBatch(ctx context.Context) (*BatchProcessor, error) {
+	nodePath := app.config.NodePath
+	if nodePath == "" {
+		var err error
+		nodePath, err = exec.LookPath("node")
+		if err != nil {
+			return nil, fmt.Errorf("node binary not found: %w", err)
+		}
+	}
+
+	scriptPath := filepath.Join(app.config.StaticDir, "../postprocess/main.js")
+	ctx, cancel := context.WithCancel(ctx)
+
+	cmd := exec.CommandContext(ctx, nodePath, scriptPath, "--base-url", app.config.BaseURL, "--batch")
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+
+	go func() {
+		scanner := bufio.NewScanner(stderrPipe)
+		for scanner.Scan() {
+			log.Printf("[postprocess-batch] %s", scanner.Text())
+		}
+	}()
+
+	if err := cmd.Start(); err != nil {
+		cancel()
+		return nil, err
+	}
+
+	return &BatchProcessor{
+		cmd:    cmd,
+		stdin:  stdin,
+		stdout: bufio.NewScanner(stdout),
+		cancel: cancel,
+	}, nil
 }
 
 func (app *AppImpl) PublishScheduledEntries(ctx context.Context) error {

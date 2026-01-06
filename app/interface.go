@@ -43,6 +43,7 @@ type App interface {
 
 	// Postprocess
 	Postprocess(ctx context.Context, html string) (string, error)
+	PostprocessBatch(ctx context.Context) (*BatchProcessor, error)
 
 	// Handler methods
 	HandleIndex(c echo.Context) error

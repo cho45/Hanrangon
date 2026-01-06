@@ -40,6 +40,12 @@ func Reformat(ctx context.Context, application app.App, args []string) error {
 	}
 	defer rows.Close()
 
+	processor, err := application.PostprocessBatch(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to start postprocess batch: %w", err)
+	}
+	defer processor.Close()
+
 	count := 0
 	for rows.Next() {
 		count++
@@ -59,7 +65,7 @@ func Reformat(ctx context.Context, application app.App, args []string) error {
 			continue
 		}
 
-		processedBody, err := application.Postprocess(ctx, formattedBody)
+		processedBody, err := processor.Process(id, formattedBody)
 		if err != nil {
 			log.Printf("  Error postprocessing entry %d: %v", id, err)
 		} else {

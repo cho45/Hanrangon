@@ -306,7 +306,7 @@ func TestHandleSitemap(t *testing.T) {
 	if !strings.Contains(body, "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">") {
 		t.Errorf("body does not contain urlset tag")
 	}
-	if !strings.Contains(body, "<loc>https://lowreal.net/2025/01/01/1</loc>") {
+	if !strings.Contains(body, "<loc>http://localhost:5555/2025/01/01/1</loc>") {
 		t.Errorf("body does not contain entry location")
 	}
 }
