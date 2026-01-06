@@ -30,6 +30,7 @@ type Querier interface {
 	FailStuckJobs(ctx context.Context) error
 	FindNextJob(ctx context.Context, runAfter time.Time) (Job, error)
 	FindScheduledEntriesToPublish(ctx context.Context, now sql.NullTime) ([]FindScheduledEntriesToPublishRow, error)
+	GetAverageSimilarityScore(ctx context.Context) (float64, error)
 	GetEntryById(ctx context.Context, id int64) (GetEntryByIdRow, error)
 	GetEntryByPath(ctx context.Context, path string) (GetEntryByPathRow, error)
 	GetImageByURI(ctx context.Context, uri string) (Image, error)
@@ -38,7 +39,9 @@ type Querier interface {
 	GetNewerEntry(ctx context.Context, createdAt time.Time) (GetNewerEntryRow, error)
 	GetOlderEntry(ctx context.Context, createdAt time.Time) (GetOlderEntryRow, error)
 	GetOrCreateJobType(ctx context.Context, name string) (JobType, error)
+	GetTFIDFStats(ctx context.Context) (GetTFIDFStatsRow, error)
 	GetTermID(ctx context.Context, term string) (int64, error)
+	GetTopTermsByDF(ctx context.Context, limit int64) ([]GetTopTermsByDFRow, error)
 	GrabJob(ctx context.Context, arg GrabJobParams) error
 	InsertPosting(ctx context.Context, arg InsertPostingParams) error
 	InsertRelatedEntry(ctx context.Context, arg InsertRelatedEntryParams) error
