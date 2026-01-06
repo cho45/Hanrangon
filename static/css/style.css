@@ -508,6 +508,12 @@ mjx-container.MathJax[display="true"] {
 	font-size: 1.4rem;
 }
 
+mjx-container.MathJax[display="true"] svg {
+	width: auto !important;
+	max-width: 100% !important;
+	overflow-x: auto;
+}
+
 /* Status & Metadata */
 article.status-scheduled {
 	border: 2px dashed var(--border-color);
