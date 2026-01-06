@@ -27,6 +27,7 @@
   });
   let saving = $state(false);
   let progress = $state('');
+  let uploading = $state(false);
 
   let titleInput = $state<HTMLInputElement>(null!);
   let bodyTextArea = $state<HTMLTextAreaElement>(null!);
@@ -206,12 +207,15 @@
       const formData = new FormData();
       formData.append('file', input.files[0]);
 
+      uploading = true;
       try {
         const data = await api.post<{ uploaded: string }>('/admin/api/upload/image', formData);
         const syntax = `<span itemscope itemtype="http://schema.org/Photograph"><a href="${data.uploaded}" class="picasa" itemprop="url"><img src="${data.uploaded}" alt="photo" itemprop="image"/></a></span>\n`;
         insertText(syntax, true);
       } catch (err) {
         alert('アップロードに失敗しました');
+      } finally {
+        uploading = false;
       }
     };
     input.click();
@@ -263,7 +267,9 @@
     />
     <div class="toolbar">
       <button type="button" onclick={openTagDialog}>🏷️ タグ</button>
-      <button type="button" onclick={openUploadDialog}>📷 写真</button>
+      <button type="button" onclick={openUploadDialog} disabled={uploading}>
+        {uploading ? '⌛ アップロード中...' : '📷 写真'}
+      </button>
       <select bind:value={form.format} class="format-select">
         {#each ['Hatena', 'Markdown', 'HTML', 'tDiary'] as fmt}
           <option value={fmt}>{fmt}</option>
