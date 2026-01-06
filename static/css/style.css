@@ -1,1314 +1,767 @@
 @charset "UTF-8";
 
-@font-face {
-	font-family: "MyYuGothicM";
-	font-weight: normal;
-	src: local("YuGothic-Medium"), local("Yu Gothic Medium"), local("YuGothic-Regular");
+/* Variables for a calm tone and consistent spacing */
+:root {
+	--bg-color: #fcfcfc;
+	--text-color: #2c3e50;
+	--accent-color: #5f6d6e; /* Darkened for accessibility (Contrast ~4.8:1) */
+	--border-color: #e0e0e0;
+	--link-color: #34495e;
+	--code-bg: #f8f9fa;
+	--container-width: 48rem; /* Ideal for readability (~70-80 chars) */
+	--full-width: 100%;
 }
 
-@font-face  {
-	font-family: "MyYuGothicM";
-	font-weight: bold;
-	src: local("YuGothic-Bold"), local("Yu Gothic");
-}
-
-a:link {
-	color: #222;
-}
-
-a:visited {
-	color: #222;
-}
-
-a:hover {
-	text-decoration: none;
-}
-
-cite {
-	font-style: normal;
-}
-
-hr {
-	clear: both;
-	border: none;
-	background: transparent;
-	height: 1px;
-}
-
-img {
-	border: none;
-}
-
-pre {
-	font-family: 'Osaka Mono', 'Monaco', 'Lucida Cosole', 'Consolas', monospace;
-	font-size: 75%;
-	overflow: auto;
-	line-height: 1.33;
-	background: repeating-linear-gradient(
-		135deg,
-		#ffffff,
-		#ffffff 5px,
-		#fafafa 5px,
-		#fafafa 10px
-	) !important;
-}
-
-q {
-	color: #999;
-}
-
-p {
-	margin: 1.2em 0;
-}
-
-ul {
-	padding: 0 0 0 1.5em;
-	margin: 1em 0;
-}
-
-ul li {
-	padding: 0;
-}
-
-ul ul {
-	margin: 0;
-}
-
-input ,
-textarea {
-	background: #fff;
-	color: #333;
-	border: 1px solid #2f3839;
-	padding: 2px;
-}
-
-ins {
-	display: block;
-	text-decoration: none;
-	padding: 10px 0 10px 10px;
-	margin: 1em 0;
-	border-style: solid;
-	border-width: 0 0 0 3px;
-	border-color: #efefef;
-}
-
-ins:before {
-	/*
-	display: block;
-	content: "追記";
-	color: #333;
-	font-size: 90%;
-	*/
-}
-
-ins.adsbygoogle ,
-ins.adsbygoogle ins {
-	padding: 0;
-	margin: 0 auto;
-	border-style: none;
-}
-
-ins.adsbygoogle:before ,
-ins.adsbygoogle ins:before {
-	display: none;
-}
-
-del {
-	display: block;
-	color: #999;
-	font-size: 50%;
-	line-height: 1.5;
-}
-
-blockquote {
-	padding: 0 0 0 1em;
-	margin: 1em 0;
-}
-
-table {
-	margin: 20px 0;
-	background: #fff;
-	border-collapse: collapse;
-	border-spacing: 0;
-}
-
-table th,
-table td {
-	border: 1px solid #ddd;
-	padding: 10px;
-}
-
-nav,
-header,
-footer,
-figure,
-figcaption,
-section,
-article {
-	display: block;
-}
-
-figure {
-	margin: 1em 0 1em 1em;
-}
-
-figcaption {
-	font-size: 90%;
-}
-
-figure.quote figcaption {
-	text-align: right;
-}
-
-.share-buttons {
-	contain: content;
-	vertical-align: middle;
-	line-height: 32px;
-	padding: 20px;
-	font-size: 14px;
-	background: #fff;
-	margin: 0;
-	text-align: center;
-	color: #000;
-	filter: grayscale(100%);
-	transition: filter 0.3s ease 0s;
-}
-
-.share-buttons:hover {
-	filter: none;
-}
-
-.share-buttons::after {
-	display: block;
-	content: "共有する";
-	font-size: 14px;
-	margin: 0;
-	padding: 0;
-	color: #666;
-	line-height: 1.2;
-}
-
-.share-buttons .share-button {
-	display: inline-block;
-	text-align: center;
-	height: 40px;
-	width: 40px;
-	margin-right: 8px;
-	position: relative;
-	border-radius: 3px;
-	overflow: hidden;
-}
-
-.share-buttons .share-button[href*="line.me"] {
-	display: none;
-}
-
-.share-buttons .share-button img {
-	position: absolute;
-	top: 50%;
-	left: 50%;
-	transform: translate(-50%, -50%);
-}
-
-article h1 ,
-article h2 ,
-article h3 ,
-article h4 ,
-article h5 ,
-article h6 {
-	line-height: 1.20;
-	white-space: pre-line;
-	font-size: 140%;
-	font-family:
-		'Noto Serif JP', 
-		YuMincho,
-		"Hiragino Mincho ProN",
-		"HG明朝E",
-		serif;
-	font-weight: normal;
-	color: #333;
-	margin: 3em 0 0em;
-	letter-spacing: -0.05em;
-	font-feature-settings: "palt";
+* {
+	box-sizing: border-box;
 }
 
 html {
-	background: #fafafa;
-	color: #4f5759;
-	margin: 0;
-	padding: 0;
+	background-color: var(--bg-color);
+	color: var(--text-color);
+	font-size: 18px; /* Slightly larger for readability */
+	-webkit-text-size-adjust: 100%;
 }
 
 body {
-	width: 1024px;
-	text-align: center;
-	font-size: 16px;
-	margin: 0 auto;
-	padding: 0 20px;
-	background: #fff;
-	line-height: 1.9;
+	margin: 0;
+	padding: 0;
 	font-family:
 		'Noto Serif JP',
 		'Noto Sans Japanese',
 		-apple-system,
 		BlinkMacSystemFont,
 		"Hiragino Kaku Gothic ProN",
-		MyYuGothicM,
+		"Hiragino Sans",
 		Meiryo,
-		sans-serif;
-	font-feature-settings: "pwid";
-	font-synthesis: none;
-	/* text-rendering: optimizeLegibility; */
+		serif;
+	line-height: 1.8;
 	word-wrap: break-word;
 	-webkit-font-smoothing: antialiased;
-	-moz-osx-font-smoothing: grayscale;
 }
 
-body > * {
-	text-align: left;
-}
-
-#global-header {
-	font-family:
-		'Noto Serif JP',
-		YuMincho,
-		"Hiragino Mincho ProN",
-		"HG明朝E",
-		serif;
-	font-feature-settings: "palt";
-	display: block;
-	position: relative;
-	z-index: 200;
-	margin: 0;
-	padding: 2em 0;
+/* Admin Links positioned absolutely */
+.admin-link {
 	position: absolute;
-	background: #fff;
+	top: 1rem;
+	right: 6rem; /* Default position for the first admin link (further left) */
+}
+
+.admin-link + .admin-link {
+	right: 1.5rem; /* Position the subsequent link to the far right */
+}
+
+.admin-link a {
+	color: var(--accent-color) !important;
+	text-decoration: none !important;
+	font-size: 0.7rem;
+	font-family: sans-serif;
+	text-transform: none !important;
+	letter-spacing: 0.05em;
+}
+
+.admin-link a:hover {
+	color: var(--text-color) !important;
+}
+
+/* Typography */
+a {
+	color: var(--link-color);
+	text-decoration: underline;
+	text-underline-offset: 0.2em;
+	transition: opacity 0.2s;
+}
+
+a:hover {
+	opacity: 0.7;
+	text-decoration: none;
+}
+
+/* Disable opacity on image links to prevent whitening on hover */
+a:has(img):hover,
+.photo a:hover,
+.hatena-fotolife:hover,
+.picasa:hover {
+	opacity: 1 !important;
+}
+
+h1, h2, h3, h4, h5, h6 {
+	font-family: 'Noto Serif JP', serif;
+	font-weight: 500;
+	line-height: 1.4;
+	margin: 2.5rem 0 1.25rem;
+	color: #1a1a1a;
+}
+
+p {
+	margin: 1.5rem 0;
+}
+
+/* Layout */
+#global-header {
+	text-align: center;
+	padding: 4rem 1rem 2rem;
 }
 
 #global-header #header {
-	text-align: center;
-	padding: 32px 32px 10px;
-	margin: -32px 0 0 0;
-	color: #fff;
-	background: #000;
-	font-size: 100%;
-	font-weight: 400;
+	margin: 0;
+	background: transparent;
+	padding: 0;
 }
 
-#global-header #header a {
-	display: block;
-	padding: 5px 0;
+#global-header .logo-container {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0;
 }
 
-#global-header #header a:link ,
-#global-header #header a:visited ,
-#global-header #header a:hover {
-	font-family: serif;
-	text-decoration: none;
-	color: #fff;
+#global-header .logo-icon {
+	width: 80px;
+	height: 80px;
+	background-color: var(--text-color);
+	-webkit-mask-image: url('/images/hanrangen-icon.svg');
+	mask-image: url('/images/hanrangen-icon.svg');
+	-webkit-mask-repeat: no-repeat;
+	mask-repeat: no-repeat;
+	-webkit-mask-position: center;
+	mask-position: center;
+	-webkit-mask-size: contain;
+	mask-size: contain;
+	transition: background-color 0.2s;
 }
 
-#global-header #header small {
-	position: relative;
-	top: -1.5em;
-	color: #999;
-	font-size: 50%;
+#global-header .logo-text {
+	width: 150px;
+	height: 50px;
+	background-color: var(--text-color);
+	-webkit-mask-image: url('/images/hanrangen.svg');
+	mask-image: url('/images/hanrangen.svg');
+	-webkit-mask-repeat: no-repeat;
+	mask-repeat: no-repeat;
+	-webkit-mask-position: center;
+	mask-position: center;
+	-webkit-mask-size: contain;
+	mask-size: contain;
+	transition: background-color 0.2s;
 }
 
-#global-header #search-form {
-	position: absolute;
-	top: 20px;
-	right: 40px;
+#global-header a:hover .logo-icon,
+#global-header a:hover .logo-text {
+	background-color: var(--accent-color);
 }
 
 #global-navigation {
-	position: relative;
-	font-family: 'Noto Serif JP', serif;
-	font-weight: 400;
-	display: block;
-	margin: 0 auto;
-	padding: 3em 0;
-	background: #fff;
+	margin-bottom: 4rem;
 }
 
 #global-navigation ul {
-	font-size: 10px;
 	list-style: none;
-	margin: 0;
 	padding: 0;
-	text-align: right;
+	margin: 0;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	gap: 0; /* Gap handled by pseudo-elements and padding */
+	font-size: 0.9rem;
 }
 
 #global-navigation ul li {
-	display: inline-block;
-	margin: 0;
-	padding: 0;
+	display: flex;
+	align-items: center;
 }
 
 #global-navigation ul li a {
-	display: inline-block;
-	padding: 5px 0;
-	width: 100px;
-	text-align: center;
-	background: repeating-linear-gradient(
-		135deg,
-		#ffffff,
-		#ffffff 5px,
-		#fafafa 5px,
-		#fafafa 10px
-	);
-}
-
-#global-navigation ul li a:link ,
-#global-navigation ul li a:visited ,
-#global-navigation ul li a:hover {
-	color: #111;
-	text-decoration: none;
-}
-
-#global-navigation ul li a:hover {
-	border: none;
-}
-
-#global-navigation ip-info {
 	display: block;
-	position: absolute;
-	top: 0;
-	right: 0;
-	color: #ccc;
-	font-size: 11px;
-}
-
-#global-navigation::after {
-	content: attr(data-ip-info);
-}
-
-
-#content {
-}
-
-.related {
-	margin: 0 auto;
-	width: 728px;
-}
-
-.pager {
-	text-align: center;
-	font-size: 11px;
-	margin: 20px 0px 20px;
-}
-
-.pager a:link ,
-.pager a:visited ,
-.pager a:hover {
-	display: inline-block;
-	padding: 10px 20px;
-	text-align: center;
-	width: 12em;
-	background: #333;
+	padding: 0.5rem 1.5rem;
 	text-decoration: none;
-	color: #fff;
+	color: var(--accent-color);
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+	border-radius: 4px;
+	transition: all 0.2s;
 }
 
-#category-header {
-	margin: 20px 0;
-	padding: 0;
-	font-family:
-		'Noto Serif JP',
-		YuMincho,
-		"Hiragino Mincho ProN",
-		"HG明朝E",
-		serif;
-}
-
-#category-header h1 ,
-#category-header h2 {
-	display: inline;
-	font-size: 100%;
-	font-weight: normal;
-}
-
-#category-header h1 small ,
-#category-header h2 small {
-	padding: 0 0.5em;
-	color: #666;
-	display: inline;
-	font-size: 100%;
-	font-weight: normal;
-}
-
-.entries {
-	margin: 0 0 3em 0;
-	padding: 0;
-}
-
-.entries article {
-	contain: layout;
-	clear: both;
-	padding: 1em 0;
-	margin: 0 0 1em 0;
-}
-
-.entries .date {
-	contain: layout;
+/* Separators for the first two public links */
+#global-navigation ul li:nth-child(1)::after,
+#global-navigation ul li:nth-child(2)::after {
+	content: "";
 	display: block;
-	clear: both;
-	font-family:
-		'Noto Serif JP',
-		YuMincho,
-		"Hiragino Mincho ProN",
-		"HG明朝E",
-		serif;
-	font-weight: 400;
-	font-size: 80%;
-	margin: 10em 0 0;
-	text-align: center;
-	border-width: 0 0 1px 0;
-	border-style: solid;
-	border-color: #eee;
-	padding: 3px 0;
-	width: 1024px;
-	color: #333;
-}
-
-.entries .date:first-child {
+	width: 1px;
+	height: 0.8rem;
+	background-color: var(--border-color);
 	margin: 0;
 }
 
+#global-navigation ul li a:hover {
+	background-color: #f0f0f0;
+	color: var(--text-color);
+	opacity: 1;
+}
+
+#content {
+	max-width: var(--container-width);
+	margin: 0 auto;
+	padding: 0 1.5rem;
+}
+
+/* Entries */
+.entries .date {
+	font-family: 'Noto Serif JP', serif;
+	font-size: 0.85rem;
+	color: var(--accent-color);
+	text-align: center;
+	margin: 6rem 0 2rem;
+	padding-bottom: 0.5rem;
+	border-bottom: 1px solid var(--border-color);
+}
+
 .entries .date a {
+	text-decoration: none;
+	color: inherit;
+}
+
+article {
+	margin-bottom: 8rem;
+}
+
+article header h2 {
+	font-size: 1.8rem;
+	margin: 0 0 0.5rem;
+	text-align: left;
+}
+
+article header h2 a {
+	text-decoration: none;
+	color: inherit;
+}
+
+article header .metadata {
+	font-size: 0.8rem;
+	color: var(--accent-color);
+	margin-bottom: 2rem;
+}
+
+article header .metadata a {
 	color: inherit;
 	text-decoration: none;
 }
 
-.entries article {
+/* Content specific styles */
+.content {
+	text-align: justify;
+}
+
+/* Large Photos & Code Breakout (Universal) */
+.content img,
+.content .photo,
+.content .hatena-fotolife,
+.content .picasa,
+.content span[itemtype*="Photograph"],
+pre.code,
+pre.hljs,
+pre {
 	position: relative;
-}
-
-.entries article.status-scheduled {
-	background: repeating-linear-gradient(
-		135deg,
-		#ffffff,
-		#ffffff 5px,
-		#fafafa 5px,
-		#fafafa 10px
-	) !important;
-}
-
-.entries article header {
-	width: 1024px;
-	padding: 0 0 20px 0;
-}
-
-.entries article header h1 ,
-.entries article header h2 {
-	font-family:
-		'Noto Serif JP',
-		YuMincho,
-		"Hiragino Mincho ProN",
-		"HG明朝E",
-		serif;
-	font-weight: 400;
-	letter-spacing: -0.05em;
-	/*
-	height: 30px;
-	line-height: 30px;
-	*/
-	line-height: 1.33;
-	text-align: left;
-	padding: 8px 0;
-	margin: 0;
-	font-size: 160%;
-	color: #111;
-	background: rgba(255, 255, 255, 0.7);
-}
-
-.entries article header h1 a ,
-.entries article header h2 a {
+	width: 100vw !important;
+	max-width: 100vw !important;
+	left: 50%;
+	transform: translateX(-50%);
+	margin-left: 0 !important;
+	margin-right: 0 !important;
 	display: block;
+	border-radius: 0 !important;
+	border-left: none !important;
+	border-right: none !important;
+}
+
+.content img,
+.content figure img,
+span[itemtype*="Photograph"] img,
+.photo img,
+.hatena-fotolife img {
+	display: block;
+	height: auto;
+	margin: 3rem auto;
+	box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+}
+
+/* Specific internal padding for code blocks */
+pre.code,
+pre.hljs,
+pre {
+	background-color: var(--code-bg) !important;
+	overflow-x: auto;
+	font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+	font-size: 0.8rem;
+	line-height: 1.1;
+	margin: 2rem 0;
+	border-top: 1px solid var(--border-color);
+	border-bottom: 1px solid var(--border-color);
+	/* Dynamically align code start with content container */
+	padding: 1.5rem calc((100vw - var(--container-width)) / 2 + 1.5rem) !important;
+}
+
+/* Adjust code padding for mobile */
+@media (max-width: 50rem) {
+	pre.code,
+	pre.hljs,
+	pre {
+		padding: 1.2rem 1rem !important;
+	}
+}
+
+/* Ensure images inside wrappers fill the breakout width */
+.content .photo img,
+.content .hatena-fotolife img,
+.content .picasa img,
+.content span[itemtype*="Photograph"] img {
+	width: 100% !important;
+	max-width: 100% !important;
+	height: auto !important;
+	margin: 0 !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 48rem) {
+	html {
+		font-size: 16px;
+	}
+	
+	article header h2 {
+		font-size: 1.5rem;
+	}
+}
+
+/* Similar entries & Social */
+.similar-entries,
+.trackbacks {
+	margin-top: 4rem;
+	padding-top: 2rem;
+	border-top: 1px solid var(--border-color);
+}
+
+.similar-entries h3,
+.trackbacks h3 {
+	font-size: 1.1rem;
+	margin-bottom: 1.5rem;
+}
+
+.similar-entries ul,
+.trackbacks ul {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+
+.similar-entries li,
+.trackbacks li {
+	margin-bottom: 1.5rem;
+}
+
+.similar-entries a,
+.trackbacks a {
 	text-decoration: none;
-}
-
-.entries article header .metadata {
 	display: block;
-	text-align: right;
-	font-family:
-		'Noto Serif JP',
-		YuMincho,
-		"Hiragino Mincho ProN",
-		"HG明朝E",
-		serif;
-	font-weight: 400;
-	padding: 0 8px;
-	margin: 0;
-	font-size: 80%;
-	line-height: 1.2;
-	color: #999;
-	border-width: 0 3px 0 3px;
-	border-color: #f6f6f6;
-	border-style: solid;
-	background: repeating-linear-gradient(
-		135deg,
-		#ffffff,
-		#ffffff 5px,
-		#fafafa 5px,
-		#fafafa 10px
-	) !important;
 }
 
-.entries article header .metadata time {
+.similar-entries a b,
+.trackbacks a b {
+	display: block;
+	text-decoration: underline;
+	text-underline-offset: 0.2rem;
+	color: var(--text-color);
+	font-size: 1.1rem;
+}
+
+.similar-entries a:hover b,
+.trackbacks a:hover b {
+	opacity: 0.7;
+}
+
+.similar-entries time,
+.trackbacks time {
+	display: block;
+	font-size: 0.8rem;
+	color: var(--accent-color);
+	margin: 0.2rem 0;
+}
+
+.similar-entries .summary,
+.trackbacks .summary {
+	display: block;
+	font-size: 0.85rem;
+	color: var(--accent-color);
+	line-height: 1.5;
+	text-decoration: none !important;
+}
+
+/* Similar Images */
+.similar-images {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 1rem;
+	margin: 1.5rem 0;
+	padding: 0;
+	list-style: none;
+}
+
+.similar-images li {
+	flex: 1 1 10rem;
+	margin: 0 !important;
+}
+
+.similar-images a {
+	display: block;
+	aspect-ratio: 16 / 9;
+	background-position: center;
+	background-size: cover;
+	border-radius: 4px;
+	position: relative;
+	overflow: hidden;
+}
+
+.similar-images .meta {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	padding: 0.5rem;
+	background: rgba(0,0,0,0.6);
+	color: #fff;
+	font-size: 0.7rem;
+	opacity: 0;
+	transition: opacity 0.2s;
+}
+
+.similar-images a:hover .meta {
+	opacity: 1;
+}
+
+/* External Services (Amazon, Link Share) */
+.amazon, figure.http {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: 1.5rem;
+	margin: 2rem 0;
+	padding: 1.2rem;
+	background: #fff;
+	border: 1px solid var(--border-color);
+	border-radius: 4px;
+	width: 100% !important; /* Force to container width */
+	left: 0 !important;
+	transform: none !important;
+	box-sizing: border-box;
+}
+
+.amazon .image img, figure.http .image img {
+	width: 120px !important; /* Smaller fixed size for product icons */
+	max-width: 120px !important;
+	height: auto !important;
+	margin: 0 !important;
+	box-shadow: none !important;
+	/* Overriding the breakout settings */
+	left: 0 !important;
+	transform: none !important;
+	position: static !important;
+}
+
+.amazon .detail, figure.http .detail {
+	flex: 1;
+	font-size: 0.85rem;
+	line-height: 1.5;
+	min-width: 0; /* Prevent flex overflow */
+}
+
+@media (max-width: 30rem) {
+	.amazon, figure.http {
+		flex-direction: column;
+		align-items: center;
+		text-align: center;
+	}
+}
+
+/* MathJax */
+.lang-math, .mjpage__block {
+	font-size: 1.2rem;
+}
+
+mjx-container.MathJax {
 	display: inline-block;
+	margin: 0 0.2em;
 }
 
-.entries article header .metadata a {
+mjx-container.MathJax[display="true"] {
+	display: block;
+	text-align: center;
+	margin: 2rem 0;
+	font-size: 1.4rem;
+}
+
+/* Status & Metadata */
+article.status-scheduled {
+	border: 2px dashed var(--border-color);
+	background: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.02) 10px, rgba(0,0,0,0.02) 20px);
+}
+
+#global-navigation ip-info {
+	display: block;
+	font-size: 0.7rem;
+	color: var(--accent-color);
+	text-align: center;
+	margin-top: 1rem;
+}
+
+#global-navigation ip-info:after {
+	content: attr(data-ip-info);
+}
+
+/* Typography elements */
+ins {
 	text-decoration: none;
+	background-color: #f1f8ff;
+	padding: 0.2rem 0.4rem;
 }
 
-.entries article header .metadata .author {
+del {
+	color: var(--accent-color);
+	text-decoration: line-through;
+}
+
+q {
+	font-style: italic;
+	color: var(--accent-color);
+}
+
+cite {
+	font-style: normal;
+	font-weight: 600;
+}
+
+/* Hidden elements */
+ol[itemtype*="BreadcrumbList"] {
 	display: none;
 }
 
-.entries article .content {
-	position: relative;
-	margin: 0 auto;
-	width: 728px;
-	text-align: justify;
-	text-justify: inter-ideograph;
+/* ABCJS */
+.abcjs-lyric, .abcjs-annotation {
+	font-size: 0.8rem !important;
 }
 
-.entries article .content h1 ,
-.entries article .content h2 ,
-.entries article .content h3 ,
-.entries article .content h4 ,
-.entries article .content h5 ,
-.entries article .content h6 {
-	color: #333;
-}
-
-.entries article .content {
-}
-
-.entries article .content a.seemore:link {
-	text-decoration: underline;
-}
-
-.entries article .content a.seemore:visited {
-	text-decoration: underline;
-}
-
-.entries article .content a.seemore:hover {
-	text-decoration: none;
-}
-
-.entries article .content img ,
-.entries article .content svg {
-	max-width: 100%;
-	height: auto;
-	width: auto;
-}
-
-.entries article .content .lang-abc svg {
-	max-width: none;
-}
-
-.entries article .content .lang-math ,
-.entries article .content .mjpage__block {
-	font-size: 24px;
-}
-
-/* MathJax 全般 */
-mjx-container.MathJax {
-	display: inline-block;
-}
-
-/* display math */
-mjx-container.MathJax[display="true"] {
-  display: block;
-  text-align: center;
-  margin: 1em 0;
-  font-size: 24px;
-}
-
-/* inline math */
-mjx-container.MathJax:not([display]) {
-  /* inline specific styles */
-}
-
-.entries article .content iframe {
-	max-width: 100%;
-}
-
-.entries article .content.trackbacks ,
-.entries article .content.similar-entries {
-}
-
-.entries article .content.trackbacks ul ,
-.entries article .content.similar-entries ul {
-	list-style: none;
-	margin: 0;
-	padding: 0;
-}
-
-.entries article .content.trackbacks ul li ,
-.entries article .content.similar-entries ul li {
-	margin: 0;
-	padding: 0;
-}
-
-.entries article .content.trackbacks ul li a:link ,
-.entries article .content.similar-entries ul li a:link {
-	display: block;
-	margin: 0;
-	padding: 0.5em 0;
-	text-decoration: none;
-}
-
-.entries article .content.trackbacks ul li a:link b ,
-.entries article .content.similar-entries ul li a:link b {
-	text-decoration: underline;
-	font-feature-settings: "palt";
-}
-
-.entries article .content.trackbacks ul li .summary ,
-.entries article .content.similar-entries ul li .summary {
-	display: block;
-	font-size: 80%;
-	color: #444;
-	line-height: 1.66;
-	overflow: hidden;
-	white-space: nowrap;
-	text-overflow: ellipsis;
-}
-
-.entries article .content.trackbacks ul li time ,
-.entries article .content.similar-entries ul li time {
-	font-size: 80%;
-	color: #666;
-}
-
-.entries article .content.similar-entries ul.similar-images {
+.share-buttons {
 	display: flex;
-	flex-wrap: nowrap;
-	justify-content: space-between;
+	justify-content: center;
+	gap: 1rem;
+	margin: 3rem 0;
+}
+
+.share-button {
+	display: inline-flex;
 	align-items: center;
-	margin: 0 -5px;
+	justify-content: center;
+	width: 3rem;
+	height: 3rem;
+	border-radius: 50%;
+	transition: transform 0.2s;
 }
 
-.entries article .content.similar-entries ul.similar-images li {
-	flex: 1;
-	margin: 5px;
-}
-.entries article .content.similar-entries ul.similar-images a {
-	display: block;
-	position: relative;
-	height: 200px;
-	background-position: center;
-	background-size: cover;
+.share-button:hover {
+	transform: translateY(-3px);
 }
 
-.entries article .content.similar-entries ul.similar-images .meta {
-	position: absolute;
-	top: 0;
-	left: 0;
-	right: 0;
-	padding: 0 5px;
-	background: rgba(0, 0, 0, 0.5);
+.share-button img {
+	width: 1.2rem;
+	height: 1.2rem;
+	margin: 0 !important;
+	box-shadow: none !important;
+}
+
+/* Pager */
+.pager {
+	margin: 6rem 0;
+	display: flex;
+	justify-content: center;
+	gap: 2rem;
+}
+
+.pager a {
+	padding: 0.75rem 2rem;
+	background: #1a1a1a;
 	color: #fff;
+	text-decoration: none;
+	border-radius: 4px;
+	font-size: 0.85rem;
+	letter-spacing: 0.05em;
+	transition: background 0.2s;
 }
 
-.entries article .content.similar-entries ul.similar-images img {
-	max-width: 100%;
+.pager a:hover {
+	background: #444;
 }
 
-.entries article pre.code {
-	contain: content;
-	border-width: 0 0 0 3px;
-	margin: 1em 0;
-	padding: 20px 20px;
+/* Archive */
+#archive .year {
+	margin-top: 4rem;
 }
 
-.entries article div.gist {
-	contain: content;
-	font-size: 75%;
-	margin: 20px 0;
-	padding: 0;
-	line-height: 1.33;
-}
-
-.entries article span[itemtype="http://schema.org/Photograph"] {
-	background: #fff;
-	display: block;
-	text-align: center;
-	width: 728px;
-}
-
-.entries article a.hatena-fotolife ,
-.entries article a.picasa ,
-.entries article p.photo {
-	display: block;
-	margin: 0;
-	border: none;
-	background: #eee;
-	position: relative;
-	text-align: center;
-}
-
-.entries article a.picasa::after {
-	content: attr(title);
-	position: absolute;
+#archive .year h1 {
+	font-size: 1.5rem;
+	border-bottom: 2px solid #1a1a1a;
 	display: inline-block;
-	font-size: 10px;
-	line-height: 10px;
-	background: rgba(255, 255, 255, 0.8);
-	bottom: -22px;
-	right: 0;
-	padding: 6px 0px 6px 6px;
-	color: #777;
+	padding-right: 2rem;
 }
 
-.entries article a.hatena-fotolife img ,
-.entries article a.picasa img {
-	display: block;
-	max-height: 100vh;
-	max-width: 100%;
-	margin: 1em auto;
-	border-width: 20px 30px;
-	border-style: none;
-	border-color: #000;
-}
-
-.entries article.photo {
-	padding-bottom: 0;
-}
-
-.entries article.photo header {
+#archive .months {
+	list-style: none;
 	padding: 0;
-	margin-bottom: -0.5em;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr));
+	gap: 1rem;
+	margin-top: 1.5rem;
 }
 
-.entries article.photo span[itemtype="http://schema.org/Photograph"] {
-	background: #fff;
+#archive .month a {
 	display: block;
-	width: 1024px;
-	float: none;
-	margin: 0 -148px;
-}
-
-.entries article .social {
+	padding: 1rem;
+	background: #eee;
 	text-align: center;
+	text-decoration: none;
+	color: #1a1a1a;
+	transition: background 0.2s;
 }
 
-.entries article .social .hatena-star {
-	display: block;
-	height: 32px;
+#archive .month a:hover {
+	background: #ddd;
 }
 
-.entries article footer {
+/* Tables */
+table {
+	width: 100%;
+	border-collapse: collapse;
+	margin: 2rem 0;
 }
 
-.amazon {
-	margin: 0;
-	padding: 0;
-}
-
-.amazon .image {
-	float: left;
-	margin: 0 1em 0 0;
-}
-
-.amazon .detail {
-}
-
-.amazon:after {
-	display: block;
-	clear: left;
-	content: "";
-}
-
-figure.http {
-	margin: 0;
-	padding: 0;
-}
-
-figure.http .image {
-	float: left;
-	margin: 0 1em 0 0;
-}
-
-figure.http .image img {
-	max-width: 128px;
-	max-height: 128px;
-}
-
-figure.http .detail {
-	color: #666;
-}
-
-figure.http:after {
-	display: block;
-	clear: left;
-	content: "";
-}
-
-#global-footer {
-	content-visibility: auto;
-	contain-intrinsic-size: 1px 300px;
-	width: 728px;
-	margin: 0 auto;
-	padding: 0 0 5em 0;
-	font-size: 80%;
+table th, table td {
+	padding: 0.75rem;
+	border: 1px solid var(--border-color);
 	text-align: left;
 }
 
-#global-footer h2 {
-	font-family:
-		'Noto Serif JP',
-		YuMincho,
-		"Hiragino Mincho ProN",
-		"HG明朝E",
-		serif;
-	font-weight: normal;
+table th {
+	background: #f0f0f0;
+}
+
+/* Misc */
+hr {
+	border: none;
+	border-top: 1px solid var(--border-color);
+	margin: 4rem 0;
+}
+
+.social {
+	margin-top: 4rem;
+}
+
+/* Metadata tag list */
+.metadata a {
+	margin-right: 0.5rem;
+}
+
+.metadata a:before {
+	content: "#";
+}
+
+/* Responsive adjustments for mobile */
+@media (max-width: 48rem) {
+	html {
+		font-size: 17px;
+	}
+	
+	#content {
+		padding: 0 1rem;
+	}
+	
+	article header h2 {
+		font-size: 1.4rem;
+	}
+	
+	.pager {
+		flex-direction: column;
+		align-items: stretch;
+	}
+	
+	.pager a {
+		text-align: center;
+	}
+}
+
+/* Footer */
+#global-footer {
+	margin-top: 8rem;
+	padding: 4rem 1.5rem;
+	background-color: #f0f0f0;
+}
+
+#global-footer .container {
+	max-width: var(--container-width);
+	margin: 0 auto;
 }
 
 #global-footer .author {
 	display: flex;
-}
-
-#global-footer .author .image {
+	flex-wrap: wrap;
+	gap: 2rem;
+	align-items: center;
 }
 
 #global-footer .author .image img {
-	aspect-ratio: 1 / 1;
-	width: 160px;
-	height: auto;
+	border-radius: 50%;
+	filter: grayscale(20%);
+	width: 120px;
+	height: 120px;
 }
 
 #global-footer .author .desc {
-	padding: 0 0 0 20px;
 	flex: 1;
+	min-width: 200px;
 }
 
 #global-footer .author .desc p {
-	margin: 0;
+	margin: 0.5rem 0;
+	font-size: 0.9rem;
 }
 
+#global-footer h2 {
+	font-size: 1.2rem;
+	margin-bottom: 2rem;
+}
+
+/* Button style */
 .button {
-	display: inline-block;
-	position: relative;
-	height: 20px;
-	padding: 1px 8px 1px 6px;
-	margin-right: 5px;
-	font-weight: 500;
-	color: #fff !important;
-	cursor: pointer;
-	border-radius: 3px;
-	box-sizing: border-box;
-	font: normal normal normal 11px/18px 'Helvetica Neue',Arial,sans-serif;
-	text-decoration: none;
+	display: inline-flex;
+	align-items: center;
+	padding: 0.4rem 1rem;
+	background: #eee;
+	color: var(--text-color) !important;
+	text-decoration: none !important;
+	font-size: 0.8rem;
+	border-radius: 4px;
+	border: 1px solid var(--border-color);
+	transition: background 0.2s;
 }
 
-.button i {
-	position: relative;
-	top: 2px;
-	display: inline-block;
-	width: 14px;
-	height: 14px;
-	background: transparent 0 0 no-repeat;
-}
-
-.button .label {
-	display: inline-block;
-	white-space: nowrap;
-	margin-left: 3px;
-	vertical-align: top;
-}
-
-.button.github-button {
-	top: 1px;
+.button:hover {
 	background: #ddd;
-	background-image: linear-gradient(#eee, #ddd);
-	border-color: #ccc;
-	border-style: solid;
-	border-width: 1px;
-	color: #333 !important;
 }
 
-.button.github-button i {
-	top: 1px;
-	background-image: url('/images/github.svg');
+/* Specific Nogag overrides */
+.entries article .content {
+	width: 100% !important; /* Overriding old fixed widths */
 }
 
-.button.github-button .label {
-	position: relative;
-	top: -1px;
+.entries article header {
+	width: 100% !important;
 }
 
-#archive {
-	padding: 10px;
-}
-
-#archive .year {
-	margin: 0;
-	padding: 2em 0;
-	clear: both;
-}
-
-#archive .year h1 {
-	font-weight: bold;
-	font-size: 100%;
-	padding: 0;
-	margin: 0;
-}
-
-#archive .year .months {
-	display: block;
-	margin: 0;
-	padding: 0;
-}
-
-#archive .year .months .month {
-	display: block;
-	float: left;
-	width: 16.66666666%;
-	margin: 0;
-	padding: 0;
-}
-
-#archive .year .months .month a {
-	display: block;
-	text-align: center;
-	padding: 0.5em 0;
-	color: #333;
-}
-
-#archive .year .months .month a:link {
-	background: #efefef;
-}
-
-#archive .year .months .month:nth-child(even) a:link {
-	background: #e0e0e0;
-}
-
-#archive .year .months .month a:link ,
-#archive .year .months .month a:visited {
-	text-decoration: none;
-}
-
-#archive .year .months .month a:link:hover {
-	color: #fff;
-	background: #000 !important;
-}
-
-ol[itemtype*="BreadcrumbList"] {
-	display: none;
-	list-style: none;
-	font-size: 80%;
-	margin: 0;
-	padding: 10px 0 0 0;
-}
-ol[itemtype*="BreadcrumbList"] + ol[itemtype*="BreadcrumbList"] {
-	padding: 0;
-}
-
-ol[itemtype*="BreadcrumbList"] a:link ,
-ol[itemtype*="BreadcrumbList"] a:visited {
-	color: #666;
-	text-decoration: none;
-}
-
-ol[itemtype*="BreadcrumbList"] li {
-	display: inline;
-	margin: 0;
-	padding: 0;
-}
-
-ol[itemtype*="BreadcrumbList"] li:before {
-	display: inline;
-	content: "›";
-}
-
-ol[itemtype*="BreadcrumbList"] li:first-child:before {
-	content: "";
-}
-
-.abcjs-lyric {
-	font-weight: normal;
-	font-size: 14px;
-}
-
-.abcjs-annotation {
-	font-weight: normal;
-	font-size: 14px;
-}
-
-@media only screen and (min-width : 1650px) {
-	body {
-		width: 1600px;
-	}
-	.entries .date {
-		width: 1600px;
-	}
-	.entries article header {
-		width: 1600px;
-	}
-	.entries article.photo span[itemtype="http://schema.org/Photograph"] {
-		width: 1600px;
-		/* (1600-728)/2 */
-		margin: 0 -436px;
-	}
-
-	.entries article.photo a.hatena-fotolife img ,
-	.entries article.photo a.picasa img {
-		max-height: 100vh;
-		max-width: 100%;
-	}
-
-	.adsense-responsive {
-		width: 1600px; height: 90px;
-	}
-}
-
-/*
-@media only screen and (min-width : 2100px) {
-	body {
-		transform: scale(1.25);
-		transform-origin: center top;
-	}
-}
-
-@media only screen and (min-width : 2500px) {
-	body {
-		transform: scale(1.5);
-		transform-origin: center top;
-	}
-}
-*/
-
-@media only screen and (min-width : 2900px) {
-	body {
-		transform: scale(1.75);
-		transform-origin: center top;
-	}
-}
-
-@media only screen and (min-width : 3300px) {
-	body {
-		transform: scale(2);
-		transform-origin: center top;
-	}
-}
-
-@media only screen and (max-width : 1100px) {
-	body {
-		width: 728px;
-	}
-	.entries .date {
-		width: 728px;
-	}
-	.entries article header {
-		width: 728px;
-	}
-	.entries article.photo span[itemtype="http://schema.org/Photograph"] {
-		width: 728px;
-		margin: 0;
-	}
-
-	.adsense-responsive {
-		width: 728px; height: 90px;
-	}
-}
-
-@media only screen and (max-width : 770px) {
-	body {
-		width: 100%;
-		padding: 0;
-		margin: 0;
-		font-size: 13pt;
-		background: #fff;
-	}
-
-	#global-header {
-		padding: 0;
-		margin: 0;
-		position: static;
-	}
-
-	#global-header #header {
-		margin: 0;
-		padding: 0;
-	}
-
-	#global-header #header a {
-		left: 0px;
-	}
-
-	#global-header #search-form {
-		position: absolute;
-		top: 10px;
-		right: 10px;
-	}
-
-	#global-navigation {
-		position: static;
-		width: 100%;
-		margin: 0;
-		padding: 5px 0;
-		background: #ccc;
-	}
-
-	#global-navigation ul {
-		text-align: center;
-	}
-
-	#global-navigation ul li a {
-		background: transparent;
-	}
-
-	#global-navigation::after {
-		color: #666;
-		padding-right: 8px;
-	}
-
-	#category-header {
-		padding: 0 10px;
-	}
-
-	#content {
-		width: 100%;
-		margin: 0;
-		overflow: hidden;
-	}
-
-	.entries {
-		margin: 0;
-		padding: 0;
-	}
-
-
-	.entries .date {
-		width: 100%;
-		padding: 3px 12px;
-		margin-left: 0;
-	}
-
-	.entries article header {
-		width: 100%;
-		display: block;
-	}
-
-	.entries article header h1, 
-	.entries article header h2, 
-	.entries article header .metadata {
-		display: block;
-		width: 100%;
-		margin: auto;
-		position: relative;
-		text-align: left;
-		border: none;
-	}
-
-	.entries article {
-		padding: 5px 10px;
-	}
-
-	.entries article .content {
-		width: 100%;
-		margin: 0;
-	}
-
-	.entries article pre.code {
-		margin: 0 -10px;
-	}
-
-	.entries article pre.code {
-		width: 100%;
-		margin: 20px 0;
-		padding: 20px 10px;
-	}
-
-	.entries article span[itemtype="http://schema.org/Photograph"] {
-		background: #fff;
-		display: block;
-		width: 100%;
-	}
-
-	.entries article.photo span[itemtype="http://schema.org/Photograph"] {
-		background: #fff;
-		display: block;
-		width: 100%;
-		float: none;
-		margin: 0;
-	}
-
-	.entries article div.gist {
-		font-size: 75%;
-		width: 100%;
-		margin: 20px 0;
-		padding: 0;
-		line-height: 1.33;
-	}
-
-	.entries article a.hatena-fotolife ,
-	.entries article a.picasa ,
-	.entries article p.photo {
-		display: block;
-		border: none;
-		width: 100%;
-		text-align: center;
-		margin: 0;
-	}
-
-	.entries article a.hatena-fotolife img ,
-	.entries article a.picasa img {
-		max-width: 100%;
-		max-height: 100vh;
-		border-width: 10px;
-		box-sizing: border-box;
-		-webkit-box-sizing: border-box;
-		-moz-box-sizing: border-box;
-		-o-box-sizing: border-box;
-	}
-
-	.entries article.photo span[itemtype="http://schema.org/Photograph"] img {
-		max-width: 100%;
-		max-height: 100vh;
-	}
-
-
-	.related ,
-	#global-footer {
-		margin: 0;
-		padding: 10px;
-		width: 100%;
-		box-sizing: border-box;
-	}
-
-	.pager {
-		margin: 0;
-		padding: 10px;
-	}
-
-	.pager a:link ,
-	.pager a:visited ,
-	.pager a:hover {
-		display: inline-block;
-		padding: 10px 0;
-		text-align: center;
-		width: 100%;
-		margin: 5px 0;
-		background: #333;
-		text-decoration: none;
-		color: #fff;
-	}
-
-	.share-buttons .share-button[href*="line.me"] {
-		display: inline-block;
-	}
-
-	.entries article .content.similar-entries ul.similar-images a {
-		display: block;
-		position: relative;
-		height: 100px;
-		background-position: center;
-		background-size: cover;
-	}
+.entries .date {
+	width: 100% !important;
 }
