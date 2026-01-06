@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import strftime from 'strftime';
   import { api } from '../lib/api.svelte';
+  import { DraftStore } from '../lib/draft.svelte';
 
   let { id = null, onSave } = $props<{ id: string | null, onSave: (location: string) => void }>();
 
@@ -13,12 +14,7 @@
     publish_at?: string;
   }
 
-  interface Backup {
-    title: string;
-    body: string;
-    time: number;
-  }
-
+  const draft = new DraftStore();
   let entry: Entry = $state({ id: null, title: '', body: '', status: null });
   let form = $state({
     id: null as number | null,
@@ -31,7 +27,6 @@
   });
   let saving = $state(false);
   let progress = $state('');
-  let existingBackup = $state<Backup | null>(null);
 
   let titleInput = $state<HTMLInputElement>(null!);
   let bodyTextArea = $state<HTMLTextAreaElement>(null!);
@@ -57,7 +52,7 @@
       } else {
         form.publishAt = strftime('%Y-%m-%dT%H:%M', new Date(Date.now() + 86400 * 30 * 1000));
       }
-      checkBackup();
+      draft.check(entry.id, { title: form.title, body: form.body });
     } catch (e) {
       console.error(e);
       alert('エントリの取得に失敗しました');
@@ -77,37 +72,15 @@
       form.status = 'public';
       form.publishLater = false;
       form.publishAt = strftime('%Y-%m-%dT%H:%M', new Date(Date.now() + 86400 * 30 * 1000));
-      checkBackup();
+      draft.check(null, { title: form.title, body: form.body });
     }
-
-    const interval = setInterval(saveBackup, 3000);
-    return () => clearInterval(interval);
   });
 
-  function checkBackup() {
-    if (!entry.id && entry.id !== null) return;
-    const key = `nogag-backup-${entry.id || 'new'}`;
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      const backup: Backup = JSON.parse(saved);
-      if (entry.title !== backup.title || entry.body !== backup.body) {
-        existingBackup = backup;
-      }
-    }
-  }
-
-  function saveBackup() {
+  $effect(() => {
     if (entry.title !== form.title || entry.body !== form.body) {
-      const key = `nogag-backup-${entry.id || 'new'}`;
-      const backup: Backup = {
-        title: form.title,
-        body: form.body,
-        time: Date.now()
-      };
-      localStorage.setItem(key, JSON.stringify(backup));
-      existingBackup = null;
+      draft.saveDebounced(entry.id, { title: form.title, body: form.body });
     }
-  }
+  });
 
   async function saveEntry() {
     saving = true;
@@ -152,7 +125,7 @@
           progress = mapProgressMessage(msg.message);
           break;
         case 'done':
-          localStorage.removeItem(`nogag-backup-${entry.id || 'new'}`);
+          draft.clear(entry.id);
           progress = '完了';
           saving = false;
           eventSource.close();
@@ -217,9 +190,10 @@
   }
 
   function restoreBackup() {
-    if (existingBackup) {
-      form.title = existingBackup.title;
-      form.body = existingBackup.body;
+    if (draft.data) {
+      form.title = draft.data.title;
+      form.body = draft.data.body;
+      draft.clear(entry.id);
       restoreDialog.close();
     }
   }
@@ -250,7 +224,7 @@
 
     form.body = value.substring(0, start) + text + value.substring(end);
     
-    setTimeout(() => {
+    tick().then(() => {
       if (typeof select === 'boolean' && select) {
         bodyTextArea.selectionStart = start;
         bodyTextArea.selectionEnd = start + text.length;
@@ -260,7 +234,7 @@
         bodyTextArea.selectionStart = bodyTextArea.selectionEnd = start + text.length;
       }
       bodyTextArea.focus();
-    }, 0);
+    });
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -330,7 +304,7 @@
       >
         {saving ? (progress || 'リクエスト中') : '更新'}
       </button>
-      {#if existingBackup}
+      {#if draft.exists}
         <button id="restore" type="button" class="submit-button" onclick={() => restoreDialog.showModal()}>
           復元...
         </button>
@@ -368,8 +342,8 @@
 <dialog bind:this={restoreDialog} id="restoreDialog">
   <h3>自動バックアップの復元</h3>
   <p>
-    {#if existingBackup}
-      {strftime('%Y年%m月%d日%H時', new Date(existingBackup.time))}
+    {#if draft.data?.time}
+      {strftime('%Y年%m月%d日%H時', new Date(draft.data.time))}
     {/if}
     に保存されたバックアップを復元しますか?
   </p>
