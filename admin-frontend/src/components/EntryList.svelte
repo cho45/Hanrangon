@@ -50,9 +50,17 @@
 
   function formatTime(iso: string) {
     if (!iso) return '-';
-    return strftime('%y/%m/%d %H:%M', new Date(iso));
+    return strftime('%Y-%m-%d %H:%M', new Date(iso));
   }
 </script>
+
+{#snippet statusBadge(status: string)}
+  <span class="status status-{status}">{status}</span>
+{/snippet}
+
+{#snippet time(iso: string, valid: boolean = true)}
+  <time datetime={iso}>{valid && iso ? formatTime(iso) : '-'}</time>
+{/snippet}
 
 <div class="entry-list">
   <div class="header">
@@ -90,16 +98,16 @@
               <td>{entry.id}</td>
               <td class="date">{entry.date}</td>
               <td>
-                <span class="status status-{entry.status}">{entry.status}</span>
+                {@render statusBadge(entry.status)}
               </td>
               <td>
                 <div class="title">{entry.title}</div>
                 <div class="path"><a href="/{entry.path}" target="_blank">/{entry.path}</a></div>
               </td>
               <td class="small">{entry.format}</td>
-              <td class="time">{formatTime(entry.created_at)}</td>
-              <td class="time">{formatTime(entry.modified_at)}</td>
-              <td class="time">{entry.publish_at?.Valid ? formatTime(entry.publish_at.Time) : '-'}</td>
+              <td class="time">{@render time(entry.created_at)}</td>
+              <td class="time">{@render time(entry.modified_at)}</td>
+              <td class="time">{@render time(entry.publish_at?.Time, entry.publish_at?.Valid)}</td>
               <td>
                 <button class="edit-btn" onclick={() => onEdit(entry.id)}>編集</button>
               </td>

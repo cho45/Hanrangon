@@ -49,6 +49,14 @@
   }
 </script>
 
+{#snippet statusBadge(status: string)}
+  <span class="status status-{status}">{status}</span>
+{/snippet}
+
+{#snippet time(iso: string, valid: boolean = true)}
+  <time class="time" datetime={iso}>{valid && iso ? formatTime(iso) : '-'}</time>
+{/snippet}
+
 <div class="job-list">
   <div class="header">
     <h2>ジョブ一覧 ({total})</h2>
@@ -80,10 +88,10 @@
             <td>{job.id}</td>
             <td><strong>{job.job_type_name}</strong></td>
             <td>
-              <span class="status status-{job.status}">{job.status}</span>
+              {@render statusBadge(job.status)}
             </td>
             <td>{job.retry_count}</td>
-            <td class="time">{formatTime(job.created_at)}</td>
+            <td>{@render time(job.created_at)}</td>
             <td class="error">
               {#if job.error_message?.Valid}
                 <div class="error-text" title={job.error_message.String}>{job.error_message.String}</div>
