@@ -551,10 +551,22 @@ func (app *AppImpl) HandleAdminApiInfo(c echo.Context) error {
 		"node_path":         app.config.NodePath,
 	}
 
+	tfidfStats, _ := app.tfidfQueries.GetTFIDFStats(c.Request().Context())
+	topTerms, _ := app.tfidfQueries.GetTopTermsByDF(c.Request().Context(), 20)
+	avgScore, _ := app.tfidfQueries.GetAverageSimilarityScore(c.Request().Context())
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"is_development": app.config.IsDevelopment(),
 		"app_hash":       AppHash,
 		"config":         configMap,
+		"tfidf_stats": map[string]interface{}{
+			"total_terms":          tfidfStats.TotalTerms,
+			"indexed_entries":      tfidfStats.IndexedEntries,
+			"total_related_pairs":  tfidfStats.TotalRelatedPairs,
+			"entries_with_related": tfidfStats.EntriesWithRelated,
+			"top_terms":            topTerms,
+			"avg_score":            avgScore,
+		},
 		"debug_info": map[string]interface{}{
 			"go_version":      runtime.Version(),
 			"num_goroutine":   runtime.NumGoroutine(),

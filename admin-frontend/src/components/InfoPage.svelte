@@ -5,6 +5,14 @@
     is_development: boolean;
     app_hash: string;
     config: Record<string, any>;
+    tfidf_stats: {
+      total_terms: number;
+      indexed_entries: number;
+      total_related_pairs: number;
+      entries_with_related: number;
+      top_terms: { term: string, df: number }[];
+      avg_score: number;
+    };
     debug_info: {
       go_version: string;
       num_goroutine: number;
@@ -54,6 +62,29 @@
     </div>
   {:else if info}
     <div class="sections">
+      <section>
+        <h3>TF-IDF 統計</h3>
+        <div class="table-container">
+          <table>
+            <tbody>
+              <tr><th>総語彙数 (Terms)</th><td>{info.tfidf_stats.total_terms}</td></tr>
+              <tr><th>インデックス済みエントリ</th><td>{info.tfidf_stats.indexed_entries}</td></tr>
+              <tr><th>関連エントリ計算済み</th><td>{info.tfidf_stats.entries_with_related}</td></tr>
+              <tr><th>総関連ペア数</th><td>{info.tfidf_stats.total_related_pairs}</td></tr>
+              <tr><th>平均類似度スコア</th><td>{info.tfidf_stats.avg_score.toFixed(4)}</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="margin-top: 10px;">
+          <h4>頻出単語 (Top 20 DF)</h4>
+          <div class="top-terms">
+            {#each info.tfidf_stats.top_terms as item}
+              <span class="term-badge" title="DF: {item.df}">{item.term}</span>
+            {/each}
+          </div>
+        </div>
+      </section>
+
       <section>
         <h3>全般</h3>
         <div class="table-container">
@@ -114,6 +145,27 @@
     margin: 0 0 10px 0;
     font-size: 1.1rem;
     color: #333;
+  }
+
+  h4 {
+    font-size: 0.9rem;
+    color: #666;
+    margin-bottom: 8px;
+  }
+
+  .top-terms {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .term-badge {
+    background: #e3f2fd;
+    color: #1976d2;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    border: 1px solid #bbdefb;
   }
 
   .table-container {

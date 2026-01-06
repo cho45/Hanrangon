@@ -27,6 +27,44 @@ func (q *Queries) DeleteRelatedEntriesByEntryID(ctx context.Context, entryID int
 	return err
 }
 
+const getAverageSimilarityScore = `-- name: GetAverageSimilarityScore :one
+SELECT CAST(COALESCE(avg(score), 0.0) AS REAL) as avg_score FROM related_entries
+`
+
+func (q *Queries) GetAverageSimilarityScore(ctx context.Context) (float64, error) {
+	row := q.db.QueryRowContext(ctx, getAverageSimilarityScore)
+	var avg_score float64
+	err := row.Scan(&avg_score)
+	return avg_score, err
+}
+
+const getTFIDFStats = `-- name: GetTFIDFStats :one
+SELECT 
+    (SELECT count(*) FROM terms) as total_terms,
+    (SELECT count(DISTINCT entry_id) FROM postings) as indexed_entries,
+    (SELECT count(*) FROM related_entries) as total_related_pairs,
+    (SELECT count(DISTINCT entry_id) FROM related_entries) as entries_with_related
+`
+
+type GetTFIDFStatsRow struct {
+	TotalTerms         int64 `json:"total_terms"`
+	IndexedEntries     int64 `json:"indexed_entries"`
+	TotalRelatedPairs  int64 `json:"total_related_pairs"`
+	EntriesWithRelated int64 `json:"entries_with_related"`
+}
+
+func (q *Queries) GetTFIDFStats(ctx context.Context) (GetTFIDFStatsRow, error) {
+	row := q.db.QueryRowContext(ctx, getTFIDFStats)
+	var i GetTFIDFStatsRow
+	err := row.Scan(
+		&i.TotalTerms,
+		&i.IndexedEntries,
+		&i.TotalRelatedPairs,
+		&i.EntriesWithRelated,
+	)
+	return i, err
+}
+
 const getTermID = `-- name: GetTermID :one
 SELECT id FROM terms WHERE term = ?
 `
@@ -36,6 +74,45 @@ func (q *Queries) GetTermID(ctx context.Context, term string) (int64, error) {
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const getTopTermsByDF = `-- name: GetTopTermsByDF :many
+;
+
+SELECT t.term, count(p.entry_id) as df
+FROM terms t
+JOIN postings p ON t.id = p.term_id
+GROUP BY t.id
+ORDER BY df DESC
+LIMIT ?
+`
+
+type GetTopTermsByDFRow struct {
+	Term string `json:"term"`
+	Df   int64  `json:"df"`
+}
+
+func (q *Queries) GetTopTermsByDF(ctx context.Context, limit int64) ([]GetTopTermsByDFRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTopTermsByDF, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTopTermsByDFRow
+	for rows.Next() {
+		var i GetTopTermsByDFRow
+		if err := rows.Scan(&i.Term, &i.Df); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const insertPosting = `-- name: InsertPosting :exec
