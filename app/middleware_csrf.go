@@ -25,7 +25,19 @@ func GenerateRandomString(n int) (string, error) {
 
 func (app *AppImpl) CSRF(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
-		// Ensure CSRF cookie exists for all requests
+		// Whitelist public GET/HEAD/OPTIONS routes to avoid unnecessary CSRF cookies.
+		// Only paths that lead to forms (like /login) or admin actions require a CSRF token.
+		if method := c.Request().Method; method == http.MethodGet || method == http.MethodHead || method == http.MethodOptions {
+			switch c.Path() {
+			case "/", "/archive", "/feed", "/sitemap.xml", "/robots.txt", "/api/similar",
+				"/.page/:date/:limit", "/:param/", "/:yyyy/:mm/", "/:yyyy/:mm/:dd/",
+				"/:category/.page/:date/:limit", "/*",
+				"/css*", "/js*", "/images*", "/images/entry*", "/static/admin*":
+				return next(c)
+			}
+		}
+
+		// Ensure CSRF cookie exists for state-changing requests or login/admin pages
 		cookie, err := c.Cookie(CSRFCookieName)
 		var sk string
 		if err != nil {
