@@ -534,6 +534,55 @@ func TestHandleApiEdit(t *testing.T) {
 	})
 }
 
+func TestHandleApiEdit_JobFailure(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	cookie := env.login(t)
+
+	// 意図的にジョブDBをクローズして投入を失敗させる
+	env.workerDB.Close()
+
+	payload := `{"title":"Job Fail Entry", "body":"Hello", "format":"HTML"}`
+	req := httptest.NewRequest(http.MethodPost, "/admin/api/edit", strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Requested-With", "fetch")
+	req.Header.Set("Cookie", cookie)
+	rec := httptest.NewRecorder()
+
+	env.server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var res EditResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	// SSEで警告メッセージが届くか確認
+	foundWarning := false
+	progReq := httptest.NewRequest(http.MethodGet, "/admin/api/edit/progress?sid="+res.SessionID, nil)
+	progReq.Header.Set("Cookie", cookie)
+	progRec := httptest.NewRecorder()
+
+	env.server.ServeHTTP(progRec, progReq)
+
+	scanner := bufio.NewScanner(progRec.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.Contains(line, "警告: 一部の非同期ジョブの投入に失敗しました") {
+			foundWarning = true
+			break
+		}
+	}
+
+	if !foundWarning {
+		t.Error("Did not find job enqueue warning message in SSE stream")
+	}
+}
+
 func TestHandleEdit(t *testing.T) {
 	env := setupTest(t)
 	defer env.close()

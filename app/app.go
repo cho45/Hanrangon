@@ -360,7 +360,7 @@ func (app *AppImpl) PublishScheduledEntries(ctx context.Context) error {
 
 	for _, e := range entries {
 		if err := app.EnqueuePublishedEntryJobs(ctx, e.ID); err != nil {
-			log.Printf("Failed to enqueue jobs for entry %d: %v", e.ID, err)
+			return fmt.Errorf("failed to enqueue jobs for entry %d: %w", e.ID, err)
 		}
 	}
 
@@ -373,7 +373,7 @@ func (app *AppImpl) EnqueuePublishedEntryJobs(ctx context.Context, entryID int64
 		map[string]interface{}{"entry_id": entryID},
 		fmt.Sprintf("recalc-tfidf-%d", entryID))
 	if err != nil {
-		log.Printf("Failed to enqueue TF-IDF job: %v", err)
+		return fmt.Errorf("failed to enqueue TF-IDF job: %w", err)
 	}
 
 	// Trackback更新ジョブをエンキュー
@@ -381,7 +381,7 @@ func (app *AppImpl) EnqueuePublishedEntryJobs(ctx context.Context, entryID int64
 		map[string]interface{}{"entry_id": entryID},
 		fmt.Sprintf("update-trackbacks-%d", entryID))
 	if err != nil {
-		log.Printf("Failed to enqueue Trackback job: %v", err)
+		return fmt.Errorf("failed to enqueue Trackback job: %w", err)
 	}
 
 	// 画像インデックスジョブをエンキュー
@@ -389,7 +389,7 @@ func (app *AppImpl) EnqueuePublishedEntryJobs(ctx context.Context, entryID int64
 		map[string]interface{}{"entry_id": entryID},
 		fmt.Sprintf("index-images-%d", entryID))
 	if err != nil {
-		log.Printf("Failed to enqueue IndexImages job: %v", err)
+		return fmt.Errorf("failed to enqueue IndexImages job: %w", err)
 	}
 
 	return nil

@@ -311,6 +311,7 @@ func (app *AppImpl) HandleAdminApiEdit(c echo.Context) error {
 			if row.Status == "public" {
 				if err := app.EnqueuePublishedEntryJobs(ctx, row.ID); err != nil {
 					log.Printf("Failed to enqueue jobs: %v", err)
+					app.sendProgressMessage(session, fmt.Sprintf("警告: 一部の非同期ジョブの投入に失敗しました: %v", err))
 				}
 			}
 		} else {
@@ -346,10 +347,11 @@ func (app *AppImpl) HandleAdminApiEdit(c echo.Context) error {
 			}
 			location = "/" + row.Path
 
-			// ジョブエンキュー（進捗通知なし）
+			// ジョブエンキュー
 			if row.Status == "public" {
 				if err := app.EnqueuePublishedEntryJobs(ctx, row.ID); err != nil {
 					log.Printf("Failed to enqueue jobs: %v", err)
+					app.sendProgressMessage(session, fmt.Sprintf("警告: 一部の非同期ジョブの投入に失敗しました: %v", err))
 				}
 			}
 		}
