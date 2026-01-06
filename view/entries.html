@@ -12,7 +12,7 @@
 		{{if or (eq $i 0) (not (isSameDay (index $entries (sub $i 1)).Date $e.Date))}}
 			<div class="date"><a href="{{datePath $e.Date}}">{{formatDate $e.Date}}</a></div>
 		{{end}}
-		{{template "article" dict "Entry" $e "IsAuth" $isAuth "IsPermalink" $isDetail "IsFirst" (eq $i 0) "Trackbacks" $.Trackbacks}}
+		{{template "article" dict "Entry" $e "IsAuth" $isAuth "IsPermalink" $isDetail "IsFirst" (eq $i 0) "Trackbacks" $.Trackbacks "BaseURL" $.BaseURL}}
 	{{end}}
 </div>
 
@@ -36,7 +36,7 @@
 {{define "article"}}
 {{$cleanTitle := .Entry.DisplayTitle}}
 {{$tags := .Entry.Tags}}
-{{$canonical := printf "/%s" .Entry.Path}}
+{{$canonical := printf "%s/%s" .BaseURL .Entry.Path}}
 <article
 	id="post-{{.Entry.CreatedAt.Unix}}"
 	class="{{range $tags}}{{.}} {{end}}{{if .IsFirst}}first {{end}}status-{{.Entry.Status}}"
@@ -103,11 +103,11 @@
 		{{range $tags}}
 		<ol itemscope itemtype="http://schema.org/BreadcrumbList">
 			<li itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem">
-				<a itemprop="item" href="/"><span itemprop="name">トップ</span></a>
+				<a itemprop="item" href="{{.BaseURL}}/"><span itemprop="name">トップ</span></a>
 				<meta itemprop="position" content="1">
 			</li>
 			<li itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem">
-				<a itemprop="item" href="/{{.}}/"><span itemprop="name">{{.}}</span></a>
+				<a itemprop="item" href="{{.BaseURL}}/{{.}}/"><span itemprop="name">{{.}}</span></a>
 				<meta itemprop="position" content="2">
 			</li>
 			<li itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem">

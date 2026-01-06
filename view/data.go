@@ -9,6 +9,7 @@ import (
 // LayoutData holds data for the layout template
 type LayoutData struct {
 	PageTitle string // ページ固有のタイトル（サイト名は含まない）
+	BaseURL   string
 	IsAuth    bool
 }
 

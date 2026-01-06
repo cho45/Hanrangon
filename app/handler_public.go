@@ -97,13 +97,10 @@ func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 	}
 
 	data := &view.IndexData{
-		LayoutData: view.LayoutData{
-			PageTitle: pageTitle,
-			IsAuth:    app.IsAuth(c),
-		},
-		Entries:  entries,
-		IsDetail: false,
-		NextPage: "",
+		LayoutData: app.newLayoutData(c, pageTitle),
+		Entries:    entries,
+		IsDetail:   false,
+		NextPage:   "",
 	}
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
@@ -117,11 +114,8 @@ func (app *AppImpl) HandleArchive(c echo.Context) error {
 	}
 
 	data := &view.ArchiveData{
-		LayoutData: view.LayoutData{
-			PageTitle: "アーカイブ",
-			IsAuth:    app.IsAuth(c),
-		},
-		Archives: view.ConvertArchives(archives),
+		LayoutData: app.newLayoutData(c, "アーカイブ"),
+		Archives:   view.ConvertArchives(archives),
 	}
 	return app.templates.RenderWithLayout(c, "layout.html", "archive.html", data)
 }
@@ -171,13 +165,10 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 
 	if len(dates) == 0 {
 		data := &view.IndexData{
-			LayoutData: view.LayoutData{
-				PageTitle: pageTitle,
-				IsAuth:    app.IsAuth(c),
-			},
-			Entries:  []*model.Entry{},
-			IsDetail: false,
-			NextPage: "",
+			LayoutData: app.newLayoutData(c, pageTitle),
+			Entries:    []*model.Entry{},
+			IsDetail:   false,
+			NextPage:   "",
 		}
 		return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 	}
@@ -203,13 +194,10 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 
 	// HTMLレンダリング
 	data := &view.IndexData{
-		LayoutData: view.LayoutData{
-			PageTitle: pageTitle,
-			IsAuth:    app.IsAuth(c),
-		},
-		Entries:  entries,
-		IsDetail: false,
-		NextPage: nextPage,
+		LayoutData: app.newLayoutData(c, pageTitle),
+		Entries:    entries,
+		IsDetail:   false,
+		NextPage:   nextPage,
 	}
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
@@ -267,13 +255,10 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 	}
 
 	data := &view.IndexData{
-		LayoutData: view.LayoutData{
-			PageTitle: category + " カテゴリ",
-			IsAuth:    app.IsAuth(c),
-		},
-		Entries:  entries,
-		IsDetail: false,
-		NextPage: nextPage,
+		LayoutData: app.newLayoutData(c, category+" カテゴリ"),
+		Entries:    entries,
+		IsDetail:   false,
+		NextPage:   nextPage,
 	}
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
@@ -617,10 +602,7 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 	}
 
 	data := &view.IndexData{
-		LayoutData: view.LayoutData{
-			PageTitle: entry.DisplayTitle(),
-			IsAuth:    app.IsAuth(c),
-		},
+		LayoutData: app.newLayoutData(c, entry.DisplayTitle()),
 		Entries:    []*model.Entry{&entry},
 		IsDetail:   true,
 		Trackbacks: trackbacks,

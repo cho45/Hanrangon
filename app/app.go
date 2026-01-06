@@ -19,6 +19,7 @@ import (
 	"github.com/cho45/hanrangon/jobqueue"
 	"github.com/cho45/hanrangon/model"
 	"github.com/cho45/hanrangon/tfidf"
+	"github.com/cho45/hanrangon/view"
 	"github.com/google/uuid"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
@@ -97,6 +98,14 @@ func (a *AppImpl) SimilarityCalculator() *tfidf.SimilarityCalculator { return a.
 func (a *AppImpl) JobQueue() *jobqueue.Worker                        { return a.jobQueue }
 func (a *AppImpl) Config() *Config                                   { return a.config }
 func (a *AppImpl) Templates() *Templates                             { return a.templates }
+
+func (a *AppImpl) newLayoutData(c echo.Context, pageTitle string) view.LayoutData {
+	return view.LayoutData{
+		PageTitle: pageTitle,
+		BaseURL:   a.config.BaseURL,
+		IsAuth:    a.IsAuth(c),
+	}
+}
 
 func (app *AppImpl) RequireAuth(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {

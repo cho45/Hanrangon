@@ -47,10 +47,7 @@ func (app *AppImpl) HandleAdminEdit(c echo.Context) error {
 	}
 
 	data := &view.AdminIndexData{
-		LayoutData: view.LayoutData{
-			PageTitle: "エントリ編集",
-			IsAuth:    true,
-		},
+		LayoutData: app.newLayoutData(c, "エントリ編集"),
 		SessionKey: sk,
 	}
 	return app.templates.RenderWithLayout(c, "admin/layout.html", "admin/index.html", data)
@@ -64,10 +61,7 @@ func (app *AppImpl) HandleAdminIndex(c echo.Context) error {
 	}
 
 	data := &view.AdminIndexData{
-		LayoutData: view.LayoutData{
-			PageTitle: "管理画面",
-			IsAuth:    true,
-		},
+		LayoutData: app.newLayoutData(c, "管理画面"),
 		SessionKey: sk,
 	}
 	return app.templates.RenderWithLayout(c, "admin/layout.html", "admin/index.html", data)
@@ -93,6 +87,7 @@ func (app *AppImpl) HandleLogin(c echo.Context) error {
 	}
 
 	data := &view.LoginData{
+		LayoutData: app.newLayoutData(c, "ログイン"),
 		ErrorMsg:   "",
 		ReturnPath: returnPath,
 		SessionKey: sk,
