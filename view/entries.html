@@ -50,8 +50,9 @@
 	<header>
 		<h2 itemprop="name"><a href="{{$canonical}}" class="bookmark" rel="bookmark" itemprop="url"><budoux-ja>{{$cleanTitle}}</budoux-ja></a></h2>
 		<div class="metadata">
+			{{$baseURL := .BaseURL}}
 			{{range $tags}}
-				<a href="/{{.}}/"><span itemprop="keywords">{{.}}</span></a>
+				<a href="{{$baseURL}}/{{.}}/"><span itemprop="keywords">{{.}}</span></a>
 			{{end}}
 			|
 			<time datetime="{{.Entry.CreatedAt.UTC.Format "2006-01-02T15:04:05Z"}}" itemprop="datePublished">
@@ -100,14 +101,15 @@
 	<div class="content" itemprop="articleBody">
 		{{.Entry.FormattedBody | safeHTML}}
 
+		{{$baseURL := .BaseURL}}
 		{{range $tags}}
 		<ol itemscope itemtype="http://schema.org/BreadcrumbList">
 			<li itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem">
-				<a itemprop="item" href="{{.BaseURL}}/"><span itemprop="name">トップ</span></a>
+				<a itemprop="item" href="{{$baseURL}}/"><span itemprop="name">トップ</span></a>
 				<meta itemprop="position" content="1">
 			</li>
 			<li itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem">
-				<a itemprop="item" href="{{.BaseURL}}/{{.}}/"><span itemprop="name">{{.}}</span></a>
+				<a itemprop="item" href="{{$baseURL}}/{{.}}/"><span itemprop="name">{{.}}</span></a>
 				<meta itemprop="position" content="2">
 			</li>
 			<li itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem">
