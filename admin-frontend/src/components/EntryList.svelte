@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import strftime from 'strftime';
+  import { api } from '../lib/api.svelte';
 
   let { onEdit } = $props<{ onEdit: (id: number) => void }>();
 
@@ -20,19 +21,14 @@
   let total = $state(0);
   let offset = $state(0);
   let limit = 50;
-  let loading = $state(true);
 
   async function fetchEntries() {
-    loading = true;
     try {
-      const res = await fetch(`/admin/api/entries?limit=${limit}&offset=${offset}`);
-      const data = await res.json();
+      const data = await api.get<{ entries: Entry[], total: number }>('/admin/api/entries', { limit, offset });
       entries = data.entries || [];
       total = data.total || 0;
     } catch (e) {
       console.error(e);
-    } finally {
-      loading = false;
     }
   }
 
@@ -62,14 +58,14 @@
   <div class="header">
     <h2>エントリ一覧 ({total})</h2>
     <div class="pagination">
-      <button disabled={offset === 0 || loading} onclick={prev}>前へ</button>
+      <button disabled={offset === 0 || api.loading} onclick={prev}>前へ</button>
       <span>{offset + 1} - {Math.min(offset + limit, total)} / {total}</span>
-      <button disabled={offset + limit >= total || loading} onclick={next}>次へ</button>
+      <button disabled={offset + limit >= total || api.loading} onclick={next}>次へ</button>
     </div>
   </div>
 
-  <div class="table-container" class:is-loading={loading}>
-    {#if loading && entries.length === 0}
+  <div class="table-container" class:is-loading={api.loading}>
+    {#if api.loading && entries.length === 0}
       <div class="loading-spinner-container">
         <div class="loading-spinner"></div>
       </div>
@@ -111,7 +107,7 @@
           {/each}
         </tbody>
       </table>
-      {#if loading}
+      {#if api.loading}
         <div class="overlay">
           <div class="loading-spinner"></div>
         </div>

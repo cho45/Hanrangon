@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import strftime from 'strftime';
+  import { api } from '../lib/api.svelte';
 
-  let { sk = '', id = null, onSave } = $props<{ sk: string, id: string | null, onSave: (location: string) => void }>();
+  let { id = null, onSave } = $props<{ id: string | null, onSave: (location: string) => void }>();
 
   interface Entry {
     id: number | null;
@@ -29,7 +30,6 @@
     publishAt: ''
   });
   let saving = $state(false);
-  let loading = $state(false);
   let progress = $state('');
   let existingBackup = $state<Backup | null>(null);
 
@@ -43,11 +43,8 @@
   let selectedIndex = $state(0);
 
   async function fetchEntry(id: string) {
-    loading = true;
     try {
-      const res = await fetch(`/admin/api/entry/${id}`);
-      if (!res.ok) throw new Error('Failed to fetch entry');
-      const parsed = await res.json();
+      const parsed = await api.get<Entry>(`/admin/api/entry/${id}`);
       entry = parsed;
       form.id = parsed.id;
       form.title = parsed.title;
@@ -64,8 +61,6 @@
     } catch (e) {
       console.error(e);
       alert('エントリの取得に失敗しました');
-    } finally {
-      loading = false;
     }
   }
 
@@ -123,7 +118,6 @@
     data.set('title', form.title);
     data.set('body', form.body);
     data.set('format', form.format);
-    data.set('sk', sk);
 
     if (form.publishLater) {
       const date = new Date(form.publishAt);
@@ -134,14 +128,7 @@
     }
 
     try {
-      const response = await fetch('/admin/api/edit', {
-        method: 'POST',
-        headers: {
-          'X-Requested-With': 'fetch'
-        },
-        body: data
-      });
-      const resData = await response.json();
+      const resData = await api.post<{ session_id: string }>('/admin/api/edit', data);
       const sessionID = resData.session_id;
 
       if (!sessionID) {
@@ -244,17 +231,9 @@
       if (!input.files?.[0]) return;
       const formData = new FormData();
       formData.append('file', input.files[0]);
-      formData.append('sk', sk);
 
       try {
-        const response = await fetch('/admin/api/upload/image', {
-          method: 'POST',
-          headers: {
-            'X-Requested-With': 'fetch'
-          },
-          body: formData
-        });
-        const data = await response.json();
+        const data = await api.post<{ uploaded: string }>('/admin/api/upload/image', formData);
         const syntax = `<span itemscope itemtype="http://schema.org/Photograph"><a href="${data.uploaded}" class="picasa" itemprop="url"><img src="${data.uploaded}" alt="photo" itemprop="image"/></a></span>\n`;
         insertText(syntax, true);
       } catch (err) {
@@ -294,7 +273,7 @@
   }
 </script>
 
-{#if loading}
+{#if api.loading && !entry.id}
   <div class="loading-spinner-container">
     <div class="loading-spinner"></div>
   </div>

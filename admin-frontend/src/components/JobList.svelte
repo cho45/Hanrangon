@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import strftime from 'strftime';
+  import { api } from '../lib/api.svelte';
 
   interface Job {
     id: number;
@@ -16,19 +17,14 @@
   let total = $state(0);
   let offset = $state(0);
   let limit = 50;
-  let loading = $state(true);
 
   async function fetchJobs() {
-    loading = true;
     try {
-      const res = await fetch(`/admin/api/jobs?limit=${limit}&offset=${offset}`);
-      const data = await res.json();
+      const data = await api.get<{ jobs: Job[], total: number }>('/admin/api/jobs', { limit, offset });
       jobs = data.jobs || [];
       total = data.total || 0;
     } catch (e) {
       console.error(e);
-    } finally {
-      loading = false;
     }
   }
 
@@ -57,14 +53,14 @@
   <div class="header">
     <h2>ジョブ一覧 ({total})</h2>
     <div class="pagination">
-      <button disabled={offset === 0 || loading} onclick={prev}>前へ</button>
+      <button disabled={offset === 0 || api.loading} onclick={prev}>前へ</button>
       <span>{offset + 1} - {Math.min(offset + limit, total)} / {total}</span>
-      <button disabled={offset + limit >= total || loading} onclick={next}>次へ</button>
+      <button disabled={offset + limit >= total || api.loading} onclick={next}>次へ</button>
       <button class="refresh-btn" onclick={fetchJobs} style="margin-left: 10px;">更新</button>
     </div>
   </div>
 
-  {#if loading}
+  {#if api.loading && jobs.length === 0}
     <div class="loading"></div>
   {:else}
     <table>

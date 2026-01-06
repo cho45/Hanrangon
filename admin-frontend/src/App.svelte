@@ -7,14 +7,8 @@
 
   let currentPath = $state(window.location.pathname);
   let searchParams = $state(new URLSearchParams(window.location.search));
-  let sk = $state('');
 
   onMount(() => {
-    const meta = document.querySelector('meta[name="csrf-token"]');
-    if (meta) {
-      sk = (meta as HTMLMetaElement).content;
-    }
-
     const handlePopState = () => {
       currentPath = window.location.pathname;
       searchParams = new URLSearchParams(window.location.search);
@@ -52,13 +46,13 @@
 
   <main class="content">
     {#if page === 'edit'}
-      <AppEditor {sk} id={entryId} onSave={(loc) => window.location.href = loc} />
+      <AppEditor id={entryId} onSave={(loc) => window.location.href = loc} />
     {:else if page === 'jobs'}
-      <JobList {sk} />
+      <JobList />
     {:else if page === 'info'}
       <InfoPage />
     {:else}
-      <EntryList {sk} onEdit={(id) => navigate(`/admin/edit?id=${id}`)} />
+      <EntryList onEdit={(id) => navigate(`/admin/edit?id=${id}`)} />
     {/if}
   </main>
 </div>
