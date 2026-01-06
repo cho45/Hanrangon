@@ -24,13 +24,13 @@ SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date
 WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND CAST(sqlc.arg(start_date) AS TEXT) <= CAST(date AS TEXT) AND CAST(date AS TEXT) < CAST(sqlc.arg(end_date) AS TEXT)
 ORDER BY created_at;
 
--- name: GetPrevEntry :one
+-- name: GetOlderEntry :one
 SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
 WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND created_at < sqlc.arg(created_at)
 ORDER BY created_at DESC
 LIMIT 1;
 
--- name: GetNextEntry :one
+-- name: GetNewerEntry :one
 SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
 WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND created_at > sqlc.arg(created_at)
 ORDER BY created_at ASC

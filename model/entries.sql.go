@@ -227,14 +227,14 @@ func (q *Queries) GetEntryByPath(ctx context.Context, path string) (GetEntryByPa
 	return i, err
 }
 
-const getNextEntry = `-- name: GetNextEntry :one
+const getNewerEntry = `-- name: GetNewerEntry :one
 SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
 WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND created_at > ?1
 ORDER BY created_at ASC
 LIMIT 1
 `
 
-type GetNextEntryRow struct {
+type GetNewerEntryRow struct {
 	ID            int64        `json:"id"`
 	Title         string       `json:"title"`
 	Body          string       `json:"body"`
@@ -248,9 +248,9 @@ type GetNextEntryRow struct {
 	Status        string       `json:"status"`
 }
 
-func (q *Queries) GetNextEntry(ctx context.Context, createdAt time.Time) (GetNextEntryRow, error) {
-	row := q.db.QueryRowContext(ctx, getNextEntry, createdAt)
-	var i GetNextEntryRow
+func (q *Queries) GetNewerEntry(ctx context.Context, createdAt time.Time) (GetNewerEntryRow, error) {
+	row := q.db.QueryRowContext(ctx, getNewerEntry, createdAt)
+	var i GetNewerEntryRow
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
@@ -267,14 +267,14 @@ func (q *Queries) GetNextEntry(ctx context.Context, createdAt time.Time) (GetNex
 	return i, err
 }
 
-const getPrevEntry = `-- name: GetPrevEntry :one
+const getOlderEntry = `-- name: GetOlderEntry :one
 SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
 WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND created_at < ?1
 ORDER BY created_at DESC
 LIMIT 1
 `
 
-type GetPrevEntryRow struct {
+type GetOlderEntryRow struct {
 	ID            int64        `json:"id"`
 	Title         string       `json:"title"`
 	Body          string       `json:"body"`
@@ -288,9 +288,9 @@ type GetPrevEntryRow struct {
 	Status        string       `json:"status"`
 }
 
-func (q *Queries) GetPrevEntry(ctx context.Context, createdAt time.Time) (GetPrevEntryRow, error) {
-	row := q.db.QueryRowContext(ctx, getPrevEntry, createdAt)
-	var i GetPrevEntryRow
+func (q *Queries) GetOlderEntry(ctx context.Context, createdAt time.Time) (GetOlderEntryRow, error) {
+	row := q.db.QueryRowContext(ctx, getOlderEntry, createdAt)
+	var i GetOlderEntryRow
 	err := row.Scan(
 		&i.ID,
 		&i.Title,

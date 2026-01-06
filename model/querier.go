@@ -35,9 +35,9 @@ type Querier interface {
 	GetImageByURI(ctx context.Context, uri string) (Image, error)
 	GetJobByID(ctx context.Context, id int64) (Job, error)
 	GetJobTypeByID(ctx context.Context, id int64) (JobType, error)
-	GetNextEntry(ctx context.Context, createdAt time.Time) (GetNextEntryRow, error)
+	GetNewerEntry(ctx context.Context, createdAt time.Time) (GetNewerEntryRow, error)
+	GetOlderEntry(ctx context.Context, createdAt time.Time) (GetOlderEntryRow, error)
 	GetOrCreateJobType(ctx context.Context, name string) (JobType, error)
-	GetPrevEntry(ctx context.Context, createdAt time.Time) (GetPrevEntryRow, error)
 	GetTermID(ctx context.Context, term string) (int64, error)
 	GrabJob(ctx context.Context, arg GrabJobParams) error
 	InsertPosting(ctx context.Context, arg InsertPostingParams) error

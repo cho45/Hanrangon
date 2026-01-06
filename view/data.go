@@ -20,8 +20,8 @@ type IndexData struct {
 	IsDetail   bool                             // true for entry detail page, false for list page
 	NextPage   string                           // For index pagination
 	Trackbacks []*model.ListTrackbackEntriesRow // For entry detail
-	Prev       *model.Entry                     // For entry detail navigation
-	Next       *model.Entry                     // For entry detail navigation
+	Older      *model.Entry                     // For entry detail navigation (past)
+	Newer      *model.Entry                     // For entry detail navigation (future)
 }
 
 // ArchiveData holds data for the archive page

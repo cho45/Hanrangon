@@ -563,42 +563,42 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 		trackbacks[i] = &row
 	}
 
-	prevRow, err := app.queries.GetPrevEntry(ctx, entry.CreatedAt)
+	olderRow, err := app.queries.GetOlderEntry(ctx, entry.CreatedAt)
 	if err != nil && err != sql.ErrNoRows {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch prev entry").SetInternal(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch older entry").SetInternal(err)
 	}
-	var prevPtr *model.Entry
+	var olderPtr *model.Entry
 	if err == nil {
 		p := model.Entry{
-			ID:         prevRow.ID,
-			Title:      prevRow.Title,
-			CreatedAt:  prevRow.CreatedAt,
-			Path:       prevRow.Path,
-			Date:       prevRow.Date,
-			ModifiedAt: prevRow.ModifiedAt,
-			PublishAt:  prevRow.PublishAt,
-			Status:     prevRow.Status,
+			ID:         olderRow.ID,
+			Title:      olderRow.Title,
+			CreatedAt:  olderRow.CreatedAt,
+			Path:       olderRow.Path,
+			Date:       olderRow.Date,
+			ModifiedAt: olderRow.ModifiedAt,
+			PublishAt:  olderRow.PublishAt,
+			Status:     olderRow.Status,
 		}
-		prevPtr = &p
+		olderPtr = &p
 	}
 
-	nextRow, err := app.queries.GetNextEntry(ctx, entry.CreatedAt)
+	newerRow, err := app.queries.GetNewerEntry(ctx, entry.CreatedAt)
 	if err != nil && err != sql.ErrNoRows {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch next entry").SetInternal(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch newer entry").SetInternal(err)
 	}
-	var nextPtr *model.Entry
+	var newerPtr *model.Entry
 	if err == nil {
 		n := model.Entry{
-			ID:         nextRow.ID,
-			Title:      nextRow.Title,
-			CreatedAt:  nextRow.CreatedAt,
-			Path:       nextRow.Path,
-			Date:       nextRow.Date,
-			ModifiedAt: nextRow.ModifiedAt,
-			PublishAt:  nextRow.PublishAt,
-			Status:     nextRow.Status,
+			ID:         newerRow.ID,
+			Title:      newerRow.Title,
+			CreatedAt:  newerRow.CreatedAt,
+			Path:       newerRow.Path,
+			Date:       newerRow.Date,
+			ModifiedAt: newerRow.ModifiedAt,
+			PublishAt:  newerRow.PublishAt,
+			Status:     newerRow.Status,
 		}
-		nextPtr = &n
+		newerPtr = &n
 	}
 
 	data := &view.IndexData{
@@ -606,8 +606,8 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 		Entries:    []*model.Entry{&entry},
 		IsDetail:   true,
 		Trackbacks: trackbacks,
-		Prev:       prevPtr,
-		Next:       nextPtr,
+		Older:      olderPtr,
+		Newer:      newerPtr,
 	}
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }

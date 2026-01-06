@@ -19,16 +19,16 @@
 <div class="pager">
 	{{if .IsDetail}}
 		{{/* Entry detail navigation */}}
-		{{if .Prev}}
-			<a href="/{{.Prev.Path}}" rel="next" class="prev">
+		{{if .Older}}
+			<a href="/{{.Older.Path}}" rel="next" class="prev">
 				<span class="label">OLDER</span>
-				<span class="title">{{.Prev.DisplayTitle}}</span>
+				<span class="title">{{.Older.DisplayTitle}}</span>
 			</a>
 		{{end}}
-		{{if .Next}}
-			<a href="/{{.Next.Path}}" rel="prev" class="next">
+		{{if .Newer}}
+			<a href="/{{.Newer.Path}}" rel="prev" class="next">
 				<span class="label">NEWER</span>
-				<span class="title">{{.Next.DisplayTitle}}</span>
+				<span class="title">{{.Newer.DisplayTitle}}</span>
 			</a>
 		{{end}}
 	{{else}}
