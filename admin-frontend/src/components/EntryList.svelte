@@ -18,32 +18,46 @@
   }
 
   let entries = $state<Entry[]>([]);
-  let total = $state(0);
-  let offset = $state(0);
+  let hasMore = $state(false);
   let limit = 50;
+  let search = $state('');
+  let cursors = $state<number[]>([]);
 
   async function fetchEntries() {
     try {
-      const data = await api.get<{ entries: Entry[], total: number }>('/admin/api/entries', { limit, offset });
+      const cursor = cursors[cursors.length - 1];
+      const params: any = { limit };
+      if (search) params.q = search;
+      if (cursor) {
+        params.cursor_id = cursor;
+      }
+
+      const data = await api.get<{ entries: Entry[], has_more: boolean }>('/admin/api/entries', params);
       entries = data.entries || [];
-      total = data.total || 0;
+      hasMore = data.has_more || false;
     } catch (e) {
       console.error(e);
     }
   }
 
+  function onSearch() {
+    cursors = [];
+    fetchEntries();
+  }
+
   onMount(fetchEntries);
 
   function goOlder() {
-    if (offset + limit < total) {
-      offset += limit;
+    if (hasMore && entries.length > 0) {
+      const last = entries[entries.length - 1];
+      cursors.push(last.id);
       fetchEntries();
     }
   }
 
   function goNewer() {
-    if (offset - limit >= 0) {
-      offset -= limit;
+    if (cursors.length > 0) {
+      cursors.pop();
       fetchEntries();
     }
   }
@@ -64,11 +78,14 @@
 
 <div class="entry-list">
   <div class="header">
-    <h2>エントリ一覧 ({total})</h2>
+    <h2>エントリ一覧</h2>
+    <div class="search-box">
+      <input type="text" placeholder="検索..." bind:value={search} onkeydown={e => e.key === 'Enter' && onSearch()} />
+      <button onclick={onSearch}>検索</button>
+    </div>
     <div class="pagination">
-      <button disabled={offset === 0 || api.loading} onclick={goNewer}>新しい方へ</button>
-      <span>{offset + 1} - {Math.min(offset + limit, total)} / {total}</span>
-      <button disabled={offset + limit >= total || api.loading} onclick={goOlder}>古い方へ</button>
+      <button disabled={cursors.length === 0 || api.loading} onclick={goNewer}>新しい方へ</button>
+      <button disabled={!hasMore || api.loading} onclick={goOlder}>古い方へ</button>
     </div>
   </div>
 
@@ -136,6 +153,29 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 20px;
+    gap: 20px;
+  }
+
+  .search-box {
+    display: flex;
+    gap: 5px;
+    flex: 1;
+  }
+
+  .search-box input {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid #dfe5e7;
+    border-radius: 3px;
+  }
+
+  .search-box button {
+    background: #757575;
+    color: #fff;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 3px;
+    cursor: pointer;
   }
 
   .pagination {

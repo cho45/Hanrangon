@@ -503,13 +503,14 @@ func (q *Queries) ListEntries(ctx context.Context, arg ListEntriesParams) ([]Lis
 
 const listEntriesAdmin = `-- name: ListEntriesAdmin :many
 SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
-ORDER BY date DESC, created_at DESC
-LIMIT ? OFFSET ?
+WHERE (CAST(?1 AS BIGINT) IS NULL OR id < CAST(?1 AS BIGINT))
+ORDER BY id DESC
+LIMIT ?2
 `
 
 type ListEntriesAdminParams struct {
-	Limit  int64 `json:"limit"`
-	Offset int64 `json:"offset"`
+	CursorID sql.NullInt64 `json:"cursor_id"`
+	Limit    int64         `json:"limit"`
 }
 
 type ListEntriesAdminRow struct {
@@ -527,7 +528,7 @@ type ListEntriesAdminRow struct {
 }
 
 func (q *Queries) ListEntriesAdmin(ctx context.Context, arg ListEntriesAdminParams) ([]ListEntriesAdminRow, error) {
-	rows, err := q.db.QueryContext(ctx, listEntriesAdmin, arg.Limit, arg.Offset)
+	rows, err := q.db.QueryContext(ctx, listEntriesAdmin, arg.CursorID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -866,6 +867,69 @@ func (q *Queries) PublishEntries(ctx context.Context, ids []int64) error {
 	}
 	_, err := q.db.ExecContext(ctx, query, queryParams...)
 	return err
+}
+
+const searchEntriesAdmin = `-- name: SearchEntriesAdmin :many
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
+WHERE (title LIKE ?1 OR body LIKE ?1)
+AND (CAST(?2 AS BIGINT) IS NULL OR id < CAST(?2 AS BIGINT))
+ORDER BY id DESC
+LIMIT ?3
+`
+
+type SearchEntriesAdminParams struct {
+	Query    string        `json:"query"`
+	CursorID sql.NullInt64 `json:"cursor_id"`
+	Limit    int64         `json:"limit"`
+}
+
+type SearchEntriesAdminRow struct {
+	ID            int64        `json:"id"`
+	Title         string       `json:"title"`
+	Body          string       `json:"body"`
+	FormattedBody string       `json:"formatted_body"`
+	Path          string       `json:"path"`
+	Format        string       `json:"format"`
+	Date          string       `json:"date"`
+	CreatedAt     time.Time    `json:"created_at"`
+	ModifiedAt    time.Time    `json:"modified_at"`
+	PublishAt     sql.NullTime `json:"publish_at"`
+	Status        string       `json:"status"`
+}
+
+func (q *Queries) SearchEntriesAdmin(ctx context.Context, arg SearchEntriesAdminParams) ([]SearchEntriesAdminRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchEntriesAdmin, arg.Query, arg.CursorID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchEntriesAdminRow
+	for rows.Next() {
+		var i SearchEntriesAdminRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Body,
+			&i.FormattedBody,
+			&i.Path,
+			&i.Format,
+			&i.Date,
+			&i.CreatedAt,
+			&i.ModifiedAt,
+			&i.PublishAt,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateEntry = `-- name: UpdateEntry :one

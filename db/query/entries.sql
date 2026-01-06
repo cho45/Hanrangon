@@ -103,8 +103,16 @@ ORDER BY date DESC, created_at DESC;
 
 -- name: ListEntriesAdmin :many
 SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
-ORDER BY date DESC, created_at DESC
-LIMIT ? OFFSET ?;
+WHERE (CAST(sqlc.narg('cursor_id') AS BIGINT) IS NULL OR id < CAST(sqlc.narg('cursor_id') AS BIGINT))
+ORDER BY id DESC
+LIMIT sqlc.arg('limit');
+
+-- name: SearchEntriesAdmin :many
+SELECT id, title, body, formatted_body, path, format, CAST(date AS TEXT) AS date, created_at, modified_at, publish_at, status FROM entries
+WHERE (title LIKE sqlc.arg('query') OR body LIKE sqlc.arg('query'))
+AND (CAST(sqlc.narg('cursor_id') AS BIGINT) IS NULL OR id < CAST(sqlc.narg('cursor_id') AS BIGINT))
+ORDER BY id DESC
+LIMIT sqlc.arg('limit');
 
 -- name: CountAllEntries :one
 SELECT count(*) FROM entries;

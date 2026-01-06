@@ -926,3 +926,127 @@ func TestUpdateModifiedAt(t *testing.T) {
 		t.Errorf("created_at should NOT be updated. old=%v, new=%v", oldTime, updated.CreatedAt)
 	}
 }
+
+func TestHandleAdminApiEntries(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	// Insert 10 test entries
+	for i := 1; i <= 10; i++ {
+		_, err := env.db.Exec(`
+			INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at, status)
+			VALUES (?, ?, ?, '', ?, 'Markdown', '2025-01-01', ?, ?, 'public')
+		`, i, fmt.Sprintf("Entry %d", i), fmt.Sprintf("Body %d", i), fmt.Sprintf("path/%d", i),
+			time.Date(2025, 1, 1, 10, i, 0, 0, time.UTC), time.Date(2025, 1, 1, 10, i, 0, 0, time.UTC))
+		if err != nil {
+			t.Fatalf("failed to insert test data: %v", err)
+		}
+	}
+
+	cookie := env.login(t)
+
+	t.Run("List with limit", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/admin/api/entries?limit=3", nil)
+		req.Header.Set("Cookie", cookie)
+		rec := httptest.NewRecorder()
+		env.server.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("want status 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+
+		var res struct {
+			Entries []*model.Entry `json:"entries"`
+			HasMore bool           `json:"has_more"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
+			t.Fatal(err)
+		}
+
+		if len(res.Entries) != 3 {
+			t.Errorf("want 3 entries, got %d", len(res.Entries))
+		}
+		if !res.HasMore {
+			t.Error("want has_more to be true")
+		}
+		// Should be in descending ID order
+		if res.Entries[0].ID != 10 || res.Entries[1].ID != 9 || res.Entries[2].ID != 8 {
+			t.Errorf("unexpected order or IDs: %d, %d, %d", res.Entries[0].ID, res.Entries[1].ID, res.Entries[2].ID)
+		}
+	})
+
+	t.Run("Pagination with cursor", func(t *testing.T) {
+		// First page
+		req1 := httptest.NewRequest(http.MethodGet, "/admin/api/entries?limit=3", nil)
+		req1.Header.Set("Cookie", cookie)
+		rec1 := httptest.NewRecorder()
+		env.server.ServeHTTP(rec1, req1)
+
+		var res1 struct {
+			Entries []*model.Entry `json:"entries"`
+			HasMore bool           `json:"has_more"`
+		}
+		json.NewDecoder(rec1.Body).Decode(&res1)
+
+		lastID := res1.Entries[len(res1.Entries)-1].ID // Should be 8
+
+		// Second page
+		req2 := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/admin/api/entries?limit=3&cursor_id=%d", lastID), nil)
+		req2.Header.Set("Cookie", cookie)
+		rec2 := httptest.NewRecorder()
+		env.server.ServeHTTP(rec2, req2)
+
+		var res2 struct {
+			Entries []*model.Entry `json:"entries"`
+			HasMore bool           `json:"has_more"`
+		}
+		json.NewDecoder(rec2.Body).Decode(&res2)
+
+		if len(res2.Entries) != 3 {
+			t.Errorf("want 3 entries on second page, got %d", len(res2.Entries))
+		}
+		if res2.Entries[0].ID != 7 {
+			t.Errorf("want first entry ID on second page to be 7, got %d", res2.Entries[0].ID)
+		}
+	})
+
+	t.Run("Search by title", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/admin/api/entries?q=Entry+5", nil)
+		req.Header.Set("Cookie", cookie)
+		rec := httptest.NewRecorder()
+		env.server.ServeHTTP(rec, req)
+
+		var res struct {
+			Entries []*model.Entry `json:"entries"`
+			HasMore bool           `json:"has_more"`
+		}
+		json.NewDecoder(rec.Body).Decode(&res)
+
+		if len(res.Entries) != 1 {
+			t.Errorf("want 1 search result, got %d", len(res.Entries))
+		}
+		if res.Entries[0].Title != "Entry 5" {
+			t.Errorf("want 'Entry 5', got '%s'", res.Entries[0].Title)
+		}
+	})
+
+	t.Run("Search by body", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/admin/api/entries?q=Body+3", nil)
+		req.Header.Set("Cookie", cookie)
+		rec := httptest.NewRecorder()
+		env.server.ServeHTTP(rec, req)
+
+		var res struct {
+			Entries []*model.Entry `json:"entries"`
+			HasMore bool           `json:"has_more"`
+		}
+		json.NewDecoder(rec.Body).Decode(&res)
+
+		if len(res.Entries) != 1 {
+			t.Errorf("want 1 search result, got %d", len(res.Entries))
+		}
+		if res.Entries[0].Body != "Body 3" {
+			t.Errorf("want 'Body 3', got '%s'", res.Entries[0].Body)
+		}
+	})
+}

@@ -66,6 +66,7 @@ type Querier interface {
 	MarkJobFailed(ctx context.Context, arg MarkJobFailedParams) error
 	PublishEntries(ctx context.Context, ids []int64) error
 	RecoverStuckJobs(ctx context.Context) error
+	SearchEntriesAdmin(ctx context.Context, arg SearchEntriesAdminParams) ([]SearchEntriesAdminRow, error)
 	UpdateEntry(ctx context.Context, arg UpdateEntryParams) (Entry, error)
 }
 

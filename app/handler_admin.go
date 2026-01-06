@@ -411,21 +411,81 @@ func (app *AppImpl) HandleAdminApiEntries(c echo.Context) error {
 	if limit <= 0 {
 		limit = 50
 	}
-	offset, _ := strconv.Atoi(c.QueryParam("offset"))
+	search := c.QueryParam("q")
+	cursorIdStr := c.QueryParam("cursor_id")
 
-	entries, err := app.queries.ListEntriesAdmin(c.Request().Context(), model.ListEntriesAdminParams{
-		Limit:  int64(limit),
-		Offset: int64(offset),
-	})
+	var cursorId int64
+	if cursorIdStr != "" {
+		cursorId, _ = strconv.ParseInt(cursorIdStr, 10, 64)
+	}
+
+	var entries []*model.Entry
+	var err error
+	fetchLimit := int64(limit + 1)
+
+	if search != "" {
+		q := "%" + search + "%"
+		rows, err := app.queries.SearchEntriesAdmin(c.Request().Context(), model.SearchEntriesAdminParams{
+			Query:    q,
+			CursorID: sql.NullInt64{Int64: cursorId, Valid: cursorId != 0},
+			Limit:    fetchLimit,
+		})
+		if err != nil {
+			return err
+		}
+		for _, row := range rows {
+			entries = append(entries, &model.Entry{
+				ID:            row.ID,
+				Title:         row.Title,
+				Body:          row.Body,
+				FormattedBody: row.FormattedBody,
+				Path:          row.Path,
+				Format:        row.Format,
+				Date:          row.Date,
+				CreatedAt:     row.CreatedAt,
+				ModifiedAt:    row.ModifiedAt,
+				PublishAt:     row.PublishAt,
+				Status:        row.Status,
+			})
+		}
+	} else {
+		rows, err := app.queries.ListEntriesAdmin(c.Request().Context(), model.ListEntriesAdminParams{
+			CursorID: sql.NullInt64{Int64: cursorId, Valid: cursorId != 0},
+			Limit:    fetchLimit,
+		})
+		if err != nil {
+			return err
+		}
+		for _, row := range rows {
+			entries = append(entries, &model.Entry{
+				ID:            row.ID,
+				Title:         row.Title,
+				Body:          row.Body,
+				FormattedBody: row.FormattedBody,
+				Path:          row.Path,
+				Format:        row.Format,
+				Date:          row.Date,
+				CreatedAt:     row.CreatedAt,
+				ModifiedAt:    row.ModifiedAt,
+				PublishAt:     row.PublishAt,
+				Status:        row.Status,
+			})
+		}
+	}
+
 	if err != nil {
 		return err
 	}
 
-	total, _ := app.queries.CountAllEntries(c.Request().Context())
+	hasMore := false
+	if len(entries) > limit {
+		hasMore = true
+		entries = entries[:limit]
+	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"entries": entries,
-		"total":   total,
+		"entries":  entries,
+		"has_more": hasMore,
 	})
 }
 
