@@ -37,6 +37,10 @@
   let bodyTextArea = $state<HTMLTextAreaElement>(null!);
   let tagDialog = $state<HTMLDialogElement>(null!);
   let restoreDialog = $state<HTMLDialogElement>(null!);
+  let tagListContainer = $state<HTMLDivElement>(null!);
+
+  const tags = ['tech', 'photo', 'redeveloped', 'stablediffusion', 'photoshopped'];
+  let selectedIndex = $state(0);
 
   async function fetchEntry(id: string) {
     loading = true;
@@ -193,8 +197,34 @@
     return map[msg] || msg;
   }
 
+  function openTagDialog() {
+    selectedIndex = 0;
+    tagDialog.showModal();
+    setTimeout(() => tagListContainer?.focus(), 0);
+  }
+
+  function handleTagKeyDown(e: KeyboardEvent) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      selectedIndex = (selectedIndex + 1) % tags.length;
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      selectedIndex = (selectedIndex - 1 + tags.length) % tags.length;
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      insertTag(tags[selectedIndex]);
+    } else if (e.key === 'Escape') {
+      tagDialog.close();
+    }
+  }
+
   function insertTag(tag: string) {
-    form.title = `[${tag}]${form.title}`;
+    const tagStr = `[${tag}]`;
+    if (form.title.includes(tagStr)) {
+      form.title = form.title.replace(tagStr, '');
+    } else {
+      form.title = tagStr + form.title;
+    }
     tagDialog.close();
     titleInput.focus();
   }
@@ -279,7 +309,7 @@
       bind:value={form.title}
     />
     <div class="toolbar">
-      <button type="button" onclick={() => tagDialog.showModal()}>🏷️ タグ</button>
+      <button type="button" onclick={openTagDialog}>🏷️ タグ</button>
       <button type="button" onclick={openUploadDialog}>📷 写真</button>
       <select bind:value={form.format} class="format-select">
         {#each ['Hatena', 'Markdown', 'HTML', 'tDiary'] as fmt}
@@ -332,11 +362,25 @@
 
 <dialog bind:this={tagDialog} id="tagDialog">
   <h3>タグを選択</h3>
-  <div class="tag-list">
-    {#each ['tech', 'photo', 'redeveloped', 'stablediffusion', 'photoshopped'] as tag}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="tag-item" onclick={() => insertTag(tag)}>{tag}</div>
+  <div
+    class="tag-list"
+    role="listbox"
+    aria-label="タグを選択"
+    tabindex="0"
+    bind:this={tagListContainer}
+    onkeydown={handleTagKeyDown}
+  >
+    {#each tags as tag, i}
+      <div
+        class="tag-item"
+        class:selected={selectedIndex === i}
+        role="option"
+        aria-selected={selectedIndex === i}
+        onclick={() => insertTag(tag)}
+        onmouseenter={() => selectedIndex = i}
+      >
+        {tag}
+      </div>
     {/each}
   </div>
   <button type="button" onclick={() => tagDialog.close()} style="margin-top: 16px;">キャンセル</button>
@@ -485,6 +529,12 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+    outline: none;
+  }
+
+  .tag-list:focus-visible {
+    box-shadow: 0 0 0 2px #00acc1;
+    border-radius: 4px;
   }
 
   .tag-item {
@@ -492,10 +542,15 @@
     background: #eee;
     border-radius: 4px;
     cursor: pointer;
+    border: 2px solid transparent;
   }
 
-  .tag-item:hover {
+  .tag-item:hover, .tag-item.selected {
     background: #ddd;
+  }
+
+  .tag-item.selected {
+    border-color: #00acc1;
   }
 
   .progress-bar {
