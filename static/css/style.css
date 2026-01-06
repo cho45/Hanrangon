@@ -368,22 +368,22 @@ pre {
 
 .similar-entries li,
 .trackbacks li {
-	margin-bottom: 1.5rem;
+	margin-bottom: 0.5rem;
 }
 
 .similar-entries a,
 .trackbacks a {
 	text-decoration: none;
 	display: block;
+	line-height: 1.2;
 }
 
 .similar-entries a b,
 .trackbacks a b {
-	display: block;
 	text-decoration: underline;
 	text-underline-offset: 0.2rem;
 	color: var(--text-color);
-	font-size: 1.1rem;
+	font-size: 0.80rem;
 }
 
 .similar-entries a:hover b,
@@ -393,18 +393,16 @@ pre {
 
 .similar-entries time,
 .trackbacks time {
-	display: block;
+	display: inline-block;
 	font-size: 0.8rem;
 	color: var(--accent-color);
-	margin: 0.2rem 0;
+	margin: 0.2rem;
 }
 
 .similar-entries .summary,
 .trackbacks .summary {
-	display: block;
-	font-size: 0.85rem;
+	font-size: 0.80rem;
 	color: var(--accent-color);
-	line-height: 1.5;
 	text-decoration: none !important;
 }
 
