@@ -56,6 +56,15 @@ func TestHandleIndex(t *testing.T) {
 	if !strings.Contains(body, "<p>Formatted Body 1</p>") {
 		t.Errorf("body does not contain formatted body")
 	}
+
+	checkCompleteHTML(t, body)
+}
+
+func checkCompleteHTML(t *testing.T, body string) {
+	t.Helper()
+	if !strings.Contains(body, "</html>") {
+		t.Errorf("response body does not contain </html> tag (possibly truncated)")
+	}
 }
 
 func TestHandleEntry(t *testing.T) {
@@ -82,6 +91,7 @@ func TestHandleEntry(t *testing.T) {
 		}
 
 		body := rec.Body.String()
+		checkCompleteHTML(t, body)
 		if !strings.Contains(body, "Test Entry 1") {
 			t.Errorf("body does not contain 'Test Entry 1'")
 		}
@@ -126,6 +136,7 @@ func TestHandleArchive(t *testing.T) {
 	}
 
 	body := rec.Body.String()
+	checkCompleteHTML(t, body)
 	// 2025年 (2 entries), 2024年 (1 entry)
 	if !strings.Contains(body, "2025年") {
 		t.Errorf("body does not contain '2025年'")
@@ -188,6 +199,7 @@ func TestHandleDateArchive(t *testing.T) {
 			}
 
 			body := rec.Body.String()
+			checkCompleteHTML(t, body)
 			for _, title := range tt.wantTitles {
 				if !strings.Contains(body, title) {
 					t.Errorf("path %s: body does not contain '%s'", tt.path, title)
@@ -226,6 +238,7 @@ func TestHandleCategory(t *testing.T) {
 	}
 
 	body := rec.Body.String()
+	checkCompleteHTML(t, body)
 	// ParseTitle separates tags, so we look for the tag link and the clean title
 	// Structure: <a href="/test/"><span itemprop="keywords">test</span></a>
 	if !strings.Contains(body, "<span itemprop=\"keywords\">test</span></a>") {
@@ -610,7 +623,9 @@ func TestHandleEdit(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Errorf("want status 200, got %d", rec.Code)
 		}
-		if !strings.Contains(rec.Body.String(), `id="admin-root"`) {
+		body := rec.Body.String()
+		checkCompleteHTML(t, body)
+		if !strings.Contains(body, `id="admin-root"`) {
 			t.Errorf("body does not contain admin-root element")
 		}
 	})
