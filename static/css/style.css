@@ -285,6 +285,17 @@ span[itemtype*="Photograph"] img,
 	box-shadow: 0 10px 40px rgba(0,0,0,0.08);
 }
 
+/* Limit height for non-photo articles to prevent excessively tall images (e.g. mobile screenshots) */
+article:not(.photo) .content img,
+article:not(.photo) .content figure img,
+article:not(.photo) span[itemtype*="Photograph"] img,
+article:not(.photo) .photo img,
+article:not(.photo) .hatena-fotolife img {
+	max-height: 75vh;
+	width: auto !important;
+	max-width: 100%;
+}
+
 /* Specific internal padding for code blocks */
 pre.code,
 pre.hljs,
