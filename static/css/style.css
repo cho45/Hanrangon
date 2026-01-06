@@ -253,11 +253,11 @@ article header .metadata a {
 }
 
 /* Large Photos & Code Breakout (Universal) */
-.content img,
-.content .photo,
-.content .hatena-fotolife,
-.content .picasa,
-.content span[itemtype*="Photograph"],
+article.photo .content .photo,
+article.photo .content img,
+article.photo .content .hatena-fotolife,
+article.photo .content .picasa,
+article.photo .content span[itemtype*="Photograph"],
 pre.code,
 pre.hljs,
 pre {
@@ -504,11 +504,13 @@ article.status-scheduled {
 }
 
 #global-navigation ip-info {
+	position: absolute;
+	top: 0;
+	right: 0;
 	display: block;
 	font-size: 0.7rem;
 	color: var(--accent-color);
 	text-align: center;
-	margin-top: 1rem;
 }
 
 #global-navigation ip-info:after {
