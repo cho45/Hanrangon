@@ -74,7 +74,7 @@ func (s *SimilarityCalculator) CalculateSimilarEntries(ctx context.Context, entr
 func (s *SimilarityCalculator) calculateForEntryTx(ctx context.Context, tx *sql.Tx, entryID int64) error {
 	// エントリが十分な情報（tfidf_n > 0 のターム）を持っているか確認
 	var validTermCount int
-	err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM postings WHERE entry_id = ? AND tfidf_n > 0`, entryID).Scan(&validTermCount)
+	err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM (SELECT 1 FROM postings WHERE entry_id = ? AND tfidf_n > 0 LIMIT ?)`, entryID, s.MinValidTerms).Scan(&validTermCount)
 	if err != nil {
 		return fmt.Errorf("failed to check valid term count: %w", err)
 	}

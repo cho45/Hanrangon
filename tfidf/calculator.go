@@ -73,7 +73,7 @@ type Calculator struct {
 	DFMaxThresholdRate float64
 
 	alphanumericPattern *regexp.Regexp
-	htmlTagPattern       *regexp.Regexp
+	htmlTagPattern      *regexp.Regexp
 }
 
 // NewCalculator creates a new Calculator
@@ -85,7 +85,7 @@ func NewCalculator(tfidfDB *sql.DB, tfidfQueries *model.Queries, dataDB *sql.DB,
 		dataQueries:         dataQueries,
 		DFMaxThresholdRate:  0.1, // Default to 10%
 		alphanumericPattern: regexp.MustCompile(`[a-z0-9]{2,}`),
-		htmlTagPattern:       regexp.MustCompile(`<[^>]*>`),
+		htmlTagPattern:      regexp.MustCompile(`<[^>]*>`),
 	}, nil
 }
 
@@ -181,31 +181,14 @@ func (c *Calculator) UpdateTFIDFs(ctx context.Context, entries []UpdateEntry) er
 
 	// 減算対象の全ターム ID を収集
 	// (postings にあるもの + first_entry_id が対象記事であるもの)
-	var targetTermIDs []int64
-
-	// a. postings から取得
+	var uniqueTermIDs []interface{}
 	rows, err := tx.QueryContext(ctx, fmt.Sprintf(`
-		SELECT DISTINCT term_id FROM postings WHERE entry_id IN (%s)
-	`, inClause), entryIDs...)
-	if err != nil {
-		return fmt.Errorf("failed to query old term ids from postings: %w", err)
-	}
-	for rows.Next() {
-		var tid int64
-		if err := rows.Scan(&tid); err != nil {
-			rows.Close()
-			return fmt.Errorf("failed to scan term id: %w", err)
-		}
-		targetTermIDs = append(targetTermIDs, tid)
-	}
-	rows.Close()
-
-	// b. first_entry_id から取得
-	rows, err = tx.QueryContext(ctx, fmt.Sprintf(`
+		SELECT term_id FROM postings WHERE entry_id IN (%s)
+		UNION
 		SELECT id FROM terms WHERE first_entry_id IN (%s)
-	`, inClause), entryIDs...)
+	`, inClause, inClause), append(entryIDs, entryIDs...)...)
 	if err != nil {
-		return fmt.Errorf("failed to query old term ids from terms table: %w", err)
+		return fmt.Errorf("failed to query old term ids: %w", err)
 	}
 	for rows.Next() {
 		var tid int64
@@ -213,22 +196,12 @@ func (c *Calculator) UpdateTFIDFs(ctx context.Context, entries []UpdateEntry) er
 			rows.Close()
 			return fmt.Errorf("failed to scan term id: %w", err)
 		}
-		targetTermIDs = append(targetTermIDs, tid)
+		uniqueTermIDs = append(uniqueTermIDs, tid)
 	}
 	rows.Close()
 
-	// 重複を排除して一括減算
-	if len(targetTermIDs) > 0 {
-		termIDMap := make(map[int64]bool)
-		uniqueTermIDs := make([]interface{}, 0)
-		for _, tid := range targetTermIDs {
-			if !termIDMap[tid] {
-				termIDMap[tid] = true
-				uniqueTermIDs = append(uniqueTermIDs, tid)
-			}
-		}
-
-		// 500件ずつ減算
+	// 一括減算
+	if len(uniqueTermIDs) > 0 {
 		for i := 0; i < len(uniqueTermIDs); i += 500 {
 			end := i + 500
 			if end > len(uniqueTermIDs) {
@@ -271,79 +244,59 @@ func (c *Calculator) UpdateTFIDFs(ctx context.Context, entries []UpdateEntry) er
 		if len(newTerms) == 0 {
 			continue
 		}
-
-		// タームのバルク UPSERT
-		// SQLite の変数の上限（通常 999 または 32766）を考慮し、1 記事単位で処理
+		// 1エントリ分を 1つのバルク SQL で UPSERT
+		// (通常 1記事の単語数は数百件なので、SQLite の上限 32766 にはまず抵触しない)
 		termList := make([]string, 0, len(newTerms))
 		for term := range newTerms {
 			termList = append(termList, term)
 		}
-
-		// INSERT ... RETURNING を使って ID と最新の DF を取得
 		upsertSQL := `
 			INSERT INTO terms (term, df_count, first_entry_id) VALUES %s
 			ON CONFLICT(term) DO UPDATE SET
 				df_count = terms.df_count + 1,
 				first_entry_id = CASE WHEN terms.df_count <= 0 THEN excluded.first_entry_id ELSE terms.first_entry_id END
 			RETURNING id, term, df_count, first_entry_id`
-
-		// 1 クエリあたりのターム数を制限して実行（念のため 400 タームずつ）
-		const batchSize = 400
-		for i := 0; i < len(termList); i += batchSize {
-			end := i + batchSize
-			if end > len(termList) {
-				end = len(termList)
+		valueStrings := make([]string, 0, len(termList))
+		valueArgs := make([]interface{}, 0, len(termList)*2)
+		for _, term := range termList {
+			valueStrings = append(valueStrings, "(?, 1, ?)")
+			valueArgs = append(valueArgs, term, e.ID)
+		}
+		rows, err := tx.QueryContext(ctx, fmt.Sprintf(upsertSQL, strings.Join(valueStrings, ",")), valueArgs...)
+		if err != nil {
+			return fmt.Errorf("failed to bulk upsert terms for entry %d: %w", e.ID, err)
+		}
+		var postingArgs []interface{}
+		var postingPlaceholders []string
+		for rows.Next() {
+			var t model.Term
+			if err := rows.Scan(&t.ID, &t.Term, &t.DfCount, &t.FirstEntryID); err != nil {
+				rows.Close()
+				return fmt.Errorf("failed to scan term after bulk upsert: %w", err)
 			}
-			currentBatch := termList[i:end]
-
-			valueStrings := make([]string, 0, len(currentBatch))
-			valueArgs := make([]interface{}, 0, len(currentBatch)*2)
-			for _, term := range currentBatch {
-				valueStrings = append(valueStrings, "(?, 1, ?)")
-				valueArgs = append(valueArgs, term, e.ID)
+			// 昇格チェック
+			if t.DfCount == 2 && t.FirstEntryID.Valid && !inBatch[t.FirstEntryID.Int64] {
+				oldEID := t.FirstEntryID.Int64
+				allPromotedTerms[oldEID] = append(allPromotedTerms[oldEID], t)
 			}
-
-			rows, err := tx.QueryContext(ctx, fmt.Sprintf(upsertSQL, strings.Join(valueStrings, ",")), valueArgs...)
+			// ポスティング候補 (DF >= 2)
+			if t.DfCount >= 2 {
+				count := newTerms[t.Term]
+				postingPlaceholders = append(postingPlaceholders, "(?, ?, ?, 0.0, 0.0)")
+				postingArgs = append(postingArgs, e.ID, t.ID, count)
+			}
+		}
+		rows.Close()
+		// ポスティングの一括挿入
+		if len(postingArgs) > 0 {
+			insertPostingSQL := fmt.Sprintf(`
+				INSERT INTO postings (entry_id, term_id, term_count, tfidf, tfidf_n)
+				VALUES %s
+				ON CONFLICT(entry_id, term_id) DO UPDATE SET term_count = excluded.term_count`,
+				strings.Join(postingPlaceholders, ","))
+			_, err = tx.ExecContext(ctx, insertPostingSQL, postingArgs...)
 			if err != nil {
-				return fmt.Errorf("failed to bulk upsert terms for entry %d: %w", e.ID, err)
-			}
-
-			var postingArgs []interface{}
-			var postingPlaceholders []string
-
-			for rows.Next() {
-				var t model.Term
-				if err := rows.Scan(&t.ID, &t.Term, &t.DfCount, &t.FirstEntryID); err != nil {
-					rows.Close()
-					return fmt.Errorf("failed to scan term after bulk upsert: %w", err)
-				}
-
-				// 昇格チェック
-				if t.DfCount == 2 && t.FirstEntryID.Valid && !inBatch[t.FirstEntryID.Int64] {
-					oldEID := t.FirstEntryID.Int64
-					allPromotedTerms[oldEID] = append(allPromotedTerms[oldEID], t)
-				}
-
-				// ポスティング候補 (DF >= 2)
-				if t.DfCount >= 2 {
-					count := newTerms[t.Term]
-					postingPlaceholders = append(postingPlaceholders, "(?, ?, ?, 0.0, 0.0)")
-					postingArgs = append(postingArgs, e.ID, t.ID, count)
-				}
-			}
-			rows.Close()
-
-			// ポスティングの一括挿入
-			if len(postingArgs) > 0 {
-				insertPostingSQL := fmt.Sprintf(`
-					INSERT INTO postings (entry_id, term_id, term_count, tfidf, tfidf_n)
-					VALUES %s
-					ON CONFLICT(entry_id, term_id) DO UPDATE SET term_count = excluded.term_count`,
-					strings.Join(postingPlaceholders, ","))
-				_, err = tx.ExecContext(ctx, insertPostingSQL, postingArgs...)
-				if err != nil {
-					return fmt.Errorf("failed to bulk insert postings for entry %d: %w", e.ID, err)
-				}
+				return fmt.Errorf("failed to bulk insert postings for entry %d: %w", e.ID, err)
 			}
 		}
 	}
