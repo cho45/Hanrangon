@@ -20,7 +20,7 @@ type LayoutData struct {
 // IndexData holds data for both index and entry detail pages
 type IndexData struct {
 	LayoutData
-	Entries    []*model.Entry                   // For index: multiple entries, for detail: single entry
+	Entries    []model.Entry                    // For index: multiple entries, for detail: single entry
 	IsDetail   bool                             // true for entry detail page, false for list page
 	OlderPage  string                           // For index pagination
 	Trackbacks []*model.ListTrackbackEntriesRow // For entry detail
@@ -101,7 +101,7 @@ type SitemapURL struct {
 
 // SimilarEntry represents an entry with similarity score
 type SimilarEntry struct {
-	*model.Entry
+	model.Entry
 	Score float64
 }
 

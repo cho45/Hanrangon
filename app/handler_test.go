@@ -956,8 +956,8 @@ func TestHandleAdminApiEntries(t *testing.T) {
 		}
 
 		var res struct {
-			Entries []*model.Entry `json:"entries"`
-			HasMore bool           `json:"has_more"`
+			Entries []model.Entry `json:"entries"`
+			HasMore bool          `json:"has_more"`
 		}
 		if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
 			t.Fatal(err)
@@ -983,8 +983,8 @@ func TestHandleAdminApiEntries(t *testing.T) {
 		env.server.ServeHTTP(rec1, req1)
 
 		var res1 struct {
-			Entries []*model.Entry `json:"entries"`
-			HasMore bool           `json:"has_more"`
+			Entries []model.Entry `json:"entries"`
+			HasMore bool          `json:"has_more"`
 		}
 		json.NewDecoder(rec1.Body).Decode(&res1)
 
@@ -997,8 +997,8 @@ func TestHandleAdminApiEntries(t *testing.T) {
 		env.server.ServeHTTP(rec2, req2)
 
 		var res2 struct {
-			Entries []*model.Entry `json:"entries"`
-			HasMore bool           `json:"has_more"`
+			Entries []model.Entry `json:"entries"`
+			HasMore bool          `json:"has_more"`
 		}
 		json.NewDecoder(rec2.Body).Decode(&res2)
 
@@ -1017,8 +1017,8 @@ func TestHandleAdminApiEntries(t *testing.T) {
 		env.server.ServeHTTP(rec, req)
 
 		var res struct {
-			Entries []*model.Entry `json:"entries"`
-			HasMore bool           `json:"has_more"`
+			Entries []model.Entry `json:"entries"`
+			HasMore bool          `json:"has_more"`
 		}
 		json.NewDecoder(rec.Body).Decode(&res)
 
@@ -1037,8 +1037,8 @@ func TestHandleAdminApiEntries(t *testing.T) {
 		env.server.ServeHTTP(rec, req)
 
 		var res struct {
-			Entries []*model.Entry `json:"entries"`
-			HasMore bool           `json:"has_more"`
+			Entries []model.Entry `json:"entries"`
+			HasMore bool          `json:"has_more"`
 		}
 		json.NewDecoder(rec.Body).Decode(&res)
 

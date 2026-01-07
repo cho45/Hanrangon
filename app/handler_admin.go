@@ -419,7 +419,7 @@ func (app *AppImpl) HandleAdminApiEntries(c echo.Context) error {
 		cursorId, _ = strconv.ParseInt(cursorIdStr, 10, 64)
 	}
 
-	var entries []*model.Entry
+	var entries []model.Entry
 	var err error
 	fetchLimit := int64(limit + 1)
 
@@ -433,20 +433,9 @@ func (app *AppImpl) HandleAdminApiEntries(c echo.Context) error {
 		if err != nil {
 			return err
 		}
-		for _, row := range rows {
-			entries = append(entries, &model.Entry{
-				ID:            row.ID,
-				Title:         row.Title,
-				Body:          row.Body,
-				FormattedBody: row.FormattedBody,
-				Path:          row.Path,
-				Format:        row.Format,
-				Date:          row.Date,
-				CreatedAt:     row.CreatedAt,
-				ModifiedAt:    row.ModifiedAt,
-				PublishAt:     row.PublishAt,
-				Status:        row.Status,
-			})
+		entries = make([]model.Entry, len(rows))
+		for i, row := range rows {
+			entries[i] = model.Entry(row)
 		}
 	} else {
 		rows, err := app.queries.ListEntriesAdmin(c.Request().Context(), model.ListEntriesAdminParams{
@@ -456,20 +445,9 @@ func (app *AppImpl) HandleAdminApiEntries(c echo.Context) error {
 		if err != nil {
 			return err
 		}
-		for _, row := range rows {
-			entries = append(entries, &model.Entry{
-				ID:            row.ID,
-				Title:         row.Title,
-				Body:          row.Body,
-				FormattedBody: row.FormattedBody,
-				Path:          row.Path,
-				Format:        row.Format,
-				Date:          row.Date,
-				CreatedAt:     row.CreatedAt,
-				ModifiedAt:    row.ModifiedAt,
-				PublishAt:     row.PublishAt,
-				Status:        row.Status,
-			})
+		entries = make([]model.Entry, len(rows))
+		for i, row := range rows {
+			entries[i] = model.Entry(row)
 		}
 	}
 

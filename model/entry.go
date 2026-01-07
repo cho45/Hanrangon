@@ -22,7 +22,7 @@ func ParseTitle(rawTitle string) (string, []string) {
 }
 
 // DisplayTitle returns the title without tags, or "✖" if empty.
-func (e *Entry) DisplayTitle() string {
+func (e Entry) DisplayTitle() string {
 	clean, _ := ParseTitle(e.Title)
 	if clean == "" {
 		return "✖"
@@ -31,13 +31,13 @@ func (e *Entry) DisplayTitle() string {
 }
 
 // Tags returns the tags extracted from the title.
-func (e *Entry) Tags() []string {
+func (e Entry) Tags() []string {
 	_, tags := ParseTitle(e.Title)
 	return tags
 }
 
 // DisplayTitle returns the title without tags, or "✖" if empty.
-func (e *ListTrackbackEntriesRow) DisplayTitle() string {
+func (e ListTrackbackEntriesRow) DisplayTitle() string {
 	clean, _ := ParseTitle(e.Title)
 	if clean == "" {
 		return "✖"
@@ -46,7 +46,7 @@ func (e *ListTrackbackEntriesRow) DisplayTitle() string {
 }
 
 // Tags returns the tags extracted from the title.
-func (e *ListTrackbackEntriesRow) Tags() []string {
+func (e ListTrackbackEntriesRow) Tags() []string {
 	_, tags := ParseTitle(e.Title)
 	return tags
 }

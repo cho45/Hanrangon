@@ -73,10 +73,9 @@ func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
 	}
 
-	entries := make([]*model.Entry, len(rows))
+	entries := make([]model.Entry, len(rows))
 	for i, r := range rows {
-		e := model.Entry(r)
-		entries[i] = &e
+		entries[i] = model.Entry(r)
 	}
 
 	if len(entries) > 0 {
@@ -166,7 +165,7 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 	if len(dates) == 0 {
 		data := &view.IndexData{
 			LayoutData: app.newLayoutData(c, pageTitle),
-			Entries:    []*model.Entry{},
+			Entries:    []model.Entry{},
 			IsDetail:   false,
 			OlderPage:  "",
 		}
@@ -178,10 +177,9 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
 	}
 
-	entries := make([]*model.Entry, len(rows))
+	entries := make([]model.Entry, len(rows))
 	for i, r := range rows {
-		e := model.Entry(r)
-		entries[i] = &e
+		entries[i] = model.Entry(r)
 	}
 
 	if len(entries) > 0 {
@@ -240,10 +238,9 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 		olderPage = fmt.Sprintf("/%s/.page/%s/%d", category, olderDate, limit)
 	}
 
-	entries := make([]*model.Entry, len(rows))
+	entries := make([]model.Entry, len(rows))
 	for i, r := range rows {
-		e := model.Entry(r)
-		entries[i] = &e
+		entries[i] = model.Entry(r)
 	}
 
 	if len(entries) > 0 {
@@ -278,10 +275,9 @@ func (app *AppImpl) HandleFeed(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
 	}
 
-	entries := make([]*model.Entry, len(rows))
+	entries := make([]model.Entry, len(rows))
 	for i, r := range rows {
-		e := model.Entry(r)
-		entries[i] = &e
+		entries[i] = model.Entry(r)
 	}
 
 	updated := getLatestModTime(entries)
@@ -414,7 +410,7 @@ func (app *AppImpl) HandleApiSimilar(c echo.Context) error {
 			for _, r := range rows {
 				e := model.Entry(r)
 				similarEntries = append(similarEntries, view.SimilarEntry{
-					Entry: &e,
+					Entry: e,
 					Score: scoreMap[e.ID],
 				})
 			}
@@ -603,7 +599,7 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 
 	data := &view.IndexData{
 		LayoutData: app.newLayoutData(c, entry.DisplayTitle()),
-		Entries:    []*model.Entry{&entry},
+		Entries:    []model.Entry{entry},
 		IsDetail:   true,
 		Trackbacks: trackbacks,
 		Older:      olderPtr,
@@ -622,7 +618,7 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
-func getLatestModTime(entries []*model.Entry) time.Time {
+func getLatestModTime(entries []model.Entry) time.Time {
 	if len(entries) == 0 {
 		return time.Time{}
 	}
