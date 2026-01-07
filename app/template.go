@@ -7,7 +7,9 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/BurntSushi/toml"
 	"github.com/Masterminds/sprig/v3"
@@ -31,6 +33,8 @@ type Templates struct {
 	config    *Config
 	templates map[string]*template.Template
 	metadata  map[string]*TemplateMetadata
+	merged    map[string]*template.Template
+	mu        sync.RWMutex
 }
 
 // buildFuncMap builds the function map for templates
@@ -61,6 +65,31 @@ func buildFuncMap() template.FuncMap {
 	}
 	funcMap["summary"] = view.Summary
 	funcMap["isSameDay"] = view.IsSameDay
+	funcMap["isDateBoundary"] = func(i int, entries []model.Entry) bool {
+		if i == 0 {
+			return true
+		}
+		if i < 0 || i >= len(entries) {
+			return false
+		}
+		return entries[i].Date != entries[i-1].Date
+	}
+	funcMap["similarURL"] = func(entries []model.Entry) string {
+		if len(entries) == 0 {
+			return ""
+		}
+		var sb strings.Builder
+		sb.Grow(len(entries) * 20)
+		sb.WriteString("/api/similar?")
+		for i, e := range entries {
+			if i > 0 {
+				sb.WriteByte('&')
+			}
+			sb.WriteString("id=")
+			sb.WriteString(strconv.FormatInt(e.ID, 10))
+		}
+		return sb.String()
+	}
 
 	return funcMap
 }
@@ -137,6 +166,7 @@ func InitTemplates(config *Config) (*Templates, error) {
 	t := &Templates{
 		config:   config,
 		metadata: make(map[string]*TemplateMetadata),
+		merged:   make(map[string]*template.Template),
 	}
 
 	if !config.IsDevelopment() {
@@ -157,6 +187,17 @@ func (t *Templates) getTemplates() (map[string]*template.Template, error) {
 		return t.LoadTemplates()
 	}
 
+	t.mu.RLock()
+	if t.templates != nil {
+		defer t.mu.RUnlock()
+		return t.templates, nil
+	}
+	t.mu.RUnlock()
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	// Double check
 	if t.templates != nil {
 		return t.templates, nil
 	}
@@ -166,6 +207,8 @@ func (t *Templates) getTemplates() (map[string]*template.Template, error) {
 		return nil, err
 	}
 	t.templates = tmpl
+	// Clear merged cache when templates are reloaded
+	t.merged = make(map[string]*template.Template)
 	return t.templates, nil
 }
 
@@ -175,6 +218,21 @@ func (t *Templates) RenderWithLayout(c echo.Context, layoutName, contentName str
 	templates, err := t.getTemplates()
 	if err != nil {
 		return err
+	}
+
+	key := layoutName + "|" + contentName
+	if !t.config.IsDevelopment() {
+		t.mu.RLock()
+		mergedTmpl, ok := t.merged[key]
+		t.mu.RUnlock()
+		if ok {
+			t.setHeaders(c, layoutName, contentName)
+			err = mergedTmpl.ExecuteTemplate(c.Response(), layoutName, data)
+			if err != nil {
+				log.Printf("Template execution error (RenderWithLayout cached): %v", err)
+			}
+			return err
+		}
 	}
 
 	contentTmpl := templates[contentName]
@@ -211,6 +269,12 @@ func (t *Templates) RenderWithLayout(c echo.Context, layoutName, contentName str
 	_, err = mergedTmpl.AddParseTree("content", contentTmpl.Tree)
 	if err != nil {
 		return err
+	}
+
+	if !t.config.IsDevelopment() {
+		t.mu.Lock()
+		t.merged[key] = mergedTmpl
+		t.mu.Unlock()
 	}
 
 	t.setHeaders(c, layoutName, contentName)
@@ -289,10 +353,13 @@ func formatDate(dateStr string) string {
 	if len(parts) != 3 {
 		return dateStr
 	}
-	return fmt.Sprintf("%s年 %s月 %s日", parts[0], parts[1], parts[2])
+	return parts[0] + "年 " + parts[1] + "月 " + parts[2] + "日"
 }
 
 // datePath converts a date string from "2006-01-02" to "/2006/01/02/"
 func datePath(dateStr string) string {
-	return "/" + strings.ReplaceAll(dateStr, "-", "/") + "/"
+	if len(dateStr) != 10 { // YYYY-MM-DD
+		return "/" + strings.ReplaceAll(dateStr, "-", "/") + "/"
+	}
+	return "/" + dateStr[0:4] + "/" + dateStr[5:7] + "/" + dateStr[8:10] + "/"
 }

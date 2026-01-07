@@ -10,6 +10,7 @@ import (
 )
 
 var htmlTagRegexp = regexp.MustCompile(`<[^>]*>`)
+var whitespaceRegexp = regexp.MustCompile(`\s+`)
 
 func IsSameDay(t1Str, t2Str string) bool {
 	return t1Str == t2Str
@@ -28,6 +29,7 @@ func Summary(htmlContent string, length interface{}) string {
 
 	tokenizer := html.NewTokenizer(strings.NewReader(htmlContent))
 	var textBuilder strings.Builder
+	textBuilder.Grow(len(htmlContent))
 	skipContent := false
 
 	// Block elements that should be separated by spaces
@@ -45,29 +47,25 @@ func Summary(htmlContent string, length interface{}) string {
 			return "" // Parse error
 		}
 
-		token := tokenizer.Token()
 		switch tokenType {
-		case html.StartTagToken:
-			if token.Data == "script" || token.Data == "style" {
-				skipContent = true
+		case html.StartTagToken, html.EndTagToken, html.SelfClosingTagToken:
+			name, _ := tokenizer.TagName()
+			tagName := string(name)
+			if tokenType != html.EndTagToken {
+				if tagName == "script" || tagName == "style" {
+					skipContent = true
+				}
+			} else {
+				if tagName == "script" || tagName == "style" {
+					skipContent = false
+				}
 			}
-			if isBlock[token.Data] {
-				textBuilder.WriteString(" ")
-			}
-		case html.EndTagToken:
-			if token.Data == "script" || token.Data == "style" {
-				skipContent = false
-			}
-			if isBlock[token.Data] {
+			if isBlock[tagName] {
 				textBuilder.WriteString(" ")
 			}
 		case html.TextToken:
 			if !skipContent {
-				textBuilder.WriteString(token.Data)
-			}
-		case html.SelfClosingTagToken:
-			if isBlock[token.Data] {
-				textBuilder.WriteString(" ")
+				textBuilder.Write(tokenizer.Text())
 			}
 		}
 	}
@@ -76,7 +74,7 @@ func Summary(htmlContent string, length interface{}) string {
 	text = strings.ReplaceAll(text, "\n", " ")
 	text = strings.ReplaceAll(text, "\r", "")
 	// Replace multiple spaces with a single space
-	text = regexp.MustCompile(`\s+`).ReplaceAllString(text, " ")
+	text = whitespaceRegexp.ReplaceAllString(text, " ")
 	text = strings.TrimSpace(text)
 
 	runes := []rune(text)

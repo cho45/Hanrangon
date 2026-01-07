@@ -12,15 +12,11 @@
 {{$entries := .Entries}}
 {{$isAuth := .IsAuth}}
 {{$isDetail := .IsDetail}}
-{{$ids := list}}
-{{range $entries}}
-	{{$ids = append $ids (printf "id=%d" .ID)}}
-{{end}}
-{{$similarURL := printf "/api/similar?%s" (join "&" $ids)}}
+{{$similarURL := similarURL $entries}}
 <link rel="preload" id="preload-similar-entries" href="{{$similarURL}}" as="fetch" crossorigin="anonymous"/>
 <div class="entries">
 	{{range $i, $e := $entries}}
-		{{if or (eq $i 0) (not (isSameDay (index $entries (sub $i 1)).Date $e.Date))}}
+		{{if isDateBoundary $i $entries}}
 			<div class="date"><a href="{{datePath $e.Date}}">{{formatDate $e.Date}}</a></div>
 		{{end}}
 		{{template "article" dict "Entry" $e "IsAuth" $isAuth "IsPermalink" $isDetail "IsFirst" (eq $i 0) "Trackbacks" $.Trackbacks "BaseURL" $.BaseURL}}

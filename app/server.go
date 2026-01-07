@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/gorilla/sessions"
+	"github.com/labstack/echo-contrib/pprof"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -18,6 +19,10 @@ func NewServer(app *AppImpl) *echo.Echo {
 	config := app.Config()
 	e := echo.New()
 	e.HideBanner = true
+
+	if os.Getenv("PPROF") == "true" {
+		pprof.Register(e)
+	}
 
 	// Middleware
 	e.Use(session.Middleware(sessions.NewCookieStore([]byte(config.SessionSecret))))
@@ -34,7 +39,12 @@ func NewServer(app *AppImpl) *echo.Echo {
 		},
 	}))
 	e.Use(middleware.Recover())
-	e.Use(middleware.Gzip())
+	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
+		Level: 1, // BestSpeed
+		// 1KB未満のレスポンスは、圧縮によるサイズ削減効果よりも
+		// Gzipライター確保のメモリ/CPUコストの方が大きいため除外する。
+		MinLength: 1024,
+	}))
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			c.Response().Before(func() {
