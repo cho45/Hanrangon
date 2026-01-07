@@ -1050,3 +1050,48 @@ func TestHandleAdminApiEntries(t *testing.T) {
 		}
 	})
 }
+
+func TestSqlcDateOverride(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	ctx := context.Background()
+	now := time.Now()
+	expectedDate := "2026-01-07"
+
+	// 1. データを挿入
+	_, err := env.db.Exec(`
+		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at, status)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, "Test", "Body", "", "test-path", "Markdown", expectedDate, now, now, "public")
+	if err != nil {
+		t.Fatalf("Failed to insert test data: %v", err)
+	}
+
+	// 2. sqlc の生成したクエリ (ListEntries) で取得
+	// CAST(date AS TEXT) が効いていることを確認する
+	rows, err := env.app.Queries().ListEntries(ctx, model.ListEntriesParams{
+		TargetDate: "9999-12-31",
+		Limit:      1,
+	})
+	if err != nil {
+		t.Fatalf("ListEntries failed: %v", err)
+	}
+
+	if len(rows) == 0 {
+		t.Fatal("No entries returned")
+	}
+
+	actualDate := rows[0].Date
+	t.Logf("Actual Date from sqlc: %q", actualDate)
+
+	// 3. 形式の検証
+	if actualDate != expectedDate {
+		t.Errorf("Date mismatch. got=%q, want=%q (Is it converted to time.Time format accidentally?)", actualDate, expectedDate)
+	}
+
+	// RFC3339 形式 (2026-01-07T00:00:00Z など) になっていないことを確認
+	if strings.Contains(actualDate, "T") || strings.Contains(actualDate, ":") {
+		t.Errorf("Date contains time information: %q", actualDate)
+	}
+}
