@@ -38,27 +38,43 @@ type SimilarEntry struct {
 const (
 	// MinValidTermsForSimilarity is the minimum number of valid terms (tfidf_n > 0)
 	// required to perform similarity calculation.
-	// In the character bigram method, an entry with fewer than 20 valid terms 
+	// In the character bigram method, an entry with fewer than 20 valid terms
 	// is likely too short to have a meaningful topic (e.g., "2009年12月12日撮影").
 	// 20 bigrams roughly correspond to 20-30 characters of unique content.
 	MinValidTermsForSimilarity = 20
 )
 
-// CalculateSimilarEntries は指定されたエントリ ID 群の類似エントリを計算
+// CalculateSimilarEntry は指定された単一エントリの類似エントリを計算
+func (s *SimilarityCalculator) CalculateSimilarEntry(ctx context.Context, entryID int64) error {
+	return s.CalculateSimilarEntries(ctx, []int64{entryID})
+}
+
+// CalculateSimilarEntries は複数のエントリの類似エントリを一括で計算
 func (s *SimilarityCalculator) CalculateSimilarEntries(ctx context.Context, entryIDs []int64) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
 	for _, entryID := range entryIDs {
-		if err := s.calculateForEntry(ctx, entryID); err != nil {
-			return fmt.Errorf("failed to calculate similar entries for entry %d: %w", entryID, err)
+		if err := s.calculateForEntryTx(ctx, tx, entryID); err != nil {
+			return fmt.Errorf("failed to calculate for entry %d: %w", entryID, err)
 		}
 	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
 	return nil
 }
 
-// calculateForEntry は単一エントリの類似エントリを計算
-func (s *SimilarityCalculator) calculateForEntry(ctx context.Context, entryID int64) error {
+// calculateForEntryTx はトランザクション内で単一エントリの類似エントリを計算
+func (s *SimilarityCalculator) calculateForEntryTx(ctx context.Context, tx *sql.Tx, entryID int64) error {
 	// エントリが十分な情報（tfidf_n > 0 のターム）を持っているか確認
 	var validTermCount int
-	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM postings WHERE entry_id = ? AND tfidf_n > 0`, entryID).Scan(&validTermCount)
+	err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM postings WHERE entry_id = ? AND tfidf_n > 0`, entryID).Scan(&validTermCount)
 	if err != nil {
 		return fmt.Errorf("failed to check valid term count: %w", err)
 	}
@@ -66,19 +82,13 @@ func (s *SimilarityCalculator) calculateForEntry(ctx context.Context, entryID in
 	if validTermCount < s.MinValidTerms {
 		// 有意義な類似性を見つけるための情報が不足。
 		// 既存の関連エントリを削除して終了。
-		_, err = s.db.ExecContext(ctx, `DELETE FROM related_entries WHERE entry_id = ?`, entryID)
+		_, err = tx.ExecContext(ctx, `DELETE FROM related_entries WHERE entry_id = ?`, entryID)
 		if err != nil {
 			return fmt.Errorf("failed to clear related entries for short entry: %w", err)
 		}
 		log.Printf("Skipping similarity calculation for short entry %d (valid terms: %d)", entryID, validTermCount)
 		return nil
 	}
-
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
 
 	// 一時テーブル similar_candidate を作成
 	// 対象エントリと少なくとも 3 つのタームを共有する候補エントリを抽出
@@ -172,10 +182,5 @@ func (s *SimilarityCalculator) calculateForEntry(ctx context.Context, entryID in
 		}
 	}
 
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	log.Printf("Calculated %d similar entries for entry %d", len(scores), entryID)
 	return nil
 }

@@ -57,6 +57,13 @@ import (
 	"github.com/cho45/hanrangon/model"
 )
 
+// UpdateEntry は TF-IDF 更新用のエントリデータ
+type UpdateEntry struct {
+	ID    int64
+	Title string
+	Body  string
+}
+
 // Calculator handles TF-IDF calculations
 type Calculator struct {
 	tfidfDB            *sql.DB
@@ -76,10 +83,6 @@ func NewCalculator(tfidfDB *sql.DB, tfidfQueries *model.Queries, dataDB *sql.DB,
 		DFMaxThresholdRate: 0.1, // Default to 10%
 	}, nil
 }
-
-
-
-
 
 // ExtractTerms はタイトルと本文からタームを抽出
 // HTMLタグの除去、CJKテキストに対する文字 2-gram の生成、英数字単語の保持を行う
@@ -142,108 +145,223 @@ func (c *Calculator) removeHTMLTags(text string) string {
 	return re.ReplaceAllString(text, "")
 }
 
-// UpdateTFIDF は指定されたエントリの TF-IDF データを更新
+// UpdateTFIDF は指定された単一エントリの TF-IDF データを更新
 func (c *Calculator) UpdateTFIDF(ctx context.Context, entryID int64, title, body string) error {
-	// 新しいコンテンツからタームを抽出
-	newTerms := c.ExtractTerms(title, body)
+	return c.UpdateTFIDFs(ctx, []UpdateEntry{{ID: entryID, Title: title, Body: body}})
+}
 
+// UpdateTFIDFs は複数のエントリの TF-IDF データを一括で更新
+func (c *Calculator) UpdateTFIDFs(ctx context.Context, entries []UpdateEntry) error {
 	tx, err := c.tfidfDB.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	qtx := c.tfidfQueries.WithTx(tx)
+	// 1. 旧タームの DF カウントを一括減算
+	entryIDs := make([]interface{}, len(entries))
+	placeholders := make([]string, len(entries))
+	for i, e := range entries {
+		entryIDs[i] = e.ID
+		placeholders[i] = "?"
+	}
+	inClause := strings.Join(placeholders, ",")
 
-	// 1. 旧タームの DF カウントを減算
-	// DF=1 のタームは postings テーブルに保存されないため、
-	// 以前にこのエントリに関連付けられていたタームを特定して DF を減らす必要がある。
-	
-	// a. postings テーブルにあるターム (DF >= 2)
-	oldTermIDs, err := qtx.GetTermIDsByEntryID(ctx, entryID)
+	// 減算対象の全ターム ID を収集
+	// (postings にあるもの + first_entry_id が対象記事であるもの)
+	var targetTermIDs []int64
+
+	// a. postings から取得
+	rows, err := tx.QueryContext(ctx, fmt.Sprintf(`
+		SELECT DISTINCT term_id FROM postings WHERE entry_id IN (%s)
+	`, inClause), entryIDs...)
 	if err != nil {
-		return fmt.Errorf("failed to get old term ids: %w", err)
+		return fmt.Errorf("failed to query old term ids from postings: %w", err)
 	}
-	termIDMap := make(map[int64]bool)
-	for _, tid := range oldTermIDs {
-		termIDMap[tid] = true
+	for rows.Next() {
+		var tid int64
+		if err := rows.Scan(&tid); err != nil {
+			rows.Close()
+			return fmt.Errorf("failed to scan term id: %w", err)
+		}
+		targetTermIDs = append(targetTermIDs, tid)
 	}
+	rows.Close()
 
-	// b. このエントリが最初の出現（first_entry_id）だったターム（DF=1 で postings にない可能性がある）
-	firstTerms, err := qtx.GetTermsByFirstEntryID(ctx, sql.NullInt64{Int64: entryID, Valid: true})
+	// b. first_entry_id から取得
+	rows, err = tx.QueryContext(ctx, fmt.Sprintf(`
+		SELECT id FROM terms WHERE first_entry_id IN (%s)
+	`, inClause), entryIDs...)
 	if err != nil {
-		return fmt.Errorf("failed to get first terms: %w", err)
+		return fmt.Errorf("failed to query old term ids from terms table: %w", err)
 	}
-	for _, t := range firstTerms {
-		termIDMap[t.ID] = true
-	}
-
-	// すべて減算
-	for tid := range termIDMap {
-		if err := qtx.DecrementTermDFCount(ctx, tid); err != nil {
-			return fmt.Errorf("failed to decrement term df count: %w", err)
+	for rows.Next() {
+		var tid int64
+		if err := rows.Scan(&tid); err != nil {
+			rows.Close()
+			return fmt.Errorf("failed to scan term id: %w", err)
 		}
+		targetTermIDs = append(targetTermIDs, tid)
 	}
+	rows.Close()
 
-	// 古いポスティングを物理削除
-	if err := qtx.DeletePostingsByEntryID(ctx, entryID); err != nil {
-		return fmt.Errorf("failed to delete existing tfidf data: %w", err)
-	}
-
-	// 2. ターム統計を更新し、昇格するタームを特定
-	// entryID -> DF=1 から DF=2 に昇格したタームのリスト
-	promotedTerms := make(map[int64][]model.Term)
-	for term, count := range newTerms {
-		t, err := qtx.UpsertTerm(ctx, model.UpsertTermParams{
-			Term:         term,
-			FirstEntryID: sql.NullInt64{Int64: entryID, Valid: true},
-		})
-		if err != nil {
-			return fmt.Errorf("failed to upsert term %q: %w", term, err)
+	// 重複を排除して一括減算
+	if len(targetTermIDs) > 0 {
+		termIDMap := make(map[int64]bool)
+		uniqueTermIDs := make([]interface{}, 0)
+		for _, tid := range targetTermIDs {
+			if !termIDMap[tid] {
+				termIDMap[tid] = true
+				uniqueTermIDs = append(uniqueTermIDs, tid)
+			}
 		}
 
-		if t.DfCount == 2 && t.FirstEntryID.Valid && t.FirstEntryID.Int64 != entryID {
-			// このタームは DF=1 から DF=2 に昇格。
-			// 最初に出現した過去エントリに対してもポスティングを追加する必要がある。
-			oldEID := t.FirstEntryID.Int64
-			promotedTerms[oldEID] = append(promotedTerms[oldEID], t)
-		}
+		// 500件ずつ減算
+		for i := 0; i < len(uniqueTermIDs); i += 500 {
+			end := i + 500
+			if end > len(uniqueTermIDs) {
+				end = len(uniqueTermIDs)
+			}
+			chunk := uniqueTermIDs[i:end]
+			chunkPlaceholders := make([]string, len(chunk))
+			for j := range chunk {
+				chunkPlaceholders[j] = "?"
+			}
 
-		// DF >= 2 の場合のみポスティングを挿入（物理足切り）
-		if t.DfCount >= 2 {
-			err = qtx.InsertPosting(ctx, model.InsertPostingParams{
-				EntryID:   entryID,
-				TermID:    t.ID,
-				TermCount: int64(count),
-			})
+			_, err = tx.ExecContext(ctx, fmt.Sprintf(`
+				UPDATE terms SET df_count = df_count - 1 
+				WHERE id IN (%s)
+			`, strings.Join(chunkPlaceholders, ",")), chunk...)
 			if err != nil {
-				return fmt.Errorf("failed to insert tfidf term: %w", err)
+				return fmt.Errorf("failed to bulk decrement df_count: %w", err)
 			}
 		}
 	}
 
-	// 3. 過去のエントリに対して昇格したタームをインデックスに追加
-	for oldEID, terms := range promotedTerms {
+	// c. 古いポスティングを一括削除
+	_, err = tx.ExecContext(ctx, fmt.Sprintf(`
+		DELETE FROM postings WHERE entry_id IN (%s)
+	`, inClause), entryIDs...)
+	if err != nil {
+		return fmt.Errorf("failed to bulk delete postings: %w", err)
+	}
+
+	// 2. ターム統計の更新と新規ポスティングの作成
+	inBatch := make(map[int64]bool)
+	for _, e := range entries {
+		inBatch[e.ID] = true
+	}
+
+	allPromotedTerms := make(map[int64][]model.Term)
+
+	for _, e := range entries {
+		newTerms := c.ExtractTerms(e.Title, e.Body)
+		if len(newTerms) == 0 {
+			continue
+		}
+
+		// タームのバルク UPSERT
+		// SQLite の変数の上限（通常 999 または 32766）を考慮し、1 記事単位で処理
+		termList := make([]string, 0, len(newTerms))
+		for term := range newTerms {
+			termList = append(termList, term)
+		}
+
+		// INSERT ... RETURNING を使って ID と最新の DF を取得
+		upsertSQL := `
+			INSERT INTO terms (term, df_count, first_entry_id) VALUES %s
+			ON CONFLICT(term) DO UPDATE SET
+				df_count = terms.df_count + 1,
+				first_entry_id = CASE WHEN terms.df_count <= 0 THEN excluded.first_entry_id ELSE terms.first_entry_id END
+			RETURNING id, term, df_count, first_entry_id`
+
+		// 1 クエリあたりのターム数を制限して実行（念のため 400 タームずつ）
+		const batchSize = 400
+		for i := 0; i < len(termList); i += batchSize {
+			end := i + batchSize
+			if end > len(termList) {
+				end = len(termList)
+			}
+			currentBatch := termList[i:end]
+
+			valueStrings := make([]string, 0, len(currentBatch))
+			valueArgs := make([]interface{}, 0, len(currentBatch)*2)
+			for _, term := range currentBatch {
+				valueStrings = append(valueStrings, "(?, 1, ?)")
+				valueArgs = append(valueArgs, term, e.ID)
+			}
+
+			rows, err := tx.QueryContext(ctx, fmt.Sprintf(upsertSQL, strings.Join(valueStrings, ",")), valueArgs...)
+			if err != nil {
+				return fmt.Errorf("failed to bulk upsert terms for entry %d: %w", e.ID, err)
+			}
+
+			var postingArgs []interface{}
+			var postingPlaceholders []string
+
+			for rows.Next() {
+				var t model.Term
+				if err := rows.Scan(&t.ID, &t.Term, &t.DfCount, &t.FirstEntryID); err != nil {
+					rows.Close()
+					return fmt.Errorf("failed to scan term after bulk upsert: %w", err)
+				}
+
+				// 昇格チェック
+				if t.DfCount == 2 && t.FirstEntryID.Valid && !inBatch[t.FirstEntryID.Int64] {
+					oldEID := t.FirstEntryID.Int64
+					allPromotedTerms[oldEID] = append(allPromotedTerms[oldEID], t)
+				}
+
+				// ポスティング候補 (DF >= 2)
+				if t.DfCount >= 2 {
+					count := newTerms[t.Term]
+					postingPlaceholders = append(postingPlaceholders, "(?, ?, ?, 0.0, 0.0)")
+					postingArgs = append(postingArgs, e.ID, t.ID, count)
+				}
+			}
+			rows.Close()
+
+			// ポスティングの一括挿入
+			if len(postingArgs) > 0 {
+				insertPostingSQL := fmt.Sprintf(`
+					INSERT INTO postings (entry_id, term_id, term_count, tfidf, tfidf_n)
+					VALUES %s
+					ON CONFLICT(entry_id, term_id) DO UPDATE SET term_count = excluded.term_count`,
+					strings.Join(postingPlaceholders, ","))
+				_, err = tx.ExecContext(ctx, insertPostingSQL, postingArgs...)
+				if err != nil {
+					return fmt.Errorf("failed to bulk insert postings for entry %d: %w", e.ID, err)
+				}
+			}
+		}
+	}
+
+	// 3. 過去のエントリに対して昇格したタームをインデックスに追加（ここもバルク化可能だが頻度が低いため現状維持）
+	for oldEID, terms := range allPromotedTerms {
 		entry, err := c.dataQueries.GetEntryById(ctx, oldEID)
 		if err != nil {
-			// エントリが見つからない場合はスキップ（通常は起こらない）
 			log.Printf("Warning: promoted entry %d not found: %v", oldEID, err)
 			continue
 		}
 
 		oldEntryTerms := c.ExtractTerms(entry.Title, entry.Body)
+		var postingArgs []interface{}
+		var postingPlaceholders []string
 		for _, t := range terms {
-			count, ok := oldEntryTerms[t.Term]
-			if !ok {
-				continue // 起こり得ないはず
+			if count, ok := oldEntryTerms[t.Term]; ok {
+				postingPlaceholders = append(postingPlaceholders, "(?, ?, ?, 0.0, 0.0)")
+				postingArgs = append(postingArgs, oldEID, t.ID, count)
 			}
-			err = qtx.InsertPosting(ctx, model.InsertPostingParams{
-				EntryID:   oldEID,
-				TermID:    t.ID,
-				TermCount: int64(count),
-			})
+		}
+		if len(postingArgs) > 0 {
+			insertPostingSQL := fmt.Sprintf(`
+				INSERT INTO postings (entry_id, term_id, term_count, tfidf, tfidf_n)
+				VALUES %s
+				ON CONFLICT(entry_id, term_id) DO UPDATE SET term_count = excluded.term_count`,
+				strings.Join(postingPlaceholders, ","))
+			_, err = tx.ExecContext(ctx, insertPostingSQL, postingArgs...)
 			if err != nil {
-				return fmt.Errorf("failed to insert promoted term for entry %d: %w", oldEID, err)
+				return fmt.Errorf("failed to insert promoted terms for entry %d: %w", oldEID, err)
 			}
 		}
 	}
@@ -252,7 +370,6 @@ func (c *Calculator) UpdateTFIDF(ctx context.Context, entryID int64, title, body
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	log.Printf("Updated TF-IDF for entry %d: %d terms extracted", entryID, len(newTerms))
 	return nil
 }
 

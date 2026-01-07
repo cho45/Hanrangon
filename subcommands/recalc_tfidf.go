@@ -5,8 +5,11 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
+	"runtime/pprof"
 
 	"github.com/cho45/hanrangon/app"
+	"github.com/cho45/hanrangon/tfidf"
 )
 
 func RecalcTFIDF(ctx context.Context, application app.App, args []string) error {
@@ -14,7 +17,20 @@ func RecalcTFIDF(ctx context.Context, application app.App, args []string) error 
 	force := fs.Bool("force", false, "force execution of recalculation")
 	dryRun := fs.Bool("dry-run", false, "show what would be done without making changes")
 	similarityOnly := fs.Bool("similarity-only", false, "run only similarity calculation phase")
+	cpuprofile := fs.String("cpuprofile", "", "write cpu profile to file")
 	fs.Parse(args)
+
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			return fmt.Errorf("could not create CPU profile: %w", err)
+		}
+		defer f.Close()
+		if err := pprof.StartCPUProfile(f); err != nil {
+			return fmt.Errorf("could not start CPU profile: %w", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
 
 	if !*force && !*dryRun {
 		fmt.Println("Warning: This operation will recalculate TF-IDF scores for all entries and may take some time.")
@@ -48,6 +64,9 @@ func RecalcTFIDF(ctx context.Context, application app.App, args []string) error 
 		}
 		defer rows.Close()
 
+		const chunkSize = 100
+		var chunk []tfidf.UpdateEntry
+
 		count := 0
 		for rows.Next() {
 			count++
@@ -58,16 +77,29 @@ func RecalcTFIDF(ctx context.Context, application app.App, args []string) error 
 				continue
 			}
 
-			log.Printf("  [%d/%d] Processing id:%d %s", count, total, id, title)
-
 			if !*dryRun {
-				if err := application.Calculator().UpdateTFIDF(ctx, id, title, body); err != nil {
-					log.Printf("  Error updating TF-IDF for entry %d: %v", id, err)
-					continue
+				chunk = append(chunk, tfidf.UpdateEntry{ID: id, Title: title, Body: body})
+				if len(chunk) >= chunkSize {
+					log.Printf("  [%d/%d] Processing chunk of %d entries (last id:%d %s)", count, total, len(chunk), id, title)
+					if err := application.Calculator().UpdateTFIDFs(ctx, chunk); err != nil {
+						log.Printf("  Error updating TF-IDFs for chunk: %v", err)
+					}
+					chunk = nil
 				}
+			} else {
+				log.Printf("  [%d/%d] (dry-run) Processing id:%d %s", count, total, id, title)
 			}
 			entryIDs = append(entryIDs, id)
 		}
+
+		// Process remaining chunk
+		if len(chunk) > 0 {
+			log.Printf("  [%d/%d] Processing remaining chunk of %d entries", count, total, len(chunk))
+			if err := application.Calculator().UpdateTFIDFs(ctx, chunk); err != nil {
+				log.Printf("  Error updating TF-IDFs for remaining chunk: %v", err)
+			}
+		}
+
 		if err := rows.Err(); err != nil {
 			return fmt.Errorf("error during row iteration: %w", err)
 		}
@@ -106,15 +138,20 @@ func RecalcTFIDF(ctx context.Context, application app.App, args []string) error 
 
 	// Phase 3: Similarity calculation
 	totalToCalc := len(entryIDs)
-	log.Printf("Phase 3: Calculating similar entries for %d processed entries...", totalToCalc)
-	for i, id := range entryIDs {
-		log.Printf("  [%d/%d] Calculating similarity for id:%d", i+1, totalToCalc, id)
-		if *dryRun {
-			// skip
-		} else {
-			if err := application.SimilarityCalculator().CalculateSimilarEntries(ctx, []int64{id}); err != nil {
-				log.Printf("  Error calculating similar entries for entry %d: %v", id, err)
-				continue
+	log.Printf("Phase 3: Calculating similar entries for %d processed entries in chunks...", totalToCalc)
+
+	const simChunkSize = 100
+	for i := 0; i < totalToCalc; i += simChunkSize {
+		end := i + simChunkSize
+		if end > totalToCalc {
+			end = totalToCalc
+		}
+		chunk := entryIDs[i:end]
+		log.Printf("  [%d/%d] Calculating similarity for chunk of %d entries (last id:%d)", end, totalToCalc, len(chunk), chunk[len(chunk)-1])
+
+		if !*dryRun {
+			if err := application.SimilarityCalculator().CalculateSimilarEntries(ctx, chunk); err != nil {
+				log.Printf("  Error calculating similar entries for chunk: %v", err)
 			}
 		}
 	}

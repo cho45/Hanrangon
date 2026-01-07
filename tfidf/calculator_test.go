@@ -247,7 +247,7 @@ func TestTFIDFThresholding(t *testing.T) {
 	ctx := context.Background()
 
 	// common body that appears in all entries (> 80%)
-	common := "これは共通の文章です。" 
+	common := "これは共通の文章です。"
 	// semi-common body that appears in some entries (2/5 = 40%, should stay)
 	semi := "特定の話題"
 	entries := []struct {
@@ -347,7 +347,7 @@ func TestExtractTermsEdgeCases(t *testing.T) {
 			title: "Go",
 			body:  "Go",
 			want:  []string{"go"}, // Alphanumeric word "go" is kept
-			avoid: []string{},    // "go" is also a valid bigram, so it shouldn't be avoided
+			avoid: []string{},     // "go" is also a valid bigram, so it shouldn't be avoided
 		},
 	}
 
@@ -382,8 +382,8 @@ func TestPromotionEdgeCases(t *testing.T) {
 	_ = calc.UpdateTFIDF(ctx, 1, "T1", "大阪") // DF=0 for "東京"
 
 	// Entry 2 adds "東京". Since DF was 0, it should become DF=1 and Entry 2 becomes the new first_entry_id.
-	_ = calc.UpdateTFIDF(ctx, 2, "T2", "東京") 
-	
+	_ = calc.UpdateTFIDF(ctx, 2, "T2", "東京")
+
 	var finalDF int
 	var firstID sql.NullInt64
 	_ = tfidfDB.QueryRow("SELECT df_count, first_entry_id FROM terms WHERE term = '東京'").Scan(&finalDF, &firstID)
@@ -395,9 +395,9 @@ func TestPromotionEdgeCases(t *testing.T) {
 	// 2. Promotion with multiple terms
 	_, _ = dataDB.Exec("INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at, status) VALUES (3, 'T3', '京都 奈良', '', 'p3', 'm', '2026', 0, 0, 'public')")
 	_ = calc.UpdateTFIDF(ctx, 3, "T3", "京都 奈良") // DF=1 for both
-	
+
 	_ = calc.UpdateTFIDF(ctx, 4, "T4", "京都 奈良") // Promotion for both
-	
+
 	var count int
 	_ = tfidfDB.QueryRow("SELECT COUNT(*) FROM postings WHERE entry_id = 3").Scan(&count)
 	if count < 2 {
