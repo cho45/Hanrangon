@@ -1,23 +1,27 @@
 BINARY_NAME=hanrangon
 GO_TAGS=sqlite_math_functions
 
-.PHONY: all build test generate fmt clean postprocess-test
+.PHONY: all build test generate fmt clean postprocess-test setup watch
 
 all: build
+
+setup:
+	go install github.com/air-verse/air@latest
+	go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+	go install golang.org/x/tools/cmd/goimports@latest
 
 build-fe:
 	cd admin-frontend && npm install && npm run build
 
-build: fmt build-fe
+build-be:
 	go build -tags "$(GO_TAGS)" -o $(BINARY_NAME) main.go
 
-run:
-	go run -tags "$(GO_TAGS)" .
+build: fmt build-fe build-be
 
-run-with-fe-dev:
+watch:
 	trap 'kill 0' EXIT; \
 	(cd admin-frontend && npm run dev) & \
-	HANRANGON_FE_DEV=true go run -tags "$(GO_TAGS)" .
+	air || go run github.com/air-verse/air@latest
 
 test:
 	go test -tags "$(GO_TAGS)" ./...
