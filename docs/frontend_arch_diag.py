@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
+plt.rcParams['font.family'] = 'Noto Sans JP'
+
 def draw_frontend_arch():
     fig, ax = plt.subplots(figsize=(12, 8))
     ax.set_xlim(0, 12)

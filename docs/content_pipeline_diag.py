@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
+plt.rcParams['font.family'] = 'Noto Sans JP'
+
 def draw_pipeline_final():
     fig, ax = plt.subplots(figsize=(16, 10))
     ax.set_xlim(0, 16)
