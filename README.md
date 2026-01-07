@@ -10,7 +10,7 @@ Perl 版 Nogag (氾濫原) の Go (Golang) によるリライトプロジェク�
 - **高速・省メモリ:** Go によるネイティブ実装。
 - **SQLite 活用:** Data, Images, TF-IDF, Worker の 4 つに分離。記事本体 (Data) のバックアップを最小限に抑えつつ、再生成可能なインデックスやメタデータによるファイル肥大化の影響を隔離。
 - **マルチフォーマット:** はてな記法、tDiary 記法、Markdown、HTML に対応。
-- **関連記事表示:** `go-japanese-segmenter` (TinySegmenter) による分かち書きと SQL を活用した高速な TF-IDF 計算。
+- **関連記事表示:** 文字 2-gram (Bigram) 方式と SQL を活用した高速な TF-IDF 計算。辞書不要でメンテナンス性の高い類似度計算を実現。
 - **ポストプロセス:** Node.js による記事保存時の事前整形。MathJax や Highlight.js などの成熟した JS エコシステムを活用しつつ、サーバー側で静的な HTML へ変換しておくことで、閲覧時のクライアント負荷を排除しコンテンツの最速表示を実現。
 - **内蔵ジョブキュー:** SQLite ベースの非同期実行システム。
 外部ミドルウェア（Redis 等）を不要にし、単一バイナリと DB ファイルのみで完結する運用性を追求。
@@ -37,23 +37,21 @@ Perl 版 Nogag (氾濫原) の Go (Golang) によるリライトプロジェク�
 - Node.js (記事保存時のポストプロセスおよび管理画面のビルドに使用)
 - `sqlc` CLI (DB コード生成に使用)
 - `goimports` (コードのフォーマットに使用)
+- `air` (開発時のホットリロードに使用)
 
 ## Setup & Run
 
 ### 1. 依存ツールのインストール
 
 ```bash
-# sqlc (DB コード生成)
-go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+make setup
+```
 
-# goimports (コードフォーマット)
-go install golang.org/x/tools/cmd/goimports@latest
+### 2. フロントエンドとポストプロセスのビルド・セットアップ
 
+```bash
 # Admin Frontend (Vite/Svelte 5)
-cd admin-frontend
-npm install
-npm run build
-cd ..
+make build-fe
 
 # Node.js 依存関係 (ポストプロセス)
 cd postprocess
@@ -61,13 +59,13 @@ npm install
 cd ..
 ```
 
-### 2. コード生成
+### 3. コード生成
 
 ```bash
 make generate
 ```
 
-### 3. 設定
+### 4. 設定
 
 `config.toml.sample` を `config.toml` にコピーして編集。
 
@@ -75,10 +73,14 @@ make generate
 cp config.toml.sample config.toml
 ```
 
-### 4. サーバーの起動
+### 5. サーバーの起動
 
 ```bash
+# ビルドして起動
 make run
+
+# または、開発用 (ホットリロード有効)
+make watch
 ```
 
 デフォルトで http://localhost:5555 で動作。
@@ -111,6 +113,7 @@ Svelte による SPA 管理画面。
     - **システム情報 (Info):** アプリケーションのハッシュ、稼働時間、メモリ使用量、構成設定の確認。
 - **開発とビルド:**
     - `admin-frontend/` ディレクトリで `npm run dev` を実行することで HMR 有効な開発が可能。
+    - `make watch` を使用すると、フロントエンドの開発サーバーと Go のホットリロード (air) を同時に起動可能。
     - `npm run build` により、ビルド成果物が `static/admin/` に出力され、Go サーバー経由で配信。
 
 ## Project Structure
@@ -123,7 +126,7 @@ Svelte による SPA 管理画面。
 - `formatter/`: 各種記法（Hatena, tDiary 等）のパーサ。
 - `jobqueue/`: ジョブキューの基盤実装（Worker 監視ループ等）。
 - `jobs/`: 具体的なジョブハンドラーの実装。
-- `tfidf/`: TF-IDF 計算と形態素解析（TinySegmenter）。
+- `tfidf/`: TF-IDF 計算と 2-gram 抽出ロジック。
 - `postprocess/`: Node.js による HTML ポストプロセススクリプト。
 - `static/`: CSS, JS, 画像などの静的アセット。
 - `main.go`: エントリーポイント。

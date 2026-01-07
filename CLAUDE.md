@@ -71,11 +71,14 @@ goimports -w path/to/file.go
 
 ```
 .
-├── main.go              # エントリポイント、サーバー設定
-├── app.go               # App構造体、認証ミドルウェア
-├── config.go            # 設定読み込み (TOML + 環境変数)
-├── handler_public.go    # 公開ページハンドラ
-├── handler_admin.go     # 管理画面ハンドラ
+├── main.go              # エントリポイント
+├── app/                 # アプリケーションのコアロジック
+│   ├── app.go           # App構造体、認証ミドルウェア
+│   ├── config.go        # 設定読み込み (TOML + 環境変数)
+│   ├── handler_public.go # 公開ページハンドラ
+│   ├── handler_admin.go  # 管理画面ハンドラ
+│   ├── server.go        # Echoサーバー設定
+│   └── template.go      # テンプレート管理
 ├── model/               # sqlc生成のDBアクセスコード (編集禁止)
 ├── view/                # html/template テンプレート
 │   ├── *.html          # テンプレートファイル
