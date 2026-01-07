@@ -611,6 +611,7 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 	}
 
 	data.Description = view.Summary(entry.FormattedBody, 100)
+	data.OGType = "article"
 	if img := view.ExtractFirstImage(entry.FormattedBody); img != "" {
 		if strings.HasPrefix(img, "http") {
 			data.ImageURL = img

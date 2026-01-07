@@ -13,6 +13,7 @@ type LayoutData struct {
 	CanonicalURL string
 	Description  string
 	ImageURL     string
+	OGType       string
 	IsAuth       bool
 }
 
