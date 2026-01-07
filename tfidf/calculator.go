@@ -71,16 +71,21 @@ type Calculator struct {
 	dataDB             *sql.DB
 	dataQueries        *model.Queries
 	DFMaxThresholdRate float64
+
+	alphanumericPattern *regexp.Regexp
+	htmlTagPattern       *regexp.Regexp
 }
 
 // NewCalculator creates a new Calculator
 func NewCalculator(tfidfDB *sql.DB, tfidfQueries *model.Queries, dataDB *sql.DB, dataQueries *model.Queries) (*Calculator, error) {
 	return &Calculator{
-		tfidfDB:            tfidfDB,
-		tfidfQueries:       tfidfQueries,
-		dataDB:             dataDB,
-		dataQueries:        dataQueries,
-		DFMaxThresholdRate: 0.1, // Default to 10%
+		tfidfDB:             tfidfDB,
+		tfidfQueries:        tfidfQueries,
+		dataDB:              dataDB,
+		dataQueries:         dataQueries,
+		DFMaxThresholdRate:  0.1, // Default to 10%
+		alphanumericPattern: regexp.MustCompile(`[a-z0-9]{2,}`),
+		htmlTagPattern:       regexp.MustCompile(`<[^>]*>`),
 	}, nil
 }
 
@@ -93,22 +98,27 @@ func (c *Calculator) ExtractTerms(title, body string) map[string]int {
 	text := title + " " + body
 
 	// HTMLタグを除去
-	text = c.removeHTMLTags(text)
+	if c.htmlTagPattern != nil {
+		text = c.htmlTagPattern.ReplaceAllString(text, "")
+	}
 
-	// テキストの正規化: 小文字化と基本的な空白の正規化
+	// テキストの正規化: 小文字化
 	text = strings.ToLower(text)
 
 	// 英数字単語（英単語、数字）をそのまま抽出
-	alphanumericPattern := regexp.MustCompile(`[a-z0-9]{2,}`)
-	matches := alphanumericPattern.FindAllString(text, -1)
-	for _, match := range matches {
-		terms[match]++
+	if c.alphanumericPattern != nil {
+		matches := c.alphanumericPattern.FindAllString(text, -1)
+		for _, match := range matches {
+			terms[match]++
+		}
 	}
 
 	// 全テキストに対して文字 2-gram を生成
-	// 日本語や混在テキストに対応。
-	// ここでは連続するすべての文字ペアを取得。
 	runes := []rune(text)
+	if len(runes) < 2 {
+		return terms
+	}
+
 	for i := 0; i < len(runes)-1; i++ {
 		r1 := runes[i]
 		r2 := runes[i+1]
@@ -118,8 +128,7 @@ func (c *Calculator) ExtractTerms(title, body string) map[string]int {
 			continue
 		}
 
-		bigram := string([]rune{r1, r2})
-		terms[bigram]++
+		terms[string(runes[i:i+2])]++
 	}
 
 	return terms
@@ -127,14 +136,17 @@ func (c *Calculator) ExtractTerms(title, body string) map[string]int {
 
 // isSkipRune はルーンが 2-gram の一部としてスキップされるべき場合に true を返す
 func (c *Calculator) isSkipRune(r rune) bool {
-	// 空白、全角記号、制御文字をスキップ
-	if strings.ContainsRune(" \t\n\r\u3000,.;:!?()[]{}<>\"'「」『』、。！？（）［］｛｝", r) {
+	if r <= 127 {
+		// ASCII 制御文字、空白、記号をスキップ
+		return r <= 32 || (r >= 33 && r <= 47) || (r >= 58 && r <= 64) || (r >= 91 && r <= 96) || (r >= 123 && r <= 126)
+	}
+
+	// 全角空白や主要な日本語記号をスキップ
+	switch r {
+	case '\u3000', '、', '。', '！', '？', '（', '）', '［', '］', '｛', '｝', '「', '」', '『', '』', '：', '；', '・':
 		return true
 	}
-	// 基本的な ASCII 記号もスキップ（記号を跨いだ 2-gram はノイズになるため、境界として扱う）
-	if (r >= 32 && r <= 47) || (r >= 58 && r <= 64) || (r >= 91 && r <= 96) || (r >= 123 && r <= 126) {
-		return true
-	}
+
 	return false
 }
 
