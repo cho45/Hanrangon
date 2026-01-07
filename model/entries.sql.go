@@ -403,7 +403,7 @@ SELECT
 FROM entries
 WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP)
 GROUP BY strftime('%Y-%m', date)
-ORDER BY date DESC
+ORDER BY year DESC, month ASC
 `
 
 type ListArchiveMonthsRow struct {

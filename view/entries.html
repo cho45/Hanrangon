@@ -27,7 +27,7 @@
 	{{end}}
 </div>
 
-<div class="pager">
+<nav class="pager" aria-label="ページ送り">
 	{{if .IsDetail}}
 		{{/* Entry detail navigation */}}
 		{{if .Older}}
@@ -48,7 +48,7 @@
 			<a href="{{.OlderPage}}" rel="next">&#x25BC; もっと古いエントリ</a>
 		{{end}}
 	{{end}}
-</div>
+</nav>
 
 {{define "article"}}
 {{$cleanTitle := .Entry.DisplayTitle}}

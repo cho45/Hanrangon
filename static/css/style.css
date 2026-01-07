@@ -663,7 +663,6 @@ ol[itemtype*="BreadcrumbList"] {
 	font-size: 0.7rem;
 	font-weight: bold;
 	color: var(--accent-color);
-	opacity: 0.6;
 	margin-bottom: 0.5rem;
 }
 
@@ -692,7 +691,7 @@ ol[itemtype*="BreadcrumbList"] {
 	margin-top: 4rem;
 }
 
-#archive .year h1 {
+#archive .year h2 {
 	font-size: 1.5rem;
 	border-bottom: 2px solid #1a1a1a;
 	display: inline-block;
@@ -812,6 +811,7 @@ hr {
 #global-footer .author .desc {
 	flex: 1;
 	min-width: 200px;
+	font-style: normal;
 }
 
 #global-footer .author .desc p {
