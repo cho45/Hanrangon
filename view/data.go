@@ -8,9 +8,10 @@ import (
 
 // LayoutData holds data for the layout template
 type LayoutData struct {
-	PageTitle string // ページ固有のタイトル（サイト名は含まない）
-	BaseURL   string
-	IsAuth    bool
+	PageTitle    string // ページ固有のタイトル（サイト名は含まない）
+	BaseURL      string
+	CanonicalURL string
+	IsAuth       bool
 }
 
 // IndexData holds data for both index and entry detail pages

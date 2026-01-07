@@ -100,10 +100,12 @@ func (a *AppImpl) Config() *Config                                   { return a.
 func (a *AppImpl) Templates() *Templates                             { return a.templates }
 
 func (a *AppImpl) newLayoutData(c echo.Context, pageTitle string) view.LayoutData {
+	baseURL := strings.TrimSuffix(a.config.BaseURL, "/")
 	return view.LayoutData{
-		PageTitle: pageTitle,
-		BaseURL:   a.config.BaseURL,
-		IsAuth:    a.IsAuth(c),
+		PageTitle:    pageTitle,
+		BaseURL:      a.config.BaseURL,
+		CanonicalURL: baseURL + c.Request().URL.Path,
+		IsAuth:       a.IsAuth(c),
 	}
 }
 

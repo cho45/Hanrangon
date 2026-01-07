@@ -27,12 +27,12 @@ links = [
 
 	<meta name="referrer" content="unsafe-url"/>
 
-	<meta itemprop="name" content="氾濫原"/>
+	<meta itemprop="name" content="{{if .PageTitle}}{{.PageTitle}} - {{end}}氾濫原"/>
 	<meta itemprop="description" content="写真・文章による、ある普通の人間の人生の記録"/>
 
-	<meta property="og:title" content="氾濫原"/>
+	<meta property="og:title" content="{{if .PageTitle}}{{.PageTitle}} - {{end}}氾濫原"/>
 	<meta property="og:type" content="blog"/>
-	<meta property="og:url" content="{{.BaseURL}}/"/>
+	<meta property="og:url" content="{{.CanonicalURL}}"/>
 	<meta property="og:email" content="cho45@lowreal.net"/>
 	<meta property="fb:admins" content="cho45"/>
 
