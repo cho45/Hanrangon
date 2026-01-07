@@ -49,7 +49,8 @@ func main() {
 
 	// 4. TF-IDF Calculator/Similarity初期化
 	tfidfQueries := model.New(tfidfDB)
-	calc, err := tfidf.NewCalculator(tfidfDB, tfidfQueries)
+	dataQueries := model.New(db)
+	calc, err := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
 	if err != nil {
 		log.Fatalf("failed to create tfidf calculator: %v", err)
 	}

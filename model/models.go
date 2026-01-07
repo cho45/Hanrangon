@@ -82,8 +82,10 @@ type RelatedEntry struct {
 }
 
 type Term struct {
-	ID   int64  `json:"id"`
-	Term string `json:"term"`
+	ID           int64         `json:"id"`
+	Term         string        `json:"term"`
+	DfCount      int64         `json:"df_count"`
+	FirstEntryID sql.NullInt64 `json:"first_entry_id"`
 }
 
 type Trackback struct {

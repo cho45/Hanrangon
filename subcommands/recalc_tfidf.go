@@ -120,6 +120,13 @@ func RecalcTFIDF(ctx context.Context, application app.App, args []string) error 
 	}
 	log.Println("Phase 3 completed.")
 
+	if !*dryRun {
+		log.Println("Final maintenance: Running VACUUM on TF-IDF database...")
+		if _, err := application.TFIDFDB().ExecContext(ctx, "VACUUM"); err != nil {
+			log.Printf("Warning: failed to run VACUUM: %v", err)
+		}
+	}
+
 	if *dryRun {
 		log.Println("Dry-run finished. No changes were made.")
 	} else {

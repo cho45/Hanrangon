@@ -20,6 +20,7 @@ type Querier interface {
 	CreateImage(ctx context.Context, arg CreateImageParams) (int64, error)
 	CreateNgram(ctx context.Context, arg CreateNgramParams) error
 	CreateTrackback(ctx context.Context, arg CreateTrackbackParams) error
+	DecrementTermDFCount(ctx context.Context, id int64) error
 	DeleteImagesByEntryID(ctx context.Context, entryID int64) error
 	DeleteNgramsByEntryID(ctx context.Context, entryID int64) error
 	DeleteNgramsByImageID(ctx context.Context, imageID int64) error
@@ -40,12 +41,13 @@ type Querier interface {
 	GetOlderEntry(ctx context.Context, createdAt time.Time) (GetOlderEntryRow, error)
 	GetOrCreateJobType(ctx context.Context, name string) (JobType, error)
 	GetTFIDFStats(ctx context.Context) (GetTFIDFStatsRow, error)
-	GetTermID(ctx context.Context, term string) (int64, error)
+	GetTermByTerm(ctx context.Context, term string) (Term, error)
+	GetTermIDsByEntryID(ctx context.Context, entryID int64) ([]int64, error)
+	GetTermsByFirstEntryID(ctx context.Context, firstEntryID sql.NullInt64) ([]Term, error)
 	GetTopTermsByDF(ctx context.Context, limit int64) ([]GetTopTermsByDFRow, error)
 	GrabJob(ctx context.Context, arg GrabJobParams) error
 	InsertPosting(ctx context.Context, arg InsertPostingParams) error
 	InsertRelatedEntry(ctx context.Context, arg InsertRelatedEntryParams) error
-	InsertTerm(ctx context.Context, term string) error
 	ListAllEntries(ctx context.Context) ([]ListAllEntriesRow, error)
 	ListAllEntriesForSitemap(ctx context.Context) ([]ListAllEntriesForSitemapRow, error)
 	ListArchiveMonths(ctx context.Context) ([]ListArchiveMonthsRow, error)
@@ -71,6 +73,7 @@ type Querier interface {
 	RecoverStuckJobs(ctx context.Context) error
 	SearchEntriesAdmin(ctx context.Context, arg SearchEntriesAdminParams) ([]SearchEntriesAdminRow, error)
 	UpdateEntry(ctx context.Context, arg UpdateEntryParams) (Entry, error)
+	UpsertTerm(ctx context.Context, arg UpsertTermParams) (Term, error)
 }
 
 var _ Querier = (*Queries)(nil)

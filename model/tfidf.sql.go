@@ -7,7 +7,17 @@ package model
 
 import (
 	"context"
+	"database/sql"
 )
+
+const decrementTermDFCount = `-- name: DecrementTermDFCount :exec
+UPDATE terms SET df_count = df_count - 1 WHERE id = ?
+`
+
+func (q *Queries) DecrementTermDFCount(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, decrementTermDFCount, id)
+	return err
+}
 
 const deletePostingsByEntryID = `-- name: DeletePostingsByEntryID :exec
 DELETE FROM postings WHERE entry_id = ?
@@ -65,25 +75,87 @@ func (q *Queries) GetTFIDFStats(ctx context.Context) (GetTFIDFStatsRow, error) {
 	return i, err
 }
 
-const getTermID = `-- name: GetTermID :one
-SELECT id FROM terms WHERE term = ?
+const getTermByTerm = `-- name: GetTermByTerm :one
+SELECT id, term, df_count, first_entry_id FROM terms WHERE term = ?
 `
 
-func (q *Queries) GetTermID(ctx context.Context, term string) (int64, error) {
-	row := q.db.QueryRowContext(ctx, getTermID, term)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
+func (q *Queries) GetTermByTerm(ctx context.Context, term string) (Term, error) {
+	row := q.db.QueryRowContext(ctx, getTermByTerm, term)
+	var i Term
+	err := row.Scan(
+		&i.ID,
+		&i.Term,
+		&i.DfCount,
+		&i.FirstEntryID,
+	)
+	return i, err
+}
+
+const getTermIDsByEntryID = `-- name: GetTermIDsByEntryID :many
+SELECT term_id FROM postings WHERE entry_id = ?
+`
+
+func (q *Queries) GetTermIDsByEntryID(ctx context.Context, entryID int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, getTermIDsByEntryID, entryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var term_id int64
+		if err := rows.Scan(&term_id); err != nil {
+			return nil, err
+		}
+		items = append(items, term_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTermsByFirstEntryID = `-- name: GetTermsByFirstEntryID :many
+SELECT id, term, df_count, first_entry_id FROM terms WHERE first_entry_id = ?
+`
+
+func (q *Queries) GetTermsByFirstEntryID(ctx context.Context, firstEntryID sql.NullInt64) ([]Term, error) {
+	rows, err := q.db.QueryContext(ctx, getTermsByFirstEntryID, firstEntryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Term
+	for rows.Next() {
+		var i Term
+		if err := rows.Scan(
+			&i.ID,
+			&i.Term,
+			&i.DfCount,
+			&i.FirstEntryID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getTopTermsByDF = `-- name: GetTopTermsByDF :many
 ;
 
-SELECT t.term, count(p.entry_id) as df
-FROM terms t
-JOIN postings p ON t.id = p.term_id
-GROUP BY t.id
-ORDER BY df DESC
+SELECT term, df_count as df
+FROM terms
+ORDER BY df_count DESC
 LIMIT ?
 `
 
@@ -118,6 +190,8 @@ func (q *Queries) GetTopTermsByDF(ctx context.Context, limit int64) ([]GetTopTer
 const insertPosting = `-- name: InsertPosting :exec
 INSERT INTO postings (entry_id, term_id, term_count, tfidf, tfidf_n)
 VALUES (?, ?, ?, 0.0, 0.0)
+ON CONFLICT(entry_id, term_id) DO UPDATE SET
+    term_count = excluded.term_count
 `
 
 type InsertPostingParams struct {
@@ -144,15 +218,6 @@ type InsertRelatedEntryParams struct {
 
 func (q *Queries) InsertRelatedEntry(ctx context.Context, arg InsertRelatedEntryParams) error {
 	_, err := q.db.ExecContext(ctx, insertRelatedEntry, arg.EntryID, arg.RelatedEntryID, arg.Score)
-	return err
-}
-
-const insertTerm = `-- name: InsertTerm :exec
-INSERT OR IGNORE INTO terms (term) VALUES (?)
-`
-
-func (q *Queries) InsertTerm(ctx context.Context, term string) error {
-	_, err := q.db.ExecContext(ctx, insertTerm, term)
 	return err
 }
 
@@ -190,4 +255,30 @@ func (q *Queries) ListRelatedEntries(ctx context.Context, entryID int64) ([]List
 		return nil, err
 	}
 	return items, nil
+}
+
+const upsertTerm = `-- name: UpsertTerm :one
+INSERT INTO terms (term, df_count, first_entry_id)
+VALUES (?, 1, ?)
+ON CONFLICT(term) DO UPDATE SET
+    df_count = terms.df_count + 1,
+    first_entry_id = CASE WHEN terms.df_count <= 0 THEN excluded.first_entry_id ELSE terms.first_entry_id END
+RETURNING id, term, df_count, first_entry_id
+`
+
+type UpsertTermParams struct {
+	Term         string        `json:"term"`
+	FirstEntryID sql.NullInt64 `json:"first_entry_id"`
+}
+
+func (q *Queries) UpsertTerm(ctx context.Context, arg UpsertTermParams) (Term, error) {
+	row := q.db.QueryRowContext(ctx, upsertTerm, arg.Term, arg.FirstEntryID)
+	var i Term
+	err := row.Scan(
+		&i.ID,
+		&i.Term,
+		&i.DfCount,
+		&i.FirstEntryID,
+	)
+	return i, err
 }

@@ -9,28 +9,42 @@ import (
 	"github.com/cho45/hanrangon/model"
 )
 
-// SimilarityCalculator handles similarity calculations between entries
+// SimilarityCalculator はエントリ間の類似度計算を処理
 type SimilarityCalculator struct {
-	db      *sql.DB
-	queries *model.Queries
+	db            *sql.DB
+	queries       *model.Queries
+	MinValidTerms int
 }
 
-// NewSimilarityCalculator creates a new SimilarityCalculator
+// NewSimilarityCalculator は新しい SimilarityCalculator を作成
 func NewSimilarityCalculator(db *sql.DB, queries *model.Queries) *SimilarityCalculator {
 	return &SimilarityCalculator{
 		db:      db,
 		queries: queries,
+		// MinValidTerms は類似度計算を行うために必要な最小の有効ターム数。
+		// 文字 2-gram 方式において、有効なターム（tfidf_n > 0）が 20 個未満のエントリは、
+		// 意味のあるトピックを持たない短い定型文（例: 「2009年12月12日撮影」のみのエントリ）とみなす。
+		// 20 個の 2-gram は実質的に約 20〜30 文字のユニークなテキスト量に相当。
+		MinValidTerms: 20,
 	}
 }
 
-// SimilarEntry represents a similar entry with its score
+// SimilarEntry はスコア付きの類似エントリを表現
 type SimilarEntry struct {
 	EntryID int64
 	Score   float64
 }
 
-// CalculateSimilarEntries calculates similar entries for given entry IDs
-// This faithfully ports the Nogag logic from SimilarEntry.pm (lines 186-254)
+const (
+	// MinValidTermsForSimilarity is the minimum number of valid terms (tfidf_n > 0)
+	// required to perform similarity calculation.
+	// In the character bigram method, an entry with fewer than 20 valid terms 
+	// is likely too short to have a meaningful topic (e.g., "2009年12月12日撮影").
+	// 20 bigrams roughly correspond to 20-30 characters of unique content.
+	MinValidTermsForSimilarity = 20
+)
+
+// CalculateSimilarEntries は指定されたエントリ ID 群の類似エントリを計算
 func (s *SimilarityCalculator) CalculateSimilarEntries(ctx context.Context, entryIDs []int64) error {
 	for _, entryID := range entryIDs {
 		if err := s.calculateForEntry(ctx, entryID); err != nil {
@@ -40,26 +54,44 @@ func (s *SimilarityCalculator) CalculateSimilarEntries(ctx context.Context, entr
 	return nil
 }
 
-// calculateForEntry calculates similar entries for a single entry
+// calculateForEntry は単一エントリの類似エントリを計算
 func (s *SimilarityCalculator) calculateForEntry(ctx context.Context, entryID int64) error {
+	// エントリが十分な情報（tfidf_n > 0 のターム）を持っているか確認
+	var validTermCount int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM postings WHERE entry_id = ? AND tfidf_n > 0`, entryID).Scan(&validTermCount)
+	if err != nil {
+		return fmt.Errorf("failed to check valid term count: %w", err)
+	}
+
+	if validTermCount < s.MinValidTerms {
+		// 有意義な類似性を見つけるための情報が不足。
+		// 既存の関連エントリを削除して終了。
+		_, err = s.db.ExecContext(ctx, `DELETE FROM related_entries WHERE entry_id = ?`, entryID)
+		if err != nil {
+			return fmt.Errorf("failed to clear related entries for short entry: %w", err)
+		}
+		log.Printf("Skipping similarity calculation for short entry %d (valid terms: %d)", entryID, validTermCount)
+		return nil
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	// Drop and create similar_candidate temporary table
-	// This table contains candidate entries that share at least 3 terms with the target entry
+	// 一時テーブル similar_candidate を作成
+	// 対象エントリと少なくとも 3 つのタームを共有する候補エントリを抽出
 	_, err = tx.ExecContext(ctx, `DROP TABLE IF EXISTS similar_candidate`)
 	if err != nil {
 		return fmt.Errorf("failed to drop similar_candidate table: %w", err)
 	}
 
-	// Create candidate table with entries that:
-	// 1. Have entry_id > (target - 1000) to exclude older entries (performance optimization)
-	// 2. Share terms with top 50 terms of target entry
-	// 3. Share at least 3 terms (cnt > 3)
-	// Limited to top 100 candidates
+	// 候補テーブルの作成条件:
+	// 1. entry_id > (target - 1000) : 古すぎるエントリを除外（パフォーマンス最適化）
+	// 2. 対象エントリの上位 50 タームのいずれかを共有
+	// 3. 少なくとも 3 つのタームを共有 (cnt > 3)
+	// 上位 100 件の候補に制限
 	_, err = tx.ExecContext(ctx, `
 		CREATE TEMPORARY TABLE similar_candidate AS
 			SELECT entry_id, COUNT(*) as cnt FROM postings
@@ -79,8 +111,8 @@ func (s *SimilarityCalculator) calculateForEntry(ctx context.Context, entryID in
 		return fmt.Errorf("failed to create similar_candidate table: %w", err)
 	}
 
-	// Calculate cosine similarity scores
-	// For normalized vectors, dot product equals cosine similarity
+	// コサイン類似度スコアを計算
+	// 正規化済みベクトルのため、内積がそのままコサイン類似度になる
 	// SUM(a.tfidf_n * b.tfidf_n) = cosine similarity
 	type scoreResult struct {
 		EntryID int64
@@ -121,13 +153,13 @@ func (s *SimilarityCalculator) calculateForEntry(ctx context.Context, entryID in
 		return fmt.Errorf("error iterating scores: %w", err)
 	}
 
-	// Delete existing related entries
+	// 既存の関連エントリを削除
 	_, err = tx.ExecContext(ctx, `DELETE FROM related_entries WHERE entry_id = ?`, entryID)
 	if err != nil {
 		return fmt.Errorf("failed to delete existing related entries: %w", err)
 	}
 
-	// Insert new related entries
+	// 新しい関連エントリを挿入
 	if len(scores) > 0 {
 		for _, score := range scores {
 			_, err := tx.ExecContext(ctx, `

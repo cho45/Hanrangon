@@ -32,7 +32,7 @@ func TestIndexImagesJob_UniqueConstraintError(t *testing.T) {
 	}
 
 	tfidfQueries := model.New(tfidfDB)
-	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries)
+	calc, err := tfidf.NewCalculator(tfidfDB, model.New(tfidfDB), db, model.New(db))
 	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
 	registry := jobqueue.NewRegistry()
 	workerQueries := model.New(workerDB)
@@ -66,7 +66,7 @@ func TestIndexImagesJob_UniqueConstraintError(t *testing.T) {
 	// 2. Create an "orphaned" ngram record
 	// First, find the image ID
 	var imageID int64
-	err := imagesDB.QueryRow("SELECT id FROM images WHERE entry_id = ?", entryID).Scan(&imageID)
+	err = imagesDB.QueryRow("SELECT id FROM images WHERE entry_id = ?", entryID).Scan(&imageID)
 	if err != nil {
 		t.Fatal(err)
 	}

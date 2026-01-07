@@ -1,7 +1,9 @@
 -- 語彙（ターム）管理テーブル
 CREATE TABLE IF NOT EXISTS terms (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    term TEXT NOT NULL UNIQUE
+    term TEXT NOT NULL UNIQUE,
+    df_count INTEGER NOT NULL DEFAULT 0,
+    first_entry_id INTEGER
 );
 
 -- ポスティングリスト（転置インデックス 兼 TF-IDF）

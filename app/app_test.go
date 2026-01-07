@@ -99,7 +99,8 @@ func setupTest(t *testing.T) *testEnv {
 
 	// TF-IDF calculator and similarity calculator
 	tfidfQueries := model.New(tfidfDB)
-	calc, err := tfidf.NewCalculator(tfidfDB, tfidfQueries)
+	dataQueries := model.New(db)
+	calc, err := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
 	if err != nil {
 		t.Fatalf("failed to create calculator: %v", err)
 	}
