@@ -1,7 +1,7 @@
 BINARY_NAME=hanrangon
 GO_TAGS=sqlite_math_functions
 
-.PHONY: all build test generate fmt clean postprocess-test setup watch
+.PHONY: all build test generate fmt clean postprocess-test setup watch run
 
 all: build
 
@@ -17,6 +17,9 @@ build-be:
 	go build -tags "$(GO_TAGS)" -o $(BINARY_NAME) main.go
 
 build: fmt build-fe build-be
+
+run:
+	go run -tags "$(GO_TAGS)" .
 
 watch:
 	trap 'kill 0' EXIT; \
