@@ -53,6 +53,8 @@ import (
 	"log"
 	"regexp"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/cho45/hanrangon/model"
 )
@@ -94,41 +96,57 @@ func NewCalculator(tfidfDB *sql.DB, tfidfQueries *model.Queries, dataDB *sql.DB,
 func (c *Calculator) ExtractTerms(title, body string) map[string]int {
 	terms := make(map[string]int)
 
-	// タイトルと本文を結合
-	text := title + " " + body
+	// Pre-clean the text: remove HTML and lowercase
+	// Avoid large intermediate string/rune-slice allocations
+	var buf strings.Builder
+	buf.Grow(len(title) + len(body) + 1)
 
-	// HTMLタグを除去
-	if c.htmlTagPattern != nil {
-		text = c.htmlTagPattern.ReplaceAllString(text, "")
+	inTag := false
+	process := func(s string) {
+		for _, r := range s {
+			if r == '<' {
+				inTag = true
+				continue
+			}
+			if inTag {
+				if r == '>' {
+					inTag = false
+				}
+				continue
+			}
+			buf.WriteRune(unicode.ToLower(r))
+		}
 	}
 
-	// テキストの正規化: 小文字化
-	text = strings.ToLower(text)
+	process(title)
+	buf.WriteByte(' ')
+	process(body)
 
-	// 英数字単語（英単語、数字）をそのまま抽出
+	cleanStr := buf.String()
+
+	// 1. 英数字単語（英単語、数字）をそのまま抽出
 	if c.alphanumericPattern != nil {
-		matches := c.alphanumericPattern.FindAllString(text, -1)
+		matches := c.alphanumericPattern.FindAllString(cleanStr, -1)
 		for _, match := range matches {
 			terms[match]++
 		}
 	}
 
-	// 全テキストに対して文字 2-gram を生成
-	runes := []rune(text)
-	if len(runes) < 2 {
-		return terms
-	}
-
-	for i := 0; i < len(runes)-1; i++ {
-		r1 := runes[i]
-		r2 := runes[i+1]
-
-		// 空白や記号を含むルーンはスキップ
-		if c.isSkipRune(r1) || c.isSkipRune(r2) {
+	// 2. 全テキストに対して文字 2-gram を生成
+	var r1, r2 rune
+	var b [utf8.UTFMax * 2]byte
+	for _, r := range cleanStr {
+		if c.isSkipRune(r) {
+			r1, r2 = 0, 0
 			continue
 		}
 
-		terms[string(runes[i:i+2])]++
+		r1, r2 = r2, r
+		if r1 != 0 && r2 != 0 {
+			n := utf8.EncodeRune(b[:], r1)
+			n += utf8.EncodeRune(b[n:], r2)
+			terms[string(b[:n])]++
+		}
 	}
 
 	return terms
