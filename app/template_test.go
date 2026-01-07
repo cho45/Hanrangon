@@ -50,7 +50,7 @@ links = [
 		t.Fatalf("LoadTemplates failed: %v", err)
 	}
 
-	if tmpl.Lookup("test.html") == nil {
+	if tmpl["test.html"] == nil {
 		t.Fatal("template test.html not found")
 	}
 

@@ -29,7 +29,7 @@ type TemplateMetadata struct {
 // Templates manages HTML templates
 type Templates struct {
 	config    *Config
-	templates *template.Template // 本番モード用キャッシュ (未実行)
+	templates map[string]*template.Template
 	metadata  map[string]*TemplateMetadata
 }
 
@@ -65,11 +65,10 @@ func buildFuncMap() template.FuncMap {
 	return funcMap
 }
 
-// LoadTemplates loads all templates recursively from the view directory
-func (t *Templates) LoadTemplates() (*template.Template, error) {
-	tmpl := template.New("")
+// LoadTemplates loads each template as an isolated set to avoid cross-template name collisions (e.g., "head").
+func (t *Templates) LoadTemplates() (map[string]*template.Template, error) {
+	templates := make(map[string]*template.Template)
 	funcMap := buildFuncMap()
-	tmpl.Funcs(funcMap)
 	t.metadata = make(map[string]*TemplateMetadata)
 
 	basePath := "view/"
@@ -115,10 +114,13 @@ func (t *Templates) LoadTemplates() (*template.Template, error) {
 			}
 		}
 
-		_, err = tmpl.New(rel).Parse(content)
+		// Each file is parsed into its own template set to isolate definitions like {{define "head"}}.
+		tmpl := template.New(rel).Funcs(funcMap)
+		_, err = tmpl.Parse(content)
 		if err != nil {
 			return err
 		}
+		templates[rel] = tmpl
 
 		return nil
 	})
@@ -127,7 +129,7 @@ func (t *Templates) LoadTemplates() (*template.Template, error) {
 		return nil, err
 	}
 
-	return tmpl, nil
+	return templates, nil
 }
 
 // InitTemplates initializes the template system
@@ -149,14 +151,14 @@ func InitTemplates(config *Config) (*Templates, error) {
 	return t, nil
 }
 
-// getTemplates returns a fresh clone of the template set to avoid "cannot Clone after executed" error.
-func (t *Templates) getTemplates() (*template.Template, error) {
+// getTemplates returns the template map, reloading in development mode.
+func (t *Templates) getTemplates() (map[string]*template.Template, error) {
 	if t.config.IsDevelopment() {
 		return t.LoadTemplates()
 	}
 
 	if t.templates != nil {
-		return t.templates.Clone()
+		return t.templates, nil
 	}
 
 	tmpl, err := t.LoadTemplates()
@@ -164,7 +166,100 @@ func (t *Templates) getTemplates() (*template.Template, error) {
 		return nil, err
 	}
 	t.templates = tmpl
-	return t.templates.Clone()
+	return t.templates, nil
+}
+
+// RenderWithLayout renders a template with the specified layout.
+// It merges the layout and content templates into a fresh set for isolation.
+func (t *Templates) RenderWithLayout(c echo.Context, layoutName, contentName string, data interface{}) error {
+	templates, err := t.getTemplates()
+	if err != nil {
+		return err
+	}
+
+	contentTmpl := templates[contentName]
+	if contentTmpl == nil {
+		return fmt.Errorf("content template %s not found", contentName)
+	}
+
+	layoutTmpl := templates[layoutName]
+	if layoutTmpl == nil {
+		return fmt.Errorf("layout template %s not found", layoutName)
+	}
+
+	// Create a new template set starting with the layout.
+	// Cloning layoutTmpl is important to avoid polluting the cached template.
+	mergedTmpl, err := layoutTmpl.Clone()
+	if err != nil {
+		return err
+	}
+
+	// Merge all defined templates from the content template into the layout set.
+	// This allows the content to override templates like "head" defined in the layout.
+	for _, sub := range contentTmpl.Templates() {
+		if sub.Name() == contentName {
+			continue
+		}
+		// Overwrite or add the definition to the layout set.
+		_, err := mergedTmpl.AddParseTree(sub.Name(), sub.Tree)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Inject the main body of the content template as "content" for the layout.
+	_, err = mergedTmpl.AddParseTree("content", contentTmpl.Tree)
+	if err != nil {
+		return err
+	}
+
+	t.setHeaders(c, layoutName, contentName)
+
+	err = mergedTmpl.ExecuteTemplate(c.Response(), layoutName, data)
+	if err != nil {
+		log.Printf("Template execution error (RenderWithLayout): %v", err)
+	}
+	return err
+}
+
+// Render renders a template by name
+func (t *Templates) Render(c echo.Context, name string, data interface{}) error {
+	templates, err := t.getTemplates()
+	if err != nil {
+		return err
+	}
+
+	tmpl := templates[name]
+	if tmpl == nil {
+		return fmt.Errorf("template %s not found", name)
+	}
+
+	t.setHeaders(c, name)
+
+	err = tmpl.ExecuteTemplate(c.Response(), name, data)
+	if err != nil {
+		log.Printf("Template execution error (Render): %v", err)
+	}
+	return err
+}
+
+// RenderTo renders a template to an io.Writer (no header setting)
+func (t *Templates) RenderTo(w io.Writer, name string, data interface{}) error {
+	templates, err := t.getTemplates()
+	if err != nil {
+		return err
+	}
+
+	tmpl := templates[name]
+	if tmpl == nil {
+		return fmt.Errorf("template %s not found", name)
+	}
+
+	err = tmpl.ExecuteTemplate(w, name, data)
+	if err != nil {
+		log.Printf("Template execution error (RenderTo): %v", err)
+	}
+	return err
 }
 
 func (t *Templates) setHeaders(c echo.Context, names ...string) {
@@ -186,67 +281,6 @@ func (t *Templates) setHeaders(c echo.Context, names ...string) {
 			}
 		}
 	}
-}
-
-// RenderWithLayout renders a template with the specified layout
-func (t *Templates) RenderWithLayout(c echo.Context, layoutName, contentName string, data interface{}) error {
-	templates, err := t.getTemplates()
-	if err != nil {
-		return err
-	}
-
-	layoutTmpl := templates.Lookup(layoutName)
-	if layoutTmpl == nil {
-		return fmt.Errorf("layout template %s not found", layoutName)
-	}
-
-	contentTmpl := templates.Lookup(contentName)
-	if contentTmpl == nil {
-		return fmt.Errorf("content template %s not found", contentName)
-	}
-
-	// templates は既に Clone() されたものなので AddParseTree してもマスターは汚染されない
-	_, err = layoutTmpl.AddParseTree("content", contentTmpl.Tree)
-	if err != nil {
-		return err
-	}
-
-	t.setHeaders(c, layoutName, contentName)
-
-	err = layoutTmpl.Execute(c.Response(), data)
-	if err != nil {
-		log.Printf("Template execution error (RenderWithLayout): %v", err)
-	}
-	return err
-}
-
-// Render renders a template by name
-func (t *Templates) Render(c echo.Context, name string, data interface{}) error {
-	templates, err := t.getTemplates()
-	if err != nil {
-		return err
-	}
-
-	t.setHeaders(c, name)
-
-	err = templates.ExecuteTemplate(c.Response(), name, data)
-	if err != nil {
-		log.Printf("Template execution error (Render): %v", err)
-	}
-	return err
-}
-
-// RenderTo renders a template to an io.Writer (no header setting)
-func (t *Templates) RenderTo(w io.Writer, name string, data interface{}) error {
-	templates, err := t.getTemplates()
-	if err != nil {
-		return err
-	}
-	err = templates.ExecuteTemplate(w, name, data)
-	if err != nil {
-		log.Printf("Template execution error (RenderTo): %v", err)
-	}
-	return err
 }
 
 // formatDate formats a date string from "2006-01-02" to "2006年 01月 02日"
