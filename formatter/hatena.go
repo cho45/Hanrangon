@@ -18,6 +18,25 @@ var hatenaTemplates = map[string]string{
 	"seemore":    `<!-- seemore --><section class="seemore">{{ .Content }}</section><!-- /seemore -->`,
 }
 
+var (
+	parsedHatenaTemplates = make(map[string]*htmltemplate.Template)
+	reFotolife            = regexp.MustCompile(`\[?f:id:([^:]+):(\d+)([jpeg]):image\]?`)
+	reAsin                = regexp.MustCompile(`\[?asin:([^\]:]+):detail\]?`)
+)
+
+func init() {
+	for name, src := range hatenaTemplates {
+		t := htmltemplate.New(name).Funcs(htmltemplate.FuncMap{
+			"add":      func(a, b int) int { return a + b },
+			"contains": func(s, substr string) bool { return strings.Contains(s, substr) },
+		})
+		t, err := t.Parse(src)
+		if err == nil {
+			parsedHatenaTemplates[name] = t
+		}
+	}
+}
+
 func FormatHatena(body string) (res string, err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -29,7 +48,6 @@ func FormatHatena(body string) (res string, err error) {
 	inline := xatena.NewInlineFormatter()
 
 	// f:id:user:id[jpeg]:image
-	reFotolife := regexp.MustCompile(`\[?f:id:([^:]+):(\d+)([jpeg]):image\]?`)
 	inline.AddRule(xatena.InlineRule{
 		Pattern: reFotolife,
 		Handler: func(ctx context.Context, f *xatena.InlineFormatter, m []string) string {
@@ -54,7 +72,6 @@ func FormatHatena(body string) (res string, err error) {
 	})
 
 	// asin:ASIN:detail
-	reAsin := regexp.MustCompile(`\[?asin:([^\]:]+):detail\]?`)
 	inline.AddRule(xatena.InlineRule{
 		Pattern: reAsin,
 		Handler: func(ctx context.Context, f *xatena.InlineFormatter, m []string) string {
@@ -66,15 +83,8 @@ func FormatHatena(body string) (res string, err error) {
 	x := xatena.NewXatenaWithInline(inline)
 
 	// Custom templates
-	for name, src := range hatenaTemplates {
-		t := htmltemplate.New(name).Funcs(htmltemplate.FuncMap{
-			"add":      func(a, b int) int { return a + b },
-			"contains": func(s, substr string) bool { return strings.Contains(s, substr) },
-		})
-		t, err := t.Parse(src)
-		if err == nil {
-			x.Templates[name] = t
-		}
+	for name, t := range parsedHatenaTemplates {
+		x.Templates[name] = t
 	}
 
 	htmlBody := x.ToHTML(context.Background(), strings.TrimSpace(body))
