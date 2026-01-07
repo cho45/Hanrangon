@@ -2,6 +2,9 @@ package app
 
 import (
 	"log"
+	"net/http/httputil"
+	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -53,10 +56,36 @@ func NewServer(app *AppImpl) *echo.Echo {
 	e.Use(app.CSRF)
 
 	// Static files
+	// 本番環境ではフロントエンドの HTTP サーバー (h2o) が直接静的ファイルを配信するため、
+	// これらの設定は主に開発環境や、フロントエンドサーバーを介さない直接実行時に利用される。
 	e.Static("/css", filepath.Join(config.StaticDir, "css"))
 	e.Static("/js", filepath.Join(config.StaticDir, "js"))
 	e.Static("/static/admin", filepath.Join(config.StaticDir, "admin"))
-	e.Static("/images/entry", config.UploadDir)
+
+	// 開発環境では、ローカルにない画像ファイルを本番環境（lowreal.net）からプロキシする。
+	// 本番DBのダンプを開発環境で利用する際、記事中の画像（/images/entry/*）を
+	// ローカルにコピーしていなくても本番に近い見た目で確認できるようにするため。
+	if config.IsDevelopment() {
+		target, _ := url.Parse("https://lowreal.net")
+		proxy := httputil.NewSingleHostReverseProxy(target)
+		e.GET("/images/entry/*", func(c echo.Context) error {
+			path := c.Param("*")
+			localPath := filepath.Join(config.UploadDir, path)
+			if _, err := os.Stat(localPath); err == nil {
+				return c.File(localPath)
+			}
+			req := c.Request()
+			req.URL.Host = target.Host
+			req.URL.Scheme = target.Scheme
+			req.Header.Set("X-Forwarded-Host", req.Header.Get("Host"))
+			req.Host = target.Host
+			proxy.ServeHTTP(c.Response(), req)
+			return nil
+		})
+	} else {
+		e.Static("/images/entry", config.UploadDir)
+	}
+
 	e.Static("/images", filepath.Join(config.StaticDir, "images"))
 
 	// Public Routes

@@ -90,23 +90,9 @@ const Nogag = {
 	},
 
 	init() {
-		const articles = document.querySelectorAll('article');
-		for (const article of articles) {
-			Nogag.initEntry(article);
-		}
-
 		this.initSimilarEntries();
 		// this.initExif();
 		this.initBudouX();
-
-		if (Nogag.data('auth')) {
-			const button = document.querySelector('.nogag-new');
-			if (button) {
-				button.addEventListener('click', () => {
-					location.href = "/admin/edit";
-				});
-			}
-		}
 	},
 
 	async initSimilarEntries() {
@@ -205,17 +191,6 @@ const Nogag = {
 			const wrapper = document.createElement('budoux-ja');
 			wrapper.append(...target.childNodes);
 			target.appendChild(wrapper);
-		}
-	},
-
-	initEntry(entry) {
-		if (Nogag.data('auth')) {
-			const button = entry.querySelector('.nogag-edit');
-			if (button) {
-				button.addEventListener('click', () => {
-					location.href = `/admin/edit?id=${entry.getAttribute('data-id')}`;
-				});
-			}
 		}
 	}
 };

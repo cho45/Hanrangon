@@ -77,16 +77,16 @@ links = [
 			<li><a href="/photo/">写真</a></li>
 			<li><a href="https://www.lowreal.net/">人物</a></li>
 			{{if .IsAuth}}
-				<li class="admin-link"><a href="#" class="nogag-new">新規</a></li>
+				<li class="admin-link"><a href="/admin/edit" class="nogag-new">新規</a></li>
 				<li class="admin-link"><a href="/admin/">管理画面</a></li>
 			{{end}}
 		</ul>
 		<ip-info></ip-info>
 	</nav>
 
-	<div id="content">
+	<main id="content">
 		{{template "content" .}}
-	</div>
+	</main>
 
 	<footer id="global-footer">
 		<div class="container">
@@ -104,9 +104,9 @@ links = [
 						JavaScript, Perl, Ruby, HTML, CSS, Web etc
 					</p>
 					<p>
-						<a class="button github-button" href="https://github.com/cho45" rel="nofollow"><i></i>
+						<a class="button github-button" href="https://github.com/cho45" rel="nofollow">
 							<span class="label">
-								Follow <b>&#64;cho45</b>
+								Follow <strong>&#64;cho45</strong>
 							</span>
 						</a>
 					</p>

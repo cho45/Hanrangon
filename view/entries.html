@@ -68,20 +68,24 @@
 		<h2 itemprop="name"><a href="{{$canonical}}" class="bookmark" rel="bookmark" itemprop="url"><budoux-ja>{{$cleanTitle}}</budoux-ja></a></h2>
 		<div class="metadata">
 			{{$baseURL := .BaseURL}}
-			{{range $tags}}
-				<a href="{{$baseURL}}/{{.}}/"><span itemprop="keywords">{{.}}</span></a>
-			{{end}}
-			|
+			<span class="tags">
+				{{range $tags}}
+					<a href="{{$baseURL}}/{{.}}/"><span itemprop="keywords">{{.}}</span></a>
+				{{end}}
+			</span>
+
 			<time datetime="{{.Entry.CreatedAt.UTC.Format "2006-01-02T15:04:05Z"}}" itemprop="datePublished">
 				<relative-time epoch="{{.Entry.CreatedAt.Unix}}">{{.Entry.CreatedAt.Format "15:04"}}</relative-time>
 			</time>
 
 			{{if eq .Entry.Status "scheduled"}}
-				| {{if .Entry.PublishAt.Valid}}<time datetime="{{.Entry.PublishAt.Time.UTC.Format "2006-01-02T15:04:05Z"}}"><relative-time epoch="{{.Entry.PublishAt.Time.Unix}}">{{.Entry.PublishAt.Time.Format "2006-01-02 15:04"}}</relative-time></time>{{else}}未来{{end}}に公開
+				<span class="status">
+					{{if .Entry.PublishAt.Valid}}<time datetime="{{.Entry.PublishAt.Time.UTC.Format "2006-01-02T15:04:05Z"}}"><relative-time epoch="{{.Entry.PublishAt.Time.Unix}}">{{.Entry.PublishAt.Time.Format "2006-01-02 15:04"}}</relative-time></time>{{else}}未来{{end}}に公開
+				</span>
 			{{end}}
 
 			{{if .IsAuth}}
-				| <a href="javascript:void(0)" class="nogag-edit">編集</a>
+				<a href="/admin/edit?id={{.Entry.ID}}" class="nogag-edit">編集</a>
 			{{end}}
 
 			<div style="display: none">
@@ -145,7 +149,7 @@
 		<ul>
 			<li data-id="{{.ID}}">
 				<a href="/{{.Path}}">
-					<b>{{.DisplayTitle}}</b><br>
+					<em>{{.DisplayTitle}}</em><br>
 					<span class="summary">{{summary .Body 140}}</span>
 
 					<time datetime="{{.CreatedAt.UTC.Format "2006-01-02T15:04:05Z"}}" itemprop="datePublished">
