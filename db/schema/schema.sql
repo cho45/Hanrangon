@@ -5,7 +5,7 @@ CREATE TABLE entries (
     formatted_body TEXT NOT NULL,
     path TEXT NOT NULL,
     format TEXT NOT NULL,
-    date DATE NOT NULL, -- YYYY-MM-DD (JST),
+    date TEXT NOT NULL, -- YYYY-MM-DD (JST),
     created_at DATETIME NOT NULL, -- YYYY-MM-DD HH:MM:SS[.ffffff]+09:00,
     modified_at DATETIME NOT NULL, -- YYYY-MM-DD HH:MM:SS[.ffffff]+09:00,
     publish_at DATETIME, -- YYYY-MM-DD HH:MM:SS[.ffffff]+09:00,

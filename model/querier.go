@@ -30,15 +30,15 @@ type Querier interface {
 	EnqueueJob(ctx context.Context, arg EnqueueJobParams) (Job, error)
 	FailStuckJobs(ctx context.Context) error
 	FindNextJob(ctx context.Context, runAfter time.Time) (Job, error)
-	FindScheduledEntriesToPublish(ctx context.Context, now sql.NullTime) ([]FindScheduledEntriesToPublishRow, error)
+	FindScheduledEntriesToPublish(ctx context.Context, now sql.NullTime) ([]Entry, error)
 	GetAverageSimilarityScore(ctx context.Context) (float64, error)
-	GetEntryById(ctx context.Context, id int64) (GetEntryByIdRow, error)
-	GetEntryByPath(ctx context.Context, path string) (GetEntryByPathRow, error)
+	GetEntryById(ctx context.Context, id int64) (Entry, error)
+	GetEntryByPath(ctx context.Context, path string) (Entry, error)
 	GetImageByURI(ctx context.Context, uri string) (Image, error)
 	GetJobByID(ctx context.Context, id int64) (Job, error)
 	GetJobTypeByID(ctx context.Context, id int64) (JobType, error)
-	GetNewerEntry(ctx context.Context, createdAt time.Time) (GetNewerEntryRow, error)
-	GetOlderEntry(ctx context.Context, createdAt time.Time) (GetOlderEntryRow, error)
+	GetNewerEntry(ctx context.Context, createdAt time.Time) (Entry, error)
+	GetOlderEntry(ctx context.Context, createdAt time.Time) (Entry, error)
 	GetOrCreateJobType(ctx context.Context, name string) (JobType, error)
 	GetTFIDFStats(ctx context.Context) (GetTFIDFStatsRow, error)
 	GetTermByTerm(ctx context.Context, term string) (Term, error)
@@ -48,19 +48,16 @@ type Querier interface {
 	GrabJob(ctx context.Context, arg GrabJobParams) error
 	InsertPosting(ctx context.Context, arg InsertPostingParams) error
 	InsertRelatedEntry(ctx context.Context, arg InsertRelatedEntryParams) error
-	ListAllEntries(ctx context.Context) ([]ListAllEntriesRow, error)
+	ListAllEntries(ctx context.Context) ([]Entry, error)
 	ListAllEntriesForSitemap(ctx context.Context) ([]ListAllEntriesForSitemapRow, error)
 	ListArchiveMonths(ctx context.Context) ([]ListArchiveMonthsRow, error)
-	// Note: sqlite3 driver converts DATE to time.Time by default, which is undesirable for
-	// date-based logic here (we want YYYY-MM-DD string). We use CAST(date AS TEXT) to
-	// ensure string return and we cannot change the schema to TEXT because we reuse
-	// existing data files.
-	ListEntries(ctx context.Context, arg ListEntriesParams) ([]ListEntriesRow, error)
-	ListEntriesAdmin(ctx context.Context, arg ListEntriesAdminParams) ([]ListEntriesAdminRow, error)
-	ListEntriesByCategory(ctx context.Context, arg ListEntriesByCategoryParams) ([]ListEntriesByCategoryRow, error)
-	ListEntriesByDates(ctx context.Context, dates []string) ([]ListEntriesByDatesRow, error)
-	ListEntriesByIds(ctx context.Context, ids []int64) ([]ListEntriesByIdsRow, error)
-	ListEntriesByYearMonthDay(ctx context.Context, arg ListEntriesByYearMonthDayParams) ([]ListEntriesByYearMonthDayRow, error)
+	// Note: date column is now TEXT type, so sqlc can map it directly to string without CAST.
+	ListEntries(ctx context.Context, arg ListEntriesParams) ([]Entry, error)
+	ListEntriesAdmin(ctx context.Context, arg ListEntriesAdminParams) ([]Entry, error)
+	ListEntriesByCategory(ctx context.Context, arg ListEntriesByCategoryParams) ([]Entry, error)
+	ListEntriesByDates(ctx context.Context, dates []string) ([]Entry, error)
+	ListEntriesByIds(ctx context.Context, ids []int64) ([]Entry, error)
+	ListEntriesByYearMonthDay(ctx context.Context, arg ListEntriesByYearMonthDayParams) ([]Entry, error)
 	ListImagesByEntryID(ctx context.Context, entryID int64) ([]Image, error)
 	ListJobs(ctx context.Context, arg ListJobsParams) ([]ListJobsRow, error)
 	ListRelatedEntries(ctx context.Context, entryID int64) ([]ListRelatedEntriesRow, error)
@@ -72,7 +69,7 @@ type Querier interface {
 	MarkJobFailed(ctx context.Context, arg MarkJobFailedParams) error
 	PublishEntries(ctx context.Context, ids []int64) error
 	RecoverStuckJobs(ctx context.Context) error
-	SearchEntriesAdmin(ctx context.Context, arg SearchEntriesAdminParams) ([]SearchEntriesAdminRow, error)
+	SearchEntriesAdmin(ctx context.Context, arg SearchEntriesAdminParams) ([]Entry, error)
 	UpdateEntry(ctx context.Context, arg UpdateEntryParams) (Entry, error)
 	UpsertTerm(ctx context.Context, arg UpsertTermParams) (Term, error)
 }

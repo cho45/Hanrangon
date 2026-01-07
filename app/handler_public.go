@@ -64,17 +64,12 @@ func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid date format").SetInternal(err)
 	}
 
-	rows, err := app.queries.ListEntriesByYearMonthDay(ctx, model.ListEntriesByYearMonthDayParams{
+	entries, err := app.queries.ListEntriesByYearMonthDay(ctx, model.ListEntriesByYearMonthDayParams{
 		StartDate: start.Format("2006-01-02"),
 		EndDate:   end.Format("2006-01-02"),
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
-	}
-
-	entries := make([]model.Entry, len(rows))
-	for i, r := range rows {
-		entries[i] = model.Entry(r)
 	}
 
 	if len(entries) > 0 {
@@ -171,14 +166,9 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 		return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 	}
 	// 2. 取得した日付に含まれる全記事を取得
-	rows, err := app.queries.ListEntriesByDates(ctx, dates)
+	entries, err := app.queries.ListEntriesByDates(ctx, dates)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
-	}
-
-	entries := make([]model.Entry, len(rows))
-	for i, r := range rows {
-		entries[i] = model.Entry(r)
 	}
 
 	if len(entries) > 0 {
@@ -219,7 +209,7 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 
 	fetchLimit := limit + 1
 
-	rows, err := app.queries.ListEntriesByCategory(ctx, model.ListEntriesByCategoryParams{
+	entries, err := app.queries.ListEntriesByCategory(ctx, model.ListEntriesByCategoryParams{
 		Title:      fmt.Sprintf("%%[%s]%%", category),
 		TargetDate: targetDate.Format("2006-01-02"),
 		Limit:      int64(fetchLimit),
@@ -229,17 +219,12 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 	}
 
 	var olderPage string
-	if len(rows) > limit {
-		lastRow := rows[len(rows)-1]
-		rows = rows[:limit]
+	if len(entries) > limit {
+		lastRow := entries[len(entries)-1]
+		entries = entries[:limit]
 
 		olderDate := strings.ReplaceAll(lastRow.Date, "-", "")
 		olderPage = fmt.Sprintf("/%s/.page/%s/%d", category, olderDate, limit)
-	}
-
-	entries := make([]model.Entry, len(rows))
-	for i, r := range rows {
-		entries[i] = model.Entry(r)
 	}
 
 	if len(entries) > 0 {
@@ -266,17 +251,12 @@ func (app *AppImpl) JoinBaseURL(path string) string {
 func (app *AppImpl) HandleFeed(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	rows, err := app.queries.ListEntries(ctx, model.ListEntriesParams{
+	entries, err := app.queries.ListEntries(ctx, model.ListEntriesParams{
 		TargetDate: time.Now().Format("2006-01-02"),
 		Limit:      20,
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
-	}
-
-	entries := make([]model.Entry, len(rows))
-	for i, r := range rows {
-		entries[i] = model.Entry(r)
 	}
 
 	updated := getLatestModTime(entries)
@@ -408,11 +388,11 @@ func (app *AppImpl) HandleApiSimilar(c echo.Context) error {
 		}
 
 		// 2. Get entry details from main DB in bulk
+		entryMap := make(map[int64]model.Entry)
 		entryRows, err := app.queries.ListEntriesByIds(ctx, allRelatedIDs)
 		if err == nil {
-			entryMap := make(map[int64]model.Entry)
 			for _, r := range entryRows {
-				entryMap[r.ID] = model.Entry(r)
+				entryMap[r.ID] = r
 			}
 
 			// 3. Render for each target ID
@@ -484,7 +464,7 @@ func (app *AppImpl) HandleApiSimilar(c echo.Context) error {
 
 		entryMap := make(map[int64]model.Entry)
 		for _, e := range entries {
-			entryMap[e.ID] = model.Entry(e)
+			entryMap[e.ID] = e
 		}
 
 		var viewImages []view.SimilarImage
@@ -525,7 +505,7 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
 	}
 
-	row, err := app.queries.GetEntryByPath(ctx, path)
+	entry, err := app.queries.GetEntryByPath(ctx, path)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
@@ -533,26 +513,12 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entry").SetInternal(err)
 	}
 
-	if row.Status != "public" && !app.IsAuth(c) {
+	if entry.Status != "public" && !app.IsAuth(c) {
 		return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
 	}
 
-	if row.PublishAt.Valid && row.PublishAt.Time.After(time.Now()) && !app.IsAuth(c) {
+	if entry.PublishAt.Valid && entry.PublishAt.Time.After(time.Now()) && !app.IsAuth(c) {
 		return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
-	}
-
-	entry := model.Entry{
-		ID:            row.ID,
-		Title:         row.Title,
-		Body:          row.Body,
-		FormattedBody: row.FormattedBody,
-		Path:          row.Path,
-		Format:        row.Format,
-		Date:          row.Date,
-		CreatedAt:     row.CreatedAt,
-		ModifiedAt:    row.ModifiedAt,
-		PublishAt:     row.PublishAt,
-		Status:        row.Status,
 	}
 
 	etag := GenerateEntryETag(entry.ID, entry.ModifiedAt, app.IsAuth(c))
@@ -570,42 +536,22 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 		trackbacks[i] = &row
 	}
 
-	olderRow, err := app.queries.GetOlderEntry(ctx, entry.CreatedAt)
+	olderEntry, err := app.queries.GetOlderEntry(ctx, entry.CreatedAt)
 	if err != nil && err != sql.ErrNoRows {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch older entry").SetInternal(err)
 	}
 	var olderPtr *model.Entry
 	if err == nil {
-		p := model.Entry{
-			ID:         olderRow.ID,
-			Title:      olderRow.Title,
-			CreatedAt:  olderRow.CreatedAt,
-			Path:       olderRow.Path,
-			Date:       olderRow.Date,
-			ModifiedAt: olderRow.ModifiedAt,
-			PublishAt:  olderRow.PublishAt,
-			Status:     olderRow.Status,
-		}
-		olderPtr = &p
+		olderPtr = &olderEntry
 	}
 
-	newerRow, err := app.queries.GetNewerEntry(ctx, entry.CreatedAt)
+	newerEntry, err := app.queries.GetNewerEntry(ctx, entry.CreatedAt)
 	if err != nil && err != sql.ErrNoRows {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch newer entry").SetInternal(err)
 	}
 	var newerPtr *model.Entry
 	if err == nil {
-		n := model.Entry{
-			ID:         newerRow.ID,
-			Title:      newerRow.Title,
-			CreatedAt:  newerRow.CreatedAt,
-			Path:       newerRow.Path,
-			Date:       newerRow.Date,
-			ModifiedAt: newerRow.ModifiedAt,
-			PublishAt:  newerRow.PublishAt,
-			Status:     newerRow.Status,
-		}
-		newerPtr = &n
+		newerPtr = &newerEntry
 	}
 
 	data := &view.IndexData{

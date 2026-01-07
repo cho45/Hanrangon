@@ -425,7 +425,8 @@ func (app *AppImpl) HandleAdminApiEntries(c echo.Context) error {
 
 	if search != "" {
 		q := "%" + search + "%"
-		rows, err := app.queries.SearchEntriesAdmin(c.Request().Context(), model.SearchEntriesAdminParams{
+		var err error
+		entries, err = app.queries.SearchEntriesAdmin(c.Request().Context(), model.SearchEntriesAdminParams{
 			Query:    q,
 			CursorID: sql.NullInt64{Int64: cursorId, Valid: cursorId != 0},
 			Limit:    fetchLimit,
@@ -433,21 +434,14 @@ func (app *AppImpl) HandleAdminApiEntries(c echo.Context) error {
 		if err != nil {
 			return err
 		}
-		entries = make([]model.Entry, len(rows))
-		for i, row := range rows {
-			entries[i] = model.Entry(row)
-		}
 	} else {
-		rows, err := app.queries.ListEntriesAdmin(c.Request().Context(), model.ListEntriesAdminParams{
+		var err error
+		entries, err = app.queries.ListEntriesAdmin(c.Request().Context(), model.ListEntriesAdminParams{
 			CursorID: sql.NullInt64{Int64: cursorId, Valid: cursorId != 0},
 			Limit:    fetchLimit,
 		})
 		if err != nil {
 			return err
-		}
-		entries = make([]model.Entry, len(rows))
-		for i, row := range rows {
-			entries[i] = model.Entry(row)
 		}
 	}
 
