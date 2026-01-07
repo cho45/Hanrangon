@@ -120,36 +120,22 @@ p {
 #global-header .logo-icon {
 	width: 80px;
 	height: 80px;
-	background-color: var(--text-color);
-	-webkit-mask-image: url('/images/hanrangen-icon.svg');
-	mask-image: url('/images/hanrangen-icon.svg');
-	-webkit-mask-repeat: no-repeat;
-	mask-repeat: no-repeat;
-	-webkit-mask-position: center;
-	mask-position: center;
-	-webkit-mask-size: contain;
-	mask-size: contain;
-	transition: background-color 0.2s;
+	transition: color 0.2s;
 }
 
 #global-header .logo-text {
 	width: 150px;
 	height: 50px;
-	background-color: var(--text-color);
-	-webkit-mask-image: url('/images/hanrangen.svg');
-	mask-image: url('/images/hanrangen.svg');
-	-webkit-mask-repeat: no-repeat;
-	mask-repeat: no-repeat;
-	-webkit-mask-position: center;
-	mask-position: center;
-	-webkit-mask-size: contain;
-	mask-size: contain;
-	transition: background-color 0.2s;
+	transition: color 0.2s;
 }
 
-#global-header a:hover .logo-icon,
-#global-header a:hover .logo-text {
-	background-color: var(--accent-color);
+#global-header a {
+	color: var(--text-color);
+	text-decoration: none;
+}
+
+#global-header a:hover {
+	color: var(--accent-color);
 }
 
 #global-navigation {
