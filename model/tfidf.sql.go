@@ -8,6 +8,7 @@ package model
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const decrementTermDFCount = `-- name: DecrementTermDFCount :exec
@@ -244,6 +245,56 @@ func (q *Queries) ListRelatedEntries(ctx context.Context, entryID int64) ([]List
 	for rows.Next() {
 		var i ListRelatedEntriesRow
 		if err := rows.Scan(&i.RelatedEntryID, &i.Score); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRelatedEntriesByEntryIDs = `-- name: ListRelatedEntriesByEntryIDs :many
+SELECT entry_id, related_entry_id, score
+FROM (
+    SELECT entry_id, related_entry_id, score,
+           row_number() OVER (PARTITION BY entry_id ORDER BY score DESC) as rn
+    FROM related_entries
+    WHERE entry_id IN (/*SLICE:entry_ids*/?)
+)
+WHERE rn <= 10
+`
+
+type ListRelatedEntriesByEntryIDsRow struct {
+	EntryID        int64   `json:"entry_id"`
+	RelatedEntryID int64   `json:"related_entry_id"`
+	Score          float64 `json:"score"`
+}
+
+func (q *Queries) ListRelatedEntriesByEntryIDs(ctx context.Context, entryIds []int64) ([]ListRelatedEntriesByEntryIDsRow, error) {
+	query := listRelatedEntriesByEntryIDs
+	var queryParams []interface{}
+	if len(entryIds) > 0 {
+		for _, v := range entryIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:entry_ids*/?", strings.Repeat(",?", len(entryIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:entry_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRelatedEntriesByEntryIDsRow
+	for rows.Next() {
+		var i ListRelatedEntriesByEntryIDsRow
+		if err := rows.Scan(&i.EntryID, &i.RelatedEntryID, &i.Score); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

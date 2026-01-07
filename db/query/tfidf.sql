@@ -25,6 +25,16 @@ WHERE entry_id = ?
 ORDER BY score DESC
 LIMIT 5;
 
+-- name: ListRelatedEntriesByEntryIDs :many
+SELECT entry_id, related_entry_id, score
+FROM (
+    SELECT entry_id, related_entry_id, score,
+           row_number() OVER (PARTITION BY entry_id ORDER BY score DESC) as rn
+    FROM related_entries
+    WHERE entry_id IN (sqlc.slice('entry_ids'))
+)
+WHERE rn <= 10;
+
 -- name: DeletePostingsByEntryID :exec
 DELETE FROM postings WHERE entry_id = ?;
 

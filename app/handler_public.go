@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -380,60 +379,75 @@ func (app *AppImpl) HandleApiSimilar(c echo.Context) error {
 	ctx := c.Request().Context()
 	idsParam := c.QueryParams()["id"]
 
-	result := make(map[string]string)
-
+	targetIDs := make([]int64, 0, len(idsParam))
 	for _, idStr := range idsParam {
-		id, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
+		if id, err := strconv.ParseInt(idStr, 10, 64); err == nil {
+			targetIDs = append(targetIDs, id)
+		}
+	}
+
+	result := make(map[string]string)
+	if len(targetIDs) == 0 {
+		return c.JSON(http.StatusOK, map[string]interface{}{"result": result, "ad": ""})
+	}
+
+	// 1. Get related entries from tfidfDB in bulk
+	relatedRows, err := app.tfidfQueries.ListRelatedEntriesByEntryIDs(ctx, targetIDs)
+	if err == nil && len(relatedRows) > 0 {
+		// Group by target entry_id
+		relatedMap := make(map[int64][]model.ListRelatedEntriesByEntryIDsRow)
+		allRelatedIDsMap := make(map[int64]bool)
+		for _, row := range relatedRows {
+			relatedMap[row.EntryID] = append(relatedMap[row.EntryID], row)
+			allRelatedIDsMap[row.RelatedEntryID] = true
+		}
+
+		allRelatedIDs := make([]int64, 0, len(allRelatedIDsMap))
+		for id := range allRelatedIDsMap {
+			allRelatedIDs = append(allRelatedIDs, id)
+		}
+
+		// 2. Get entry details from main DB in bulk
+		entryRows, err := app.queries.ListEntriesByIds(ctx, allRelatedIDs)
+		if err == nil {
+			entryMap := make(map[int64]model.Entry)
+			for _, r := range entryRows {
+				entryMap[r.ID] = model.Entry(r)
+			}
+
+			// 3. Render for each target ID
+			for targetID, related := range relatedMap {
+				similarEntries := make([]view.SimilarEntry, 0, len(related))
+				for _, rel := range related {
+					if e, ok := entryMap[rel.RelatedEntryID]; ok {
+						similarEntries = append(similarEntries, view.SimilarEntry{
+							Entry: e,
+							Score: rel.Score,
+						})
+					}
+				}
+
+				if len(similarEntries) > 0 {
+					var buf bytes.Buffer
+					data := &view.SimilarEntriesData{
+						Entries: similarEntries,
+					}
+					if err := app.templates.RenderTo(&buf, "similar-entries.html", data); err == nil {
+						result[strconv.FormatInt(targetID, 10)] = buf.String()
+					}
+				}
+			}
+		}
+	}
+
+	// 4. Fallback for IDs that don't have TF-IDF results yet
+	for _, id := range targetIDs {
+		idStr := strconv.FormatInt(id, 10)
+		if _, ok := result[idStr]; ok {
 			continue
 		}
 
-		// 1. Get related entries from tfidfDB
-		relatedRows, err := app.tfidfQueries.ListRelatedEntries(ctx, id)
-
-		if err == nil && len(relatedRows) > 0 {
-			relatedIDs := make([]int64, len(relatedRows))
-			scoreMap := make(map[int64]float64)
-			for i, r := range relatedRows {
-				relatedIDs[i] = r.RelatedEntryID
-				scoreMap[r.RelatedEntryID] = r.Score
-			}
-
-			// 2. Get entry details from main DB
-			rows, err := app.queries.ListEntriesByIds(ctx, relatedIDs)
-			if err != nil {
-				continue
-			}
-
-			// 3. Prepare data for view
-			similarEntries := make([]view.SimilarEntry, 0, len(rows))
-			for _, r := range rows {
-				e := model.Entry(r)
-				similarEntries = append(similarEntries, view.SimilarEntry{
-					Entry: e,
-					Score: scoreMap[e.ID],
-				})
-			}
-
-			// Sort by score descending
-			sort.Slice(similarEntries, func(i, j int) bool {
-				return similarEntries[i].Score > similarEntries[j].Score
-			})
-
-			// 4. Render to string
-			var buf bytes.Buffer
-			data := &view.SimilarEntriesData{
-				Entries: similarEntries,
-			}
-			if err := app.templates.RenderTo(&buf, "similar-entries.html", data); err != nil {
-				continue
-			}
-
-			result[idStr] = buf.String()
-			continue
-		}
-
-		// Fallback: Similar Images
+		// Similar Images fallback (one by one for now as it's less frequent)
 		images, err := app.imagesQueries.ListImagesByEntryID(ctx, id)
 		if err != nil || len(images) == 0 {
 			continue
@@ -454,13 +468,12 @@ func (app *AppImpl) HandleApiSimilar(c echo.Context) error {
 			continue
 		}
 
-		// Fetch entries
 		var entryIDs []int64
 		entryIDMap := make(map[int64]bool)
-		for _, c := range candidates {
-			if !entryIDMap[c.EntryID] {
-				entryIDs = append(entryIDs, c.EntryID)
-				entryIDMap[c.EntryID] = true
+		for _, cand := range candidates {
+			if !entryIDMap[cand.EntryID] {
+				entryIDs = append(entryIDs, cand.EntryID)
+				entryIDMap[cand.EntryID] = true
 			}
 		}
 
@@ -475,25 +488,23 @@ func (app *AppImpl) HandleApiSimilar(c echo.Context) error {
 		}
 
 		var viewImages []view.SimilarImage
-		for _, c := range candidates {
-			if e, ok := entryMap[c.EntryID]; ok {
+		for _, cand := range candidates {
+			if e, ok := entryMap[cand.EntryID]; ok {
 				viewImages = append(viewImages, view.SimilarImage{
-					URI:       c.Uri,
+					URI:       cand.Uri,
 					EntryPath: e.Path,
-					Score:     c.Score,
+					Score:     cand.Score,
 				})
 			}
 		}
 
-		// Render SimilarImages
 		var buf bytes.Buffer
 		data := &view.SimilarImagesData{
 			Images: viewImages,
 		}
-		if err := app.templates.RenderTo(&buf, "similar-images.html", data); err != nil {
-			continue
+		if err := app.templates.RenderTo(&buf, "similar-images.html", data); err == nil {
+			result[idStr] = buf.String()
 		}
-		result[idStr] = buf.String()
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
