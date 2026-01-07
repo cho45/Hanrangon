@@ -19,7 +19,141 @@
 		{{if isDateBoundary $i $entries}}
 			<div class="date"><a href="{{datePath $e.Date}}">{{formatDate $e.Date}}</a></div>
 		{{end}}
-		{{template "article" dict "Entry" $e "IsAuth" $isAuth "IsPermalink" $isDetail "IsFirst" (eq $i 0) "Trackbacks" $.Trackbacks "BaseURL" $.BaseURL}}
+
+		{{/* Article */}}
+		{{$cleanTitle := $e.DisplayTitle}}
+		{{$tags := $e.Tags}}
+		{{$canonical := (print $.BaseURL "/" $e.Path)}}
+		<article
+			id="post-{{$e.CreatedAt.Unix}}"
+			class="{{range $tags}}{{.}} {{end}}{{if eq $i 0}}first {{end}}status-{{$e.Status}}"
+			data-id="{{$e.ID}}"
+			{{if not $isDetail}}
+			itemprop="blogPosts"
+			itemscope
+			itemtype="http://schema.org/BlogPosting"
+			{{end}}
+		>
+			<header>
+				<h2 itemprop="name"><a href="{{$canonical}}" class="bookmark" rel="bookmark" itemprop="url"><budoux-ja>{{$cleanTitle}}</budoux-ja></a></h2>
+				<div class="metadata">
+					{{$baseURL := $.BaseURL}}
+					<span class="tags">
+						{{range $tags}}
+							<a href="{{$baseURL}}/{{.}}/"><span itemprop="keywords">{{.}}</span></a>
+						{{end}}
+					</span>
+
+					<time datetime="{{$e.CreatedAt.UTC.Format "2006-01-02T15:04:05Z"}}" itemprop="datePublished">
+						<relative-time epoch="{{$e.CreatedAt.Unix}}">{{$e.CreatedAt.Format "15:04"}}</relative-time>
+					</time>
+
+					{{if eq $e.Status "scheduled"}}
+						<span class="status">
+							{{if $e.PublishAt.Valid}}<time datetime="{{$e.PublishAt.Time.UTC.Format "2006-01-02T15:04:05Z"}}"><relative-time epoch="{{$e.PublishAt.Time.Unix}}">{{$e.PublishAt.Time.Format "2006-01-02 15:04"}}</relative-time></time>{{else}}未来{{end}}に公開
+						</span>
+					{{end}}
+
+					{{if $isAuth}}
+						<a href="/admin/edit?id={{$e.ID}}" class="nogag-edit">編集</a>
+					{{end}}
+
+					<div style="display: none">
+						<meta itemscope itemprop="mainEntityOfPage"  itemType="https://schema.org/WebPage" content="{{$canonical}}">
+						<span itemprop="headline">{{$cleanTitle}}</span>
+						<span itemprop="description">{{summary $e.FormattedBody 100}}</span>
+
+						<span itemprop="author" itemscope itemtype="https://schema.org/Person">
+							<a href="http://www.lowreal.net/" itemprop="url">
+								<span itemprop="name">cho45</span>
+							</a>
+						</span>
+
+						<div itemprop="publisher" itemscope itemtype="https://schema.org/Organization">
+							<div itemprop="logo" itemscope itemtype="https://schema.org/ImageObject">
+								<meta itemprop="url" content="https://www.lowreal.net/images/logo.png">
+								<meta itemprop="width" content="189">
+								<meta itemprop="height" content="105">
+							</div>
+							<meta itemprop="name" content="cho45">
+						</div>
+
+						<meta itemprop="datePublished" content="{{$e.CreatedAt.UTC.Format "2006-01-02T15:04:05Z"}}">
+						<meta itemprop="dateModified" content="{{$e.ModifiedAt.UTC.Format "2006-01-02T15:04:05Z"}}">
+
+						<div itemprop="image" itemscope itemtype="https://schema.org/ImageObject">
+							<meta itemprop="url" content="https://www.lowreal.net/images/logo.png">
+							<meta itemprop="width" content="189">
+							<meta itemprop="height" content="105">
+						</div>
+					</div>
+				</div>
+			</header>
+
+			<div class="content" itemprop="articleBody">
+				{{$e.FormattedBody | safeHTML}}
+
+				{{$baseURL := $.BaseURL}}
+				{{range $tags}}
+				<ol itemscope itemtype="http://schema.org/BreadcrumbList">
+					<li itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem">
+						<a itemprop="item" href="{{$baseURL}}/"><span itemprop="name">トップ</span></a>
+						<meta itemprop="position" content="1">
+					</li>
+					<li itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem">
+						<a itemprop="item" href="{{$baseURL}}/{{.}}/"><span itemprop="name">{{.}}</span></a>
+						<meta itemprop="position" content="2">
+					</li>
+					<li itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem">
+						<a itemprop="item" href="{{$canonical}}"><span itemprop="name">{{$cleanTitle}}</span></a>
+						<meta itemprop="position" content="3">
+					</li>
+				</ol>
+				{{end}}
+			</div>
+
+			{{if $.Trackbacks}}
+			<div class="content trackbacks">
+				<h3>このエントリを参照するエントリ</h3>
+				{{range $.Trackbacks}}
+				<ul>
+					<li data-id="{{.ID}}">
+						<a href="/{{.Path}}">
+							<em>{{.DisplayTitle}}</em><br>
+							<span class="summary">{{summary .Body 140}}</span>
+
+							<time datetime="{{.CreatedAt.UTC.Format "2006-01-02T15:04:05Z"}}" itemprop="datePublished">
+								<relative-time epoch="{{.CreatedAt.Unix}}">{{.CreatedAt.Format "15:04"}}</relative-time>
+							</time>
+						</a>
+					</li>
+				</ul>
+				{{end}}
+			</div>
+			{{end}}
+
+			<div class="content similar-entries"></div>
+
+			<div class="social">
+				<p class="share-buttons">
+					<a class="share-button" style="background: #3b5998" target="_blank" rel="noopener nofollow"
+						href="https://www.facebook.com/sharer/sharer.php?u={{$canonical}}"
+					>
+						<img src="/images/sharebuttons/FB-f-Logo__white_50.png" width="18" height="18" alt="Facebook"/>
+					</a>
+					<a class="share-button" style="background: #efefef" target="_blank" rel="noopener nofollow"
+						href="https://bsky.app/intent/compose?text={{$cleanTitle}} {{$canonical}}"
+					>
+						<img src="/images/bluesky_media_kit_logo_svgs.svg" width="40" height="40" alt="Bluesky"/>
+					</a>
+					<a class="share-button" style="background: #00a4de" target="_blank" rel="noopener nofollow"
+						href="http://b.hatena.ne.jp/add?url={{$canonical}}"
+					>
+						<img src="/images/sharebuttons/hatenabookmark-logomark.svg" width="40" height="40" alt="はてなブックマーク"/>
+					</a>
+				</p>
+			</div>
+		</article>
 	{{end}}
 </div>
 
@@ -45,139 +179,3 @@
 		{{end}}
 	{{end}}
 </nav>
-
-{{define "article"}}
-{{$cleanTitle := .Entry.DisplayTitle}}
-{{$tags := .Entry.Tags}}
-{{$canonical := printf "%s/%s" .BaseURL .Entry.Path}}
-<article
-	id="post-{{.Entry.CreatedAt.Unix}}"
-	class="{{range $tags}}{{.}} {{end}}{{if .IsFirst}}first {{end}}status-{{.Entry.Status}}"
-	data-id="{{.Entry.ID}}"
-	{{if not .IsPermalink}}
-	itemprop="blogPosts"
-	itemscope
-	itemtype="http://schema.org/BlogPosting"
-	{{end}}
->
-	<header>
-		<h2 itemprop="name"><a href="{{$canonical}}" class="bookmark" rel="bookmark" itemprop="url"><budoux-ja>{{$cleanTitle}}</budoux-ja></a></h2>
-		<div class="metadata">
-			{{$baseURL := .BaseURL}}
-			<span class="tags">
-				{{range $tags}}
-					<a href="{{$baseURL}}/{{.}}/"><span itemprop="keywords">{{.}}</span></a>
-				{{end}}
-			</span>
-
-			<time datetime="{{.Entry.CreatedAt.UTC.Format "2006-01-02T15:04:05Z"}}" itemprop="datePublished">
-				<relative-time epoch="{{.Entry.CreatedAt.Unix}}">{{.Entry.CreatedAt.Format "15:04"}}</relative-time>
-			</time>
-
-			{{if eq .Entry.Status "scheduled"}}
-				<span class="status">
-					{{if .Entry.PublishAt.Valid}}<time datetime="{{.Entry.PublishAt.Time.UTC.Format "2006-01-02T15:04:05Z"}}"><relative-time epoch="{{.Entry.PublishAt.Time.Unix}}">{{.Entry.PublishAt.Time.Format "2006-01-02 15:04"}}</relative-time></time>{{else}}未来{{end}}に公開
-				</span>
-			{{end}}
-
-			{{if .IsAuth}}
-				<a href="/admin/edit?id={{.Entry.ID}}" class="nogag-edit">編集</a>
-			{{end}}
-
-			<div style="display: none">
-				<meta itemscope itemprop="mainEntityOfPage"  itemType="https://schema.org/WebPage" content="{{$canonical}}">
-				<span itemprop="headline">{{$cleanTitle}}</span>
-				<span itemprop="description">{{summary .Entry.FormattedBody 100}}</span>
-
-				<span itemprop="author" itemscope itemtype="https://schema.org/Person">
-					<a href="http://www.lowreal.net/" itemprop="url">
-						<span itemprop="name">cho45</span>
-					</a>
-				</span>
-
-				<div itemprop="publisher" itemscope itemtype="https://schema.org/Organization">
-					<div itemprop="logo" itemscope itemtype="https://schema.org/ImageObject">
-						<meta itemprop="url" content="https://www.lowreal.net/images/logo.png">
-						<meta itemprop="width" content="189">
-						<meta itemprop="height" content="105">
-					</div>
-					<meta itemprop="name" content="cho45">
-				</div>
-
-				<meta itemprop="datePublished" content="{{.Entry.CreatedAt.UTC.Format "2006-01-02T15:04:05Z"}}">
-				<meta itemprop="dateModified" content="{{.Entry.ModifiedAt.UTC.Format "2006-01-02T15:04:05Z"}}">
-
-				<div itemprop="image" itemscope itemtype="https://schema.org/ImageObject">
-					<meta itemprop="url" content="https://www.lowreal.net/images/logo.png">
-					<meta itemprop="width" content="189">
-					<meta itemprop="height" content="105">
-				</div>
-			</div>
-		</div>
-	</header>
-
-	<div class="content" itemprop="articleBody">
-		{{.Entry.FormattedBody | safeHTML}}
-
-		{{$baseURL := .BaseURL}}
-		{{range $tags}}
-		<ol itemscope itemtype="http://schema.org/BreadcrumbList">
-			<li itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem">
-				<a itemprop="item" href="{{$baseURL}}/"><span itemprop="name">トップ</span></a>
-				<meta itemprop="position" content="1">
-			</li>
-			<li itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem">
-				<a itemprop="item" href="{{$baseURL}}/{{.}}/"><span itemprop="name">{{.}}</span></a>
-				<meta itemprop="position" content="2">
-			</li>
-			<li itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem">
-				<a itemprop="item" href="{{$canonical}}"><span itemprop="name">{{$cleanTitle}}</span></a>
-				<meta itemprop="position" content="3">
-			</li>
-		</ol>
-		{{end}}
-	</div>
-
-	{{if .Trackbacks}}
-	<div class="content trackbacks">
-		<h3>このエントリを参照するエントリ</h3>
-		{{range .Trackbacks}}
-		<ul>
-			<li data-id="{{.ID}}">
-				<a href="/{{.Path}}">
-					<em>{{.DisplayTitle}}</em><br>
-					<span class="summary">{{summary .Body 140}}</span>
-
-					<time datetime="{{.CreatedAt.UTC.Format "2006-01-02T15:04:05Z"}}" itemprop="datePublished">
-						<relative-time epoch="{{.CreatedAt.Unix}}">{{.CreatedAt.Format "15:04"}}</relative-time>
-					</time>
-				</a>
-			</li>
-		</ul>
-		{{end}}
-	</div>
-	{{end}}
-
-	<div class="content similar-entries"></div>
-
-	<div class="social">
-		<p class="share-buttons">
-			<a class="share-button" style="background: #3b5998" target="_blank" rel="noopener nofollow"
-				href="https://www.facebook.com/sharer/sharer.php?u={{$canonical}}"
-			>
-				<img src="/images/sharebuttons/FB-f-Logo__white_50.png" width="18" height="18" alt="Facebook"/>
-			</a>
-			<a class="share-button" style="background: #efefef" target="_blank" rel="noopener nofollow"
-				href="https://bsky.app/intent/compose?text={{$cleanTitle}} {{$canonical}}"
-			>
-				<img src="/images/bluesky_media_kit_logo_svgs.svg" width="40" height="40" alt="Bluesky"/>
-			</a>
-			<a class="share-button" style="background: #00a4de" target="_blank" rel="noopener nofollow"
-				href="http://b.hatena.ne.jp/add?url={{$canonical}}"
-			>
-				<img src="/images/sharebuttons/hatenabookmark-logomark.svg" width="40" height="40" alt="はてなブックマーク"/>
-			</a>
-		</p>
-	</div>
-</article>
-{{end}}
