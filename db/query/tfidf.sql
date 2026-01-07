@@ -33,7 +33,7 @@ FROM (
     FROM related_entries
     WHERE entry_id IN (sqlc.slice('entry_ids'))
 )
-WHERE rn <= 10;
+WHERE rn <= 5;
 
 -- name: DeletePostingsByEntryID :exec
 DELETE FROM postings WHERE entry_id = ?;

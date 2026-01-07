@@ -266,7 +266,7 @@ FROM (
     FROM related_entries
     WHERE entry_id IN (/*SLICE:entry_ids*/?)
 )
-WHERE rn <= 10
+WHERE rn <= 5
 `
 
 type ListRelatedEntriesByEntryIDsRow struct {
