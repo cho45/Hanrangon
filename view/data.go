@@ -11,6 +11,8 @@ type LayoutData struct {
 	PageTitle    string // ページ固有のタイトル（サイト名は含まない）
 	BaseURL      string
 	CanonicalURL string
+	Description  string
+	ImageURL     string
 	IsAuth       bool
 }
 

@@ -103,8 +103,11 @@ func (a *AppImpl) newLayoutData(c echo.Context, pageTitle string) view.LayoutDat
 	baseURL := strings.TrimSuffix(a.config.BaseURL, "/")
 	return view.LayoutData{
 		PageTitle:    pageTitle,
-		BaseURL:      a.config.BaseURL,
+		BaseURL:      baseURL,
 		CanonicalURL: baseURL + c.Request().URL.Path,
+		Description:  "写真・文章による、ある普通の人間の人生の記録",
+		ImageURL:     baseURL + "/images/profile.jpg",
+		OGType:       "website",
 		IsAuth:       a.IsAuth(c),
 	}
 }

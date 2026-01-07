@@ -609,6 +609,16 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 		Older:      olderPtr,
 		Newer:      newerPtr,
 	}
+
+	data.Description = view.Summary(entry.FormattedBody, 100)
+	if img := view.ExtractFirstImage(entry.FormattedBody); img != "" {
+		if strings.HasPrefix(img, "http") {
+			data.ImageURL = img
+		} else {
+			data.ImageURL = app.JoinBaseURL(img)
+		}
+	}
+
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
 func getLatestModTime(entries []*model.Entry) time.Time {

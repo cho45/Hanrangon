@@ -86,6 +86,28 @@ func Summary(htmlContent string, length interface{}) string {
 	return string(runes)
 }
 
+func ExtractFirstImage(htmlContent string) string {
+	tokenizer := html.NewTokenizer(strings.NewReader(htmlContent))
+	for {
+		tokenType := tokenizer.Next()
+		if tokenType == html.ErrorToken {
+			break
+		}
+
+		token := tokenizer.Token()
+		if tokenType == html.StartTagToken || tokenType == html.SelfClosingTagToken {
+			if token.Data == "img" {
+				for _, attr := range token.Attr {
+					if attr.Key == "src" {
+						return attr.Val
+					}
+				}
+			}
+		}
+	}
+	return ""
+}
+
 type ArchiveYear struct {
 	Year   string
 	Months []ArchiveMonth

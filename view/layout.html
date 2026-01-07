@@ -16,7 +16,8 @@ links = [
 	<meta charset="utf-8"/>
 
 	<title>{{if .PageTitle}}{{.PageTitle}} - {{end}}氾濫原</title>
-	<meta name="description" content="写真・文章による、ある普通の人間の人生の記録"/>
+	<meta name="description" content="{{.Description}}"/>
+	<meta name="author" content="cho45"/>
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=2.0, user-scalable=yes"/>
 	<meta name="theme-color" content="#000000"/>
 
@@ -24,23 +25,39 @@ links = [
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
 
 	<link rel="alternate" type="application/atom+xml" title="Feed" href="/feed"/>
+	<link rel="canonical" href="{{.CanonicalURL}}"/>
+	<link rel="icon" href="/images/favicon.ico"/>
+	<link rel="apple-touch-icon" href="/images/apple-touch-icon.png"/>
 
 	<meta name="referrer" content="unsafe-url"/>
 
 	<meta itemprop="name" content="{{if .PageTitle}}{{.PageTitle}} - {{end}}氾濫原"/>
-	<meta itemprop="description" content="写真・文章による、ある普通の人間の人生の記録"/>
+	<meta itemprop="description" content="{{.Description}}"/>
 
+	<meta property="og:site_name" content="氾濫原"/>
 	<meta property="og:title" content="{{if .PageTitle}}{{.PageTitle}} - {{end}}氾濫原"/>
-	<meta property="og:type" content="blog"/>
+	<meta property="og:description" content="{{.Description}}"/>
+	<meta property="og:type" content="{{.OGType}}"/>
 	<meta property="og:url" content="{{.CanonicalURL}}"/>
+	<meta property="og:image" content="{{.ImageURL}}"/>
+	<meta property="og:locale" content="ja_JP"/>
 	<meta property="og:email" content="cho45@lowreal.net"/>
 	<meta property="fb:admins" content="cho45"/>
+
+	<meta name="twitter:card" content="summary_large_image"/>
+	<meta name="twitter:site" content="@cho45"/>
+	<meta name="twitter:creator" content="@cho45"/>
+	<meta name="twitter:title" content="{{if .PageTitle}}{{.PageTitle}} - {{end}}氾濫原"/>
+	<meta name="twitter:description" content="{{.Description}}"/>
+	<meta name="twitter:image" content="{{.ImageURL}}"/>
 
 	<link rel="stylesheet" href="/css/style.css"/>
 	<link rel="stylesheet" href="/css/github.css"/>
 
 	<script src="/js/budoux-ja.min.js" defer></script>
 	<script type="module" src="/js/nogag.js"></script>
+
+	{{block "head" .}}{{end}}
 </head>
 <body>
 	<header id="global-header">
