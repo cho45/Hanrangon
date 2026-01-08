@@ -1,9 +1,9 @@
 {{define "head"}}
 <style>
 	.search-container {
-		max-width: 800px;
-		margin: 20px auto;
-		padding: 0 20px;
+		max-width: var(--container-width);
+		margin: 0 auto;
+		padding: 0 1.5rem;
 	}
 	.search-form {
 		display: flex;
@@ -11,63 +11,93 @@
 		margin-bottom: 30px;
 		position: sticky;
 		top: 0;
-		background: #fff;
-		padding: 15px 0;
+		background: var(--bg-color);
+		padding: 1.5rem 0;
 		z-index: 10;
-		box-shadow: 0 4px 4px -4px rgba(0,0,0,0.1);
+		border-bottom: 1px solid var(--border-color);
 	}
 	.search-form input[type="search"] {
 		flex: 1;
-		padding: 10px;
-		font-size: 1.1rem;
-		border: 1px solid #dfe5e7;
-		border-radius: 4px;
+		padding: 0.75rem 1rem;
+		font-size: 1rem;
+		border: 1px solid var(--border-color);
+		border-radius: 2px;
+		background: var(--code-bg);
+		color: var(--text-color);
+		font-family: inherit;
+		outline: none;
+		transition: border-color 0.2s;
+	}
+	.search-form input[type="search"]:focus {
+		border-color: var(--link-color);
 	}
 	.search-form button {
-		padding: 10px 20px;
-		background: #00acc1;
+		padding: 0.75rem 1.5rem;
+		background: var(--link-color);
 		color: #fff;
 		border: none;
-		border-radius: 4px;
+		border-radius: 2px;
 		cursor: pointer;
-		font-size: 1rem;
+		font-size: 0.9rem;
+		font-weight: 500;
+		transition: opacity 0.2s;
+	}
+	.search-form button:hover {
+		opacity: 0.8;
 	}
 	.search-result-item {
-		margin-bottom: 20px;
-		padding-bottom: 15px;
-		border-bottom: 1px solid #eee;
+		margin-bottom: 2.5rem;
+		padding-bottom: 1.5rem;
+		border-bottom: 1px solid var(--border-color);
 	}
 	.search-result-item h3 {
-		margin: 0 0 5px 0;
-		font-size: 1.2rem;
+		margin: 0 0 0.5rem 0;
+		font-size: 1.25rem;
 		display: flex;
 		flex-wrap: wrap;
 		gap: 8px;
 		align-items: center;
+		font-family: 'Noto Serif JP', serif;
+	}
+	.search-result-item h3 a {
+		text-decoration: none;
+		color: var(--text-color);
+	}
+	.search-result-item h3 a:hover {
+		color: var(--link-color);
+		text-decoration: underline;
 	}
 	.search-result-item .tag {
-		background: #e3f2fd;
-		color: #1976d2;
-		font-size: 0.75rem;
-		padding: 2px 8px;
-		border-radius: 12px;
-		border: 1px solid #bbdefb;
+		background: var(--code-bg);
+		color: var(--accent-color);
+		font-size: 0.7rem;
+		padding: 1px 6px;
+		border-radius: 2px;
+		border: 1px solid var(--border-color);
 		font-weight: normal;
+		font-family: sans-serif;
 	}
 	.search-result-item .summary {
-		font-size: 0.95rem;
-		color: #333;
-		margin-bottom: 8px;
-		line-height: 1.5;
+		font-size: 0.9rem;
+		color: var(--text-color);
+		margin-bottom: 0.5rem;
+		line-height: 1.6;
 	}
 	.search-result-item .meta {
-		font-size: 0.85rem;
-		color: #666;
+		font-size: 0.75rem;
+		color: var(--accent-color);
 		display: flex;
 		gap: 15px;
+		font-family: sans-serif;
 	}
 	.search-result-item .score {
-		color: #00acc1;
+		opacity: 0.5;
+	}
+	mark {
+		background: #eee;
+		color: #000;
+		padding: 0 1px;
+		border-radius: 1px;
 		font-weight: bold;
 	}
 	.loading-spinner {

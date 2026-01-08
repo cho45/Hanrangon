@@ -77,12 +77,15 @@ document.addEventListener('DOMContentLoaded', () => {
 				const textContent = doc.body.textContent || "";
 				const summary = textContent.replace(/\s+/g, ' ').trim().substring(0, 200) + (textContent.length > 200 ? '...' : '');
 
+				const highlightedTitle = highlight(item.title, query);
+				const highlightedSummary = highlight(summary, query);
+
 				div.innerHTML = `
 					<h3>
-						<a href="/${item.path}">${escapeHTML(item.title)}</a>
+						<a href="/${item.path}">${highlightedTitle}</a>
 						${tagsHTML}
 					</h3>
-					<div class="summary">${escapeHTML(summary)}</div>
+					<div class="summary">${highlightedSummary}</div>
 					<div class="meta">
 						<span class="date"><relative-time epoch="${item.created_at}">${item.date}</relative-time></span>
 						<span class="score">Score: ${item.score.toFixed(4)}</span>
@@ -102,6 +105,17 @@ document.addEventListener('DOMContentLoaded', () => {
 		const p = document.createElement('p');
 		p.textContent = str;
 		return p.innerHTML;
+	}
+
+	function highlight(text, query) {
+		if (!query) return escapeHTML(text);
+		const escapedText = escapeHTML(text);
+		const tokens = query.split(/\s+/).filter(t => t.length >= 2);
+		if (tokens.length === 0) return escapedText;
+
+		const pattern = tokens.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+		const regex = new RegExp(`(${pattern})`, 'gi');
+		return escapedText.replace(regex, '<mark>$1</mark>');
 	}
 
 	const debouncedSearch = debounce((q) => performSearch(q), 500);
