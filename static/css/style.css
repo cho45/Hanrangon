@@ -570,13 +570,66 @@ article.status-scheduled {
 /* Typography elements */
 ins {
 	text-decoration: none;
-	background-color: #f1f8ff;
-	padding: 0.2rem 0.4rem;
+}
+
+ins::before {
+	content: "［追記: ";
+	font-size: 0.8em;
+	color: var(--accent-color);
+}
+
+ins::after {
+	content: "］";
+	font-size: 0.8em;
+	color: var(--accent-color);
 }
 
 del {
-	color: var(--accent-color);
 	text-decoration: line-through;
+	color: var(--accent-color);
+}
+
+del::before {
+	content: "［削除: ";
+	font-size: 0.8em;
+	color: var(--accent-color);
+}
+
+del::after {
+	content: "］";
+	font-size: 0.8em;
+	color: var(--accent-color);
+}
+
+/* Block-level ins/del (when it contains block elements) */
+ins:has(p, div, ul, ol, blockquote, section, figure),
+del:has(p, div, ul, ol, blockquote, section, figure) {
+	display: block;
+	padding: 1rem;
+	border: 1px dashed var(--border-color);
+	margin: 1.5rem 0;
+}
+
+ins:has(p, div, ul, ol, blockquote, section, figure)::before,
+del:has(p, div, ul, ol, blockquote, section, figure)::before {
+	display: block;
+	font-weight: bold;
+	margin-bottom: 0.5rem;
+	font-size: 0.9rem;
+	color: var(--accent-color);
+}
+
+ins:has(p, div, ul, ol, blockquote, section, figure)::before {
+	content: "【追記】";
+}
+
+del:has(p, div, ul, ol, blockquote, section, figure)::before {
+	content: "【削除】";
+}
+
+ins:has(p, div, ul, ol, blockquote, section, figure)::after,
+del:has(p, div, ul, ol, blockquote, section, figure)::after {
+	content: none;
 }
 
 q {
