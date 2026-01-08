@@ -19,6 +19,7 @@ func NewServer(app *AppImpl) *echo.Echo {
 	config := app.Config()
 	e := echo.New()
 	e.HideBanner = true
+	e.Debug = config.IsDevelopment()
 
 	if os.Getenv("PPROF") == "true" {
 		pprof.Register(e)
@@ -115,6 +116,7 @@ func NewServer(app *AppImpl) *echo.Echo {
 	e.GET("/robots.txt", app.HandleRobotsTxt)
 
 	e.GET("/api/similar", app.HandleApiSimilar)
+	e.GET("/images/ogp/:id", app.HandleOGP)
 
 	// Auth
 	e.GET("/login", app.HandleLogin)

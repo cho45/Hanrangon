@@ -571,6 +571,8 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 		} else {
 			data.ImageURL = app.JoinBaseURL(img)
 		}
+	} else {
+		data.ImageURL = app.JoinBaseURL(fmt.Sprintf("/images/ogp/%d.png", entry.ID))
 	}
 
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)

@@ -1,0 +1,243 @@
+package app
+
+import (
+	"fmt"
+	"image"
+	"image/color"
+	"image/draw"
+	"image/png"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+
+	"github.com/labstack/echo/v4"
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/opentype"
+	"golang.org/x/image/math/fixed"
+)
+
+func (app *AppImpl) HandleOGP(c echo.Context) error {
+	idStr := c.Param("id")
+	idStr = strings.TrimSuffix(idStr, ".png")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid ID")
+	}
+
+	cachePath := filepath.Join("var", "cache", "ogp", fmt.Sprintf("%d.png", id))
+
+	// 開発環境かつスーパーリロード時はキャッシュを破棄する
+	if app.config.IsDevelopment() {
+		cc := c.Request().Header.Get("Cache-Control")
+		pragma := c.Request().Header.Get("Pragma")
+		if cc == "no-cache" || pragma == "no-cache" {
+			os.Remove(cachePath)
+		}
+	}
+
+	// キャッシュがあれば即座に返す
+	if _, err := os.Stat(cachePath); err == nil {
+		return c.File(cachePath)
+	}
+
+	// 記事タイトルを取得
+	entry, err := app.queries.GetEntryById(c.Request().Context(), id)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
+	}
+
+	// 1. 背景画像をロード
+	bgPath := filepath.Join(app.config.StaticDir, "images", "ogp_base.png")
+	bgFile, err := os.Open(bgPath)
+	var bg image.Image
+	if err != nil {
+		rgba := image.NewRGBA(image.Rect(0, 0, 1200, 630))
+		draw.Draw(rgba, rgba.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
+		bg = rgba
+	} else {
+		bg, err = png.Decode(bgFile)
+		bgFile.Close()
+		if err != nil {
+			return fmt.Errorf("failed to decode background: %w", err)
+		}
+	}
+
+	bounds := bg.Bounds()
+	dst := image.NewRGBA(bounds)
+	draw.Draw(dst, bounds, bg, bounds.Min, draw.Src)
+
+	// 2. フォントの準備
+	fontPath := filepath.Join(app.config.StaticDir, "fonts", "NotoSansJP-Bold.ttf")
+	fontBytes, err := os.ReadFile(fontPath)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("failed to read font: %v", err))
+	}
+
+	f, err := opentype.Parse(fontBytes)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("failed to parse font: %v", err))
+	}
+
+	const dpi = 72
+	titleFace, _ := opentype.NewFace(f, &opentype.FaceOptions{
+		Size:    64,
+		DPI:     dpi,
+		Hinting: font.HintingFull,
+	})
+	defer titleFace.Close()
+
+	metaFace, _ := opentype.NewFace(f, &opentype.FaceOptions{
+		Size:    36,
+		DPI:     dpi,
+		Hinting: font.HintingFull,
+	})
+	defer metaFace.Close()
+
+	// 3. テキストの準備
+	title := entry.DisplayTitle()
+	dateStr := entry.CreatedAt.Format("2006 . 01 . 02")
+
+	pathParts := strings.Split(strings.Trim(entry.Path, "/"), "/")
+	if len(pathParts) > 0 {
+		seq := pathParts[len(pathParts)-1]
+		if _, err := strconv.Atoi(seq); err == nil {
+			dateStr = fmt.Sprintf("%s  #%s", dateStr, seq)
+		}
+	}
+
+	tags := entry.Tags()
+	tagStr := ""
+	for _, t := range tags {
+		tagStr += " #" + t
+	}
+	tagStr = strings.TrimSpace(tagStr)
+	
+	d := &font.Drawer{
+		Dst: dst,
+	}
+
+	const margin = 80
+	maxWidth := bounds.Dx() - 2*margin
+
+	d.Face = titleFace
+	if d.MeasureString(title).Round() > maxWidth {
+		runes := []rune(title)
+		for i := len(runes); i >= 0; i-- {
+			truncated := string(runes[:i]) + "..."
+			if d.MeasureString(truncated).Round() <= maxWidth {
+				title = truncated
+				break
+			}
+		}
+	}
+
+	centerY := bounds.Dy() / 2
+
+	// 4. 中央に短い栞（しおり）タブを描画
+	tabColor := color.RGBA{R: 44, G: 62, B: 80, A: 255}
+	tabW := 60
+	tabH := 80
+	tabX := (bounds.Dx() - tabW) / 2
+	for x := tabX; x < tabX+tabW; x++ {
+		for y := 0; y < tabH; y++ {
+			distFromBottom := tabH - y
+			distFromCenter := x - (tabX + tabW/2)
+			if distFromCenter < 0 { distFromCenter = -distFromCenter }
+			if distFromBottom > distFromCenter {
+				dst.Set(x, y, tabColor)
+			}
+		}
+	}
+
+	// 5. テキストの描画 (元の位置に戻す)
+	// 日付
+	d.Face = metaFace
+	d.Src = image.NewUniform(color.RGBA{R: 120, G: 130, B: 140, A: 255})
+	dateWidth := d.MeasureString(dateStr)
+	d.Dot = fixed.Point26_6{
+		X: (fixed.I(bounds.Dx()) - dateWidth) / 2,
+		Y: fixed.I(centerY - 180),
+	}
+	d.DrawString(dateStr)
+
+	// タグ
+	if tagStr != "" {
+		d.Src = image.NewUniform(color.RGBA{R: 44, G: 62, B: 80, A: 255})
+		tagWidth := d.MeasureString(tagStr)
+		d.Dot = fixed.Point26_6{
+			X: (fixed.I(bounds.Dx()) - tagWidth) / 2,
+			Y: fixed.I(centerY - 120),
+		}
+		d.DrawString(tagStr)
+	}
+
+	// タイトル
+	d.Face = titleFace
+	d.Src = image.NewUniform(color.RGBA{R: 44, G: 62, B: 80, A: 255})
+	titleWidth := d.MeasureString(title)
+	d.Dot = fixed.Point26_6{
+		X: (fixed.I(bounds.Dx()) - titleWidth) / 2,
+		Y: fixed.I(centerY - 20),
+	}
+	d.DrawString(title)
+
+	// 6. 下部ライン
+	lineColor := color.RGBA{R: 44, G: 62, B: 80, A: 255}
+	for x := 0; x < bounds.Dx(); x++ {
+		for y := bounds.Dy() - 12; y < bounds.Dy(); y++ {
+			dst.Set(x, y, lineColor)
+		}
+	}
+
+	// 7. パレット変換と保存
+	palette := make(color.Palette, 0, 256)
+	palette = append(palette, color.White)
+	for i := 0; i < 127; i++ {
+		t := float64(i) / 126.0
+		palette = append(palette, color.RGBA{
+			R: uint8(255*(1-t) + 44*t),
+			G: uint8(255*(1-t) + 62*t),
+			B: uint8(255*(1-t) + 80*t),
+			A: 255,
+		})
+	}
+	for i := 0; i < 128; i++ {
+		t := float64(i) / 127.0
+		palette = append(palette, color.RGBA{
+			R: uint8(255*(1-t) + 120*t),
+			G: uint8(255*(1-t) + 130*t),
+			B: uint8(255*(1-t) + 140*t),
+			A: 255,
+		})
+	}
+
+	paletted := image.NewPaletted(bounds, palette)
+	draw.Draw(paletted, bounds, dst, image.Point{}, draw.Src)
+
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0755); err != nil {
+		return fmt.Errorf("failed to create cache directory: %w", err)
+	}
+
+	outFile, err := os.Create(cachePath)
+	if err != nil {
+		return fmt.Errorf("failed to create cache file: %w", err)
+	}
+	defer outFile.Close()
+
+	enc := &png.Encoder{CompressionLevel: png.BestCompression}
+	if err := enc.Encode(outFile, paletted); err != nil {
+		return fmt.Errorf("failed to encode png: %w", err)
+	}
+
+	return c.File(cachePath)
+}
+
+func (app *AppImpl) InvalidateOGPCache(id int64) error {
+	cachePath := filepath.Join("var", "cache", "ogp", fmt.Sprintf("%d.png", id))
+	if err := os.Remove(cachePath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}

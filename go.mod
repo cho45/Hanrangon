@@ -12,11 +12,11 @@ require (
 	github.com/labstack/echo-contrib v0.17.4
 	github.com/labstack/echo/v4 v4.14.0
 	github.com/mattn/go-sqlite3 v1.14.32
-	github.com/nyarla/go-japanese-segmenter v0.1.0
 	github.com/sergi/go-diff v1.4.0
 	github.com/stretchr/testify v1.11.1
 	github.com/yuin/goldmark v1.7.13
 	golang.org/x/crypto v0.46.0
+	golang.org/x/image v0.34.0
 	golang.org/x/net v0.48.0
 	golang.org/x/term v0.38.0
 	golang.org/x/text v0.32.0
