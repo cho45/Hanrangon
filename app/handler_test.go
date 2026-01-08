@@ -1095,3 +1095,90 @@ func TestSqlcDateOverride(t *testing.T) {
 		t.Errorf("Date contains time information: %q", actualDate)
 	}
 }
+
+func TestHandleApiSearch(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	// 1. Insert test data with various statuses
+	now := time.Now()
+	_, err := env.db.Exec(`
+		INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at, status, publish_at)
+		VALUES
+		(1, 'Public Apple', 'Apple test', '<p>Apple</p>', 'p1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00', 'public', NULL),
+		(2, 'Draft Apple', 'Apple draft', '<p>Apple</p>', 'p2', 'Markdown', '2025-01-01', '2025-01-01 11:00:00', '2025-01-01 11:00:00', 'draft', NULL),
+		(3, 'Future Apple', 'Apple future', '<p>Apple</p>', 'p3', 'Markdown', '2025-01-01', '2025-01-01 12:00:00', '2025-01-01 12:00:00', 'public', ?),
+		(4, 'Public Banana', 'Banana test', '<p>Banana</p>', 'p4', 'Markdown', '2025-01-01', '2025-01-01 13:00:00', '2025-01-01 13:00:00', 'public', NULL)
+	`, now.Add(24*time.Hour).Format(time.RFC3339))
+	if err != nil {
+		t.Fatalf("failed to insert test data: %v", err)
+	}
+
+	// 2. Update TF-IDF index
+	ctx := context.Background()
+	calc := env.app.Calculator()
+	calc.DFMaxThresholdRate = 1.0
+	entryTexts := map[int64][2]string{
+		1: {"Public Entry", "Apple"},
+		2: {"Draft Entry", "Apple"},
+		3: {"Future Entry", "Apple"},
+		4: {"Other Entry", "Banana"},
+	}
+	for id, txts := range entryTexts {
+		if err := calc.UpdateTFIDF(ctx, id, txts[0], txts[1]); err != nil {
+			t.Fatalf("failed to update tfidf %d: %v", id, err)
+		}
+	}
+	if err := calc.RecalculateTFIDFValues(ctx, nil); err != nil {
+		t.Fatalf("failed to recalculate tfidf: %v", err)
+	}
+
+	t.Run("Filtering and Ranking", func(t *testing.T) {
+		// "Apple" should match entries 1, 2, 3 but only 1 is public and past
+		req := httptest.NewRequest(http.MethodGet, "/api/search?q=Apple", nil)
+		rec := httptest.NewRecorder()
+		env.server.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("want status 200, got %d", rec.Code)
+		}
+
+		var resp struct {
+			Results []struct {
+				ID    int64   `json:"id"`
+				Title string  `json:"title"`
+				Score float64 `json:"score"`
+			} `json:"results"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to unmarshal: %v", err)
+		}
+
+		// Now only Entry 1 should be returned. Entry 4 should NOT match "Apple" at all.
+		if len(resp.Results) != 1 {
+			t.Errorf("expected exactly 1 result (entry 1), got %d. Results: %+v", len(resp.Results), resp.Results)
+		} else if resp.Results[0].ID != 1 {
+			t.Errorf("expected Entry 1, got %d", resp.Results[0].ID)
+		}
+	})
+
+	t.Run("Multi-term Ranking", func(t *testing.T) {
+		// Searching for "Apple Banana" should return both but ranked by relevancy (if applicable)
+		// In our tiny dataset, scores might be identical or varied by IDF
+		req := httptest.NewRequest(http.MethodGet, "/api/search?q=Apple+Banana", nil)
+		rec := httptest.NewRecorder()
+		env.server.ServeHTTP(rec, req)
+
+		var resp struct {
+			Results []struct {
+				ID int64 `json:"id"`
+			} `json:"results"`
+		}
+		json.Unmarshal(rec.Body.Bytes(), &resp)
+
+		// Both Entry 1 and 4 are public
+		if len(resp.Results) != 2 {
+			t.Errorf("expected 2 results, got %d", len(resp.Results))
+		}
+	})
+}

@@ -105,13 +105,14 @@ func setupTest(t *testing.T) *testEnv {
 		t.Fatalf("failed to create calculator: %v", err)
 	}
 	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
 
 	// Create job queue for testing
 	registry := jobqueue.NewRegistry()
 	workerQueries := model.New(workerDB)
 	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
 
-	application := NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, worker)
+	application := NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
 	e := NewServer(application)
 
 	// テスト用のエラーハンドラーを設定（詳細なエラーメッセージを出力）

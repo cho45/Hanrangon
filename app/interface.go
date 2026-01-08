@@ -26,6 +26,7 @@ type App interface {
 	// TF-IDF accessors
 	Calculator() *tfidf.Calculator
 	SimilarityCalculator() *tfidf.SimilarityCalculator
+	Searcher() *tfidf.Searcher
 
 	// Job queue accessor
 	JobQueue() *jobqueue.Worker

@@ -55,6 +55,7 @@ func main() {
 		log.Fatalf("failed to create tfidf calculator: %v", err)
 	}
 	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
 
 	// 5. Registry作成
 	registry := jobqueue.NewRegistry()
@@ -64,7 +65,7 @@ func main() {
 	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
 
 	// 7. App作成
-	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, worker)
+	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
 
 	// 8. Execute command
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

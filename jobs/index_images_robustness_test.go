@@ -34,11 +34,13 @@ func TestIndexImagesJob_UniqueConstraintError(t *testing.T) {
 	tfidfQueries := model.New(tfidfDB)
 	calc, err := tfidf.NewCalculator(tfidfDB, model.New(tfidfDB), db, model.New(db))
 	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+
 	registry := jobqueue.NewRegistry()
 	workerQueries := model.New(workerDB)
 	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
 
-	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, worker)
+	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
 	job := NewIndexImagesJob(application)
 
 	// Create dummy image

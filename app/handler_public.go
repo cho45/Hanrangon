@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -586,4 +587,90 @@ func getLatestModTime(entries []model.Entry) time.Time {
 		}
 	}
 	return latest
+}
+
+func (app *AppImpl) HandleSearch(c echo.Context) error {
+	data := app.newLayoutData(c, "検索")
+	return app.templates.RenderWithLayout(c, "layout.html", "search.html", data)
+}
+
+func (app *AppImpl) HandleApiSearch(c echo.Context) error {
+	query := c.QueryParam("q")
+	if query == "" {
+		return c.JSON(http.StatusOK, map[string]interface{}{"results": []interface{}{}})
+	}
+
+	ctx := c.Request().Context()
+
+	// 1. tfidf.db からマッチする ID を取得
+	searchResults, err := app.Searcher().Search(ctx, query, 50)
+	if err != nil {
+		return err
+	}
+
+	if len(searchResults) == 0 {
+		return c.JSON(http.StatusOK, map[string]interface{}{"results": []interface{}{}})
+	}
+
+	// 2. data.db から記事情報を取得
+	ids := make([]int64, len(searchResults))
+	scoreMap := make(map[int64]float64)
+	for i, r := range searchResults {
+		ids[i] = r.EntryID
+		scoreMap[r.EntryID] = r.Score
+	}
+
+	entries, err := app.queries.ListEntriesByIds(ctx, ids)
+	if err != nil {
+		return err
+	}
+
+	// 3. フィルタリングと並び替え
+	type SearchEntryResponse struct {
+		ID            int64   `json:"id"`
+		Title         string  `json:"title"`
+		Path          string  `json:"path"`
+		Date          string  `json:"date"`
+		FormattedBody string  `json:"formatted_body"`
+		Score         float64 `json:"score"`
+	}
+
+	var results []SearchEntryResponse
+	now := time.Now()
+	for _, e := range entries {
+		// public かつ 公開済みかチェック
+		if e.Status == "public" && (!e.PublishAt.Valid || e.PublishAt.Time.Before(now)) {
+			score := scoreMap[e.ID]
+			// タイトルにクエリが含まれていればブースト
+			if strings.Contains(strings.ToLower(e.Title), strings.ToLower(query)) {
+				score *= 2.0
+			}
+
+			// 時間減衰 (Recency Boost)
+			// 1000日でスコアが半分になる程度の緩やかな減衰: score = score / (1 + days/1000)
+			if entryDate, err := time.Parse("2006-01-02", e.Date); err == nil {
+				daysOld := now.Sub(entryDate).Hours() / 24
+				if daysOld < 0 {
+					daysOld = 0
+				}
+				score *= (1.0 / (1.0 + daysOld/1000.0))
+			}
+
+			results = append(results, SearchEntryResponse{
+				ID:            e.ID,
+				Title:         e.Title,
+				Path:          e.Path,
+				Date:          e.Date,
+				FormattedBody: e.FormattedBody,
+				Score:         score,
+			})
+		}
+	}
+
+	// 元のスコア順に並び替え
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Score > results[j].Score
+	})
+
+	return c.JSON(http.StatusOK, map[string]interface{}{"results": results})
 }
