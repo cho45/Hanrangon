@@ -179,7 +179,7 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 	const margin = 80
 	titleWidth := (&font.Drawer{Face: titleFace}).MeasureString(title)
 	tagWidth := (&font.Drawer{Face: metaFace}).MeasureString(tagStr)
-	
+
 	// フェードアウトの必要判定
 	needsFade := false
 	if tagStr != "" && (fixed.I(1200)-tagWidth)/2 < fixed.I(margin) {
@@ -197,6 +197,7 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 	var textLayer *image.RGBA
 	var d *font.Drawer
 	if needsFade {
+		// フェードアウトが必要な場合は、合成計算のためにテキストのみを別レイヤー（透明）に描画
 		tpix := rgbaPool.Get().([]byte)
 		defer rgbaPool.Put(tpix)
 		for i := range tpix {
@@ -205,6 +206,7 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 		textLayer = &image.RGBA{Pix: tpix, Stride: 1200 * 4, Rect: dst.Rect}
 		d = &font.Drawer{Dst: textLayer}
 	} else {
+		// フェード不要な場合は、直接背景画像の上にテキストを描画して高速化
 		if ogpBaseImage != nil {
 			copy(dst.Pix, ogpBaseImage.Pix)
 		} else {
@@ -214,11 +216,14 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 	}
 
 	centerY := 315
+
+	// パート1: 日付の描画
 	d.Face = metaFace
 	d.Src = image.NewUniform(color.RGBA{120, 130, 140, 255})
 	d.Dot = fixed.Point26_6{X: (fixed.I(1200) - d.MeasureString(dateStr)) / 2, Y: fixed.I(centerY - 180)}
 	d.DrawString(dateStr)
 
+	// パート2: タグの描画
 	if tagStr != "" {
 		d.Src = image.NewUniform(color.RGBA{44, 62, 80, 255})
 		tagX := (fixed.I(1200) - d.MeasureString(tagStr)) / 2
@@ -229,6 +234,7 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 		d.DrawString(tagStr)
 	}
 
+	// パート3: タイトルの描画
 	d.Face = titleFace
 	d.Src = image.NewUniform(color.RGBA{44, 62, 80, 255})
 	titleX := (fixed.I(1200) - titleWidth) / 2
@@ -238,12 +244,14 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 	d.Dot = fixed.Point26_6{X: titleX, Y: fixed.I(centerY - 20)}
 	d.DrawString(title)
 
-	// 5. パレットへのマージ
+	// 5. 最終的な画像形式への変換 (RGBA -> 16色パレット)
+	// ファイルサイズを劇的に削減するため、フルカラー(RGBA)から16色のインデックス形式(Paletted)へ変換する
 	ppix := palettedPool.Get().([]byte)
 	defer palettedPool.Put(ppix)
 	paletted := &image.Paletted{Pix: ppix, Stride: 1200, Rect: dst.Rect, Palette: getOGPPalette()}
 
 	lut, pPix, dPix := ogpPaletteLUT, paletted.Pix, dst.Pix
+	// 高速化のため、不変の背景アセットを直接参照できるようにスライスを確保
 	var bRPix, bPPix []uint8
 	if ogpBaseImage != nil {
 		bRPix = ogpBaseImage.Pix
@@ -253,7 +261,8 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 	}
 
 	if needsFade {
-		// フェード計算と合成を 1 パスで実行
+		// フェード計算、アルファブレンディング（合成）、パレット変換（LUT）を 1 パスで実行
+		// textLayer (RGBA) を背景アセットに重ねつつ、その結果を直接 paletted (Index) に書き込む
 		fadeEnd, fadeLen := 1120, 120
 		fadeStart := fadeEnd - fadeLen
 		tPix := textLayer.Pix
@@ -263,6 +272,7 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 				i, j := off+x*4, pOff+x
 				srcA := uint32(tPix[i+3])
 				if srcA == 0 {
+					// テキストピクセルが完全に透明な場合は、背景アセットのパレットインデックスをそのままコピーして変換をスキップ
 					if bPPix != nil {
 						pPix[j] = bPPix[j]
 					} else {
@@ -270,6 +280,8 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 					}
 					continue
 				}
+
+				// 右端マージン付近でのフェードアウト用マスクを計算 (0-255)
 				mask := uint32(255)
 				if x >= fadeEnd {
 					mask = 0
@@ -284,6 +296,8 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 					}
 					continue
 				}
+
+				// 合成（アルファブレンディング）とLUT変換
 				sR, sG, sB, sA := (uint32(tPix[i])*mask)/255, (uint32(tPix[i+1])*mask)/255, (uint32(tPix[i+2])*mask)/255, (srcA*mask)/255
 				var dR, dG, dB uint32
 				if bRPix != nil {
@@ -291,13 +305,14 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 				} else {
 					dR, dG, dB = ogpBgR, ogpBgG, ogpBgB
 				}
+				// ポーター・ダフの Over 演算
 				invA := 255 - sA
 				r, g, b := (sR*255+dR*invA)/255, (sG*255+dG*invA)/255, (sB*255+dB*invA)/255
 				pPix[j] = lut[((r>>3)<<10)|((g>>3)<<5)|(b>>3)]
 			}
 		}
 	} else {
-		// フェード不要な場合は極めて高速なLUT変換
+		// フェード不要な場合は、すでに描画済みの dst (RGBA) を一気にパレット変換する
 		for i, j := 0, 0; i < len(dPix); i, j = i+4, j+1 {
 			pPix[j] = lut[((uint32(dPix[i])>>3)<<10)|((uint32(dPix[i+1])>>3)<<5)|(uint32(dPix[i+2])>>3)]
 		}
