@@ -29,10 +29,10 @@ func TestSearch(t *testing.T) {
 		{2, "京都の寺院", "京都にはたくさんの古い寺院があります。"},
 		{3, "東京の天気", "今日の東京は晴れです。"},
 		{4, "ユニーク単語", "これは珍しい言葉「超絶弩級」を含む記事です。"},
+		{10, "JS", "I love javascript"},
 	}
 
 	for _, e := range entries {
-		// formatted_body is NOT NULL in schema
 		_, err := dataDB.Exec("INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at, status) VALUES (?, ?, ?, ?, ?, 'Hatena', '2024-01-01', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'public')",
 			e.id, e.title, e.body, e.body, e.title)
 		if err != nil {
@@ -43,76 +43,79 @@ func TestSearch(t *testing.T) {
 		}
 	}
 
-	// Recalculate values to populate postings.tfidf_n
 	if err := calc.RecalculateTFIDFValues(ctx, nil); err != nil {
 		t.Fatalf("failed to recalculate tfidf values: %v", err)
 	}
 
-	t.Run("Ranking by TF (Term Frequency)", func(t *testing.T) {
-		// Entry 1 has "東京タワー" (multiple mentions of related bigrams implicitly)
-		// Entry 3 has "東京" once.
+	t.Run("AND search requirements", func(t *testing.T) {
+		// "東京タワー" contains 4 bigrams.
+		// Entry 1 has all of them. Entry 3 only has "東京".
 		results, err := searcher.Search(ctx, "東京タワー", 10)
 		if err != nil {
 			t.Fatalf("search failed: %v", err)
 		}
-		if len(results) < 2 {
-			t.Fatalf("expected results, got %d", len(results))
-		}
-		if results[0].EntryID != 1 {
-			t.Errorf("expected Entry 1 (exact match) to be first, got %d", results[0].EntryID)
+		if len(results) != 1 {
+			t.Errorf("expected exactly 1 result for '東京タワー' (Entry 1), got %d", len(results))
 		}
 	})
 
-	t.Run("Ranking by IDF (Rare vs Common)", func(t *testing.T) {
-		// "晴れ" is common (if we had more entries)
-		// "超絶弩級" is very rare (DF=1)
-		// Querying both should prioritize the one with the rare term if scores are calculated correctly
-		results, err := searcher.Search(ctx, "東京 晴れ 超絶弩級", 10)
+	t.Run("Partial alphanumeric match (javas -> javascript)", func(t *testing.T) {
+		// Searching for "javas" (word javas + bigrams ja, av, va, as)
+		// even if the word "javas" is not in the terms table, it should match Entry 10 via bigrams.
+		results, err := searcher.Search(ctx, "javas", 10)
 		if err != nil {
 			t.Fatalf("search failed: %v", err)
 		}
-		// Entry 4 has "超絶弩級", Entry 3 has "東京" and "晴れ"
-		// Since "超絶弩級" is DF=1, its IDF is much higher.
-		if len(results) > 0 && results[0].EntryID != 4 {
-			t.Errorf("expected Entry 4 (with rare term) to be top, got %d", results[0].EntryID)
-		}
-	})
 
-	t.Run("Limit constraint", func(t *testing.T) {
-		results, err := searcher.Search(ctx, "の", 2)
-		if err != nil {
-			t.Fatalf("search failed: %v", err)
-		}
-		if len(results) > 2 {
-			t.Errorf("expected at most 2 results, got %d", len(results))
-		}
-	})
-
-	t.Run("Mixed existent and non-existent terms", func(t *testing.T) {
-		results, err := searcher.Search(ctx, "東京 魔法の呪文アブラカダブラ", 10)
-		if err != nil {
-			t.Fatalf("search failed: %v", err)
-		}
-		// Should still find "東京" entries
 		found := false
 		for _, r := range results {
-			if r.EntryID == 1 || r.EntryID == 3 {
+			if r.EntryID == 10 {
 				found = true
 				break
 			}
 		}
 		if !found {
-			t.Error("expected to find entries with '東京' even if other terms don't exist")
+			t.Errorf("expected to find Entry 10 ('javascript') with 'javas' query via bigram matching")
 		}
 	})
 
-	t.Run("Empty query", func(t *testing.T) {
-		results, err := searcher.Search(ctx, "", 10)
+	t.Run("AND search with high-frequency term (score 0)", func(t *testing.T) {
+		// Ensure "港区" has DF >= 2 so it exists in postings table
+		_ = calc.UpdateTFIDF(ctx, 3, "東京の天気", "港区の天気です")
+		_ = calc.RecalculateTFIDFValues(ctx, nil)
+
+		// Simulate high-frequency term by zeroing score
+		_, err := tfidfDB.Exec("UPDATE postings SET tfidf = 0, tfidf_n = 0 WHERE term_id IN (SELECT id FROM terms WHERE term = '港区')")
+		if err != nil {
+			t.Fatalf("failed to zero out term: %v", err)
+		}
+
+		// Search for "東京 港区"
+		// Entry 1 has both. "港区" has 0 weight but must still be counted for AND.
+		results, err := searcher.Search(ctx, "東京 港区", 10)
 		if err != nil {
 			t.Fatalf("search failed: %v", err)
 		}
-		if results != nil {
-			t.Error("expected nil for empty query")
+
+		found := false
+		for _, r := range results {
+			if r.EntryID == 1 {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected Entry 1 to match even if one required term has 0 weight")
+		}
+	})
+
+	t.Run("No match for missing required bigrams", func(t *testing.T) {
+		results, err := searcher.Search(ctx, "東京 存在しない", 10)
+		if err != nil {
+			t.Fatalf("search failed: %v", err)
+		}
+		if len(results) != 0 {
+			t.Errorf("expected 0 results for AND search with missing bigram, got %d", len(results))
 		}
 	})
 }

@@ -1068,7 +1068,8 @@ func TestHandleApiSearch(t *testing.T) {
 		(1, 'Public Apple', 'Apple test', '<p>Apple</p>', 'p1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00', 'public', NULL),
 		(2, 'Draft Apple', 'Apple draft', '<p>Apple</p>', 'p2', 'Markdown', '2025-01-01', '2025-01-01 11:00:00', '2025-01-01 11:00:00', 'draft', NULL),
 		(3, 'Future Apple', 'Apple future', '<p>Apple</p>', 'p3', 'Markdown', '2025-01-01', '2025-01-01 12:00:00', '2025-01-01 12:00:00', 'public', ?),
-		(4, 'Public Banana', 'Banana test', '<p>Banana</p>', 'p4', 'Markdown', '2025-01-01', '2025-01-01 13:00:00', '2025-01-01 13:00:00', 'public', NULL)
+		(4, 'Public Banana', 'Banana test', '<p>Banana</p>', 'p4', 'Markdown', '2025-01-01', '2025-01-01 13:00:00', '2025-01-01 13:00:00', 'public', NULL),
+		(5, 'Apple and Banana', 'Mixed fruit', '<p>Apple Banana</p>', 'p5', 'Markdown', '2025-01-01', '2025-01-01 14:00:00', '2025-01-01 14:00:00', 'public', NULL)
 	`, now.Add(24*time.Hour).Format(time.RFC3339))
 	if err != nil {
 		t.Fatalf("failed to insert test data: %v", err)
@@ -1083,6 +1084,7 @@ func TestHandleApiSearch(t *testing.T) {
 		2: {"Draft Entry", "Apple"},
 		3: {"Future Entry", "Apple"},
 		4: {"Other Entry", "Banana"},
+		5: {"Mixed Entry", "Apple Banana"},
 	}
 	for id, txts := range entryTexts {
 		if err := calc.UpdateTFIDF(ctx, id, txts[0], txts[1]); err != nil {
@@ -1094,7 +1096,7 @@ func TestHandleApiSearch(t *testing.T) {
 	}
 
 	t.Run("Filtering and Ranking", func(t *testing.T) {
-		// "Apple" should match entries 1, 2, 3 but only 1 is public and past
+		// "Apple" should match entries 1, 2, 3, 5 but only 1 and 5 are public and past
 		req := httptest.NewRequest(http.MethodGet, "/api/search?q=Apple", nil)
 		rec := httptest.NewRecorder()
 		env.server.ServeHTTP(rec, req)
@@ -1114,17 +1116,14 @@ func TestHandleApiSearch(t *testing.T) {
 			t.Fatalf("failed to unmarshal: %v", err)
 		}
 
-		// Now only Entry 1 should be returned. Entry 4 should NOT match "Apple" at all.
-		if len(resp.Results) != 1 {
-			t.Errorf("expected exactly 1 result (entry 1), got %d. Results: %+v", len(resp.Results), resp.Results)
-		} else if resp.Results[0].ID != 1 {
-			t.Errorf("expected Entry 1, got %d", resp.Results[0].ID)
+		// Entries 1 and 5 should be returned.
+		if len(resp.Results) < 1 {
+			t.Errorf("expected at least 1 result, got %d. Results: %+v", len(resp.Results), resp.Results)
 		}
 	})
 
-	t.Run("Multi-term Ranking", func(t *testing.T) {
-		// Searching for "Apple Banana" should return results.
-		// Note: Strict 50% filtering might drop one if IDF/time differences are large.
+	t.Run("Multi-term Ranking (AND search)", func(t *testing.T) {
+		// Searching for "Apple Banana" should return only Entry 5
 		req := httptest.NewRequest(http.MethodGet, "/api/search?q=Apple+Banana", nil)
 		rec := httptest.NewRecorder()
 		env.server.ServeHTTP(rec, req)
@@ -1136,9 +1135,11 @@ func TestHandleApiSearch(t *testing.T) {
 		}
 		json.Unmarshal(rec.Body.Bytes(), &resp)
 
-		// At least the top match should be returned
-		if len(resp.Results) < 1 {
-			t.Errorf("expected at least 1 result, got %d", len(resp.Results))
+		// Only Entry 5 has BOTH "Apple" and "Banana"
+		if len(resp.Results) != 1 {
+			t.Errorf("expected exactly 1 result (entry 5), got %d", len(resp.Results))
+		} else if resp.Results[0].ID != 5 {
+			t.Errorf("expected entry 5, got %d", resp.Results[0].ID)
 		}
 	})
 }

@@ -32,8 +32,9 @@ func NewSearcher(db *sql.DB, queries *model.Queries, calculator *Calculator) *Se
 	}
 }
 
-// Search executes a search using the TF-IDF index.
-// It matches terms from both the postings table (DF >= 2) and terms table (DF = 1).
+// Search executes an AND search using the TF-IDF index.
+// It requires all 2-grams of the query to be present in the entry.
+// Longer alphanumeric words are used to boost the score if they exist in the index.
 func (s *Searcher) Search(ctx context.Context, query string, limit int) ([]SearchResult, error) {
 	if query == "" {
 		return nil, nil
@@ -43,7 +44,7 @@ func (s *Searcher) Search(ctx context.Context, query string, limit int) ([]Searc
 		limit = 50
 	}
 
-	// 1. Extract terms from query
+	// 1. Extract terms (words and bigrams) from query
 	queryTerms := s.calculator.ExtractTerms("", query)
 	if len(queryTerms) == 0 {
 		return nil, nil
@@ -58,75 +59,98 @@ func (s *Searcher) Search(ctx context.Context, query string, limit int) ([]Searc
 		return nil, nil
 	}
 
-	// 3. Build query vector and prepare term IDs
+	// 3. Identify which terms are required for the AND condition
 	type queryTermInfo struct {
-		termID int64
-		weight float64
+		termID     int64
+		weight     float64
+		isRequired bool
 	}
 	var termInfos []queryTermInfo
+	var requiredCount int
+
 	for term, count := range queryTerms {
+		// Use runes to handle multi-byte characters correctly.
+		// Bigrams (len=2) are the atomic units of our index and required for AND search.
+		isBigram := len([]rune(term)) == 2
+
 		t, err := s.queries.GetTermByTerm(ctx, term)
 		if err != nil {
 			if err == sql.ErrNoRows {
+				if isBigram {
+					// If a required bigram doesn't exist in the index at all,
+					// no document can possibly match the AND query.
+					return nil, nil
+				}
+				// Optional terms (words > 2 chars) can be missing from the index.
 				continue
 			}
 			return nil, fmt.Errorf("failed to get term: %w", err)
 		}
 
 		if t.DfCount <= 0 {
+			if isBigram {
+				return nil, nil
+			}
 			continue
 		}
 
-		// IDF calculation: 1 + LOG(total_entries / entries_with_term)
 		idf := 1.0 + math.Log(float64(totalEntries)/float64(t.DfCount))
-		// TF calculation for query: LOG(count + 1)
 		tf := math.Log(float64(count) + 1.0)
 
-		termInfos = append(termInfos, queryTermInfo{
-			termID: t.ID,
-			weight: tf * idf,
-		})
+		info := queryTermInfo{
+			termID:     t.ID,
+			weight:     tf * idf,
+			isRequired: isBigram,
+		}
+		if info.isRequired {
+			requiredCount++
+		}
+		termInfos = append(termInfos, info)
 	}
 
 	if len(termInfos) == 0 {
 		return nil, nil
 	}
 
-	// 4. Execute scoring query
-	// We use a CTE or VALUES clause to avoid temporary table creation,
-	// allowing this to run in a ReadOnly transaction.
-
+	// 4. Prepare parameters for the SQL query
 	valueStrings := make([]string, len(termInfos))
-	binds := make([]interface{}, len(termInfos)*2)
+	binds := make([]interface{}, len(termInfos)*3)
 	for i, info := range termInfos {
-		valueStrings[i] = "(?, ?)"
-		binds[i*2] = info.termID
-		binds[i*2+1] = info.weight
+		valueStrings[i] = "(?, ?, ?)"
+		binds[i*3] = info.termID
+		binds[i*3+1] = info.weight
+		if info.isRequired {
+			binds[i*3+2] = 1
+		} else {
+			binds[i*3+2] = 0
+		}
 	}
-	binds = append(binds, limit)
+	binds = append(binds, requiredCount, limit)
 
-	// Cosine similarity matching: Sum(postings.tfidf_n * query_terms.weight)
-	// Includes DF=1 rescue path using terms.first_entry_id.
+	// SQL Logic:
+	// - We use a CTE/VALUES to provide the query terms and their properties.
+	// - SUM(is_required) counts how many distinct required term_ids match for each entry.
+	// - HAVING ensures that all required terms (all bigrams) are present.
 	querySQL := fmt.Sprintf(`
-		WITH query_terms(term_id, weight) AS (
+		WITH query_terms(term_id, weight, is_required) AS (
 			VALUES %s
 		)
 		SELECT entry_id, SUM(score) AS total_score FROM (
-			-- Matches from postings (DF >= 2)
-			SELECT p.entry_id, p.tfidf_n * q.weight AS score
+			-- Matches from the postings table (DF >= 2)
+			SELECT p.entry_id, p.term_id, p.tfidf_n * q.weight AS score, q.is_required
 			FROM postings p
 			JOIN query_terms q ON p.term_id = q.term_id
-			WHERE p.tfidf_n > 0
 
 			UNION ALL
 
-			-- Matches from terms (DF = 1)
-			SELECT t.first_entry_id AS entry_id, q.weight * 1.0 AS score
+			-- Matches from the terms table (DF = 1 rescue path)
+			SELECT t.first_entry_id AS entry_id, t.id AS term_id, q.weight * 1.0 AS score, q.is_required
 			FROM terms t
 			JOIN query_terms q ON t.id = q.term_id
 			WHERE t.df_count = 1 AND t.first_entry_id IS NOT NULL
 		)
 		GROUP BY entry_id
+		HAVING SUM(is_required) = ?
 		ORDER BY total_score DESC
 		LIMIT ?
 	`, strings.Join(valueStrings, ","))
