@@ -90,59 +90,8 @@ const Nogag = {
 	},
 
 	init() {
-		this.initSimilarEntries();
 		// this.initExif();
 		this.initBudouX();
-	},
-
-	async initSimilarEntries() {
-		const similarLink = document.getElementById('preload-similar-entries');
-		if (!similarLink) return;
-
-		const similar = similarLink.href;
-		console.log('fetch', similar);
-		
-		try {
-			const res = await fetch(similar);
-			const data = await res.json();
-
-			const ids = similar.match(/id=(\d+)/g);
-			if (!ids) return;
-
-			for (const idStr of ids) {
-				const key = idStr.replace(/^id=/, '');
-				let val = data.result[key] || '';
-				if (data.ad) {
-					val += data.ad;
-					data.ad = ""; // display once
-				}
-				if (!val) continue;
-
-				const article = document.querySelector(`article[data-id="${key}"]`);
-				if (!article) continue;
-
-				const container = article.querySelector('.similar-entries');
-				if (!container) continue;
-
-				container.innerHTML = val;
-
-				const trackbacks = article.querySelector('.content.trackbacks');
-				if (trackbacks) {
-					const links = trackbacks.getElementsByTagName('li');
-					for (const link of links) {
-						const duplicate = container.querySelector(`li[data-id="${link.getAttribute('data-id')}"]`);
-						if (duplicate) {
-							duplicate.remove();
-						}
-					}
-					if (!container.getElementsByTagName('li').length) {
-						container.remove();
-					}
-				}
-			}
-		} catch (e) {
-			console.error('Failed to load similar entries', e);
-		}
 	},
 
 	async initExif() {

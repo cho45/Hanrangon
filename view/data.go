@@ -35,6 +35,8 @@ type ViewEntry struct {
 	ModifiedAtRFC3339 string
 	FormattedBodyHTML template.HTML
 	IsDateBoundary    bool // Pre-calculated for template
+	SimilarEntries    []SimilarEntry
+	SimilarImages     []SimilarImage
 }
 
 func NewViewEntry(e model.Entry, baseURL string) ViewEntry {
@@ -107,13 +109,12 @@ func NewViewTrackbacks(rows []model.ListTrackbackEntriesRow) []ViewTrackback {
 // IndexData holds data for both index and entry detail pages
 type IndexData struct {
 	LayoutData
-	Entries           []ViewEntry     // For index: multiple entries, for detail: single entry
-	IsDetail          bool            // true for entry detail page, false for list page
-	OlderPage         string          // For index pagination
-	Trackbacks        []ViewTrackback // For entry detail
-	Older             *ViewEntry      // For entry detail navigation (past)
-	Newer             *ViewEntry      // For entry detail navigation (future)
-	SimilarEntriesURL template.URL    // Pre-calculated URL for similar entries
+	Entries    []ViewEntry     // For index: multiple entries, for detail: single entry
+	IsDetail   bool            // true for entry detail page, false for list page
+	OlderPage  string          // For index pagination
+	Trackbacks []ViewTrackback // For entry detail
+	Older      *ViewEntry      // For entry detail navigation (past)
+	Newer      *ViewEntry      // For entry detail navigation (future)
 }
 
 // ArchiveData holds data for the archive page

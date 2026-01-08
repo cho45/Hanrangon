@@ -115,7 +115,6 @@ func NewServer(app *AppImpl) *echo.Echo {
 	e.GET("/sitemap.xml", app.HandleSitemap)
 	e.GET("/robots.txt", app.HandleRobotsTxt)
 
-	e.GET("/api/similar", app.HandleApiSimilar)
 	e.GET("/images/ogp/:id", app.HandleOGP)
 
 	// Auth

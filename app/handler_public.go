@@ -1,14 +1,12 @@
 package app
 
 import (
-	"bytes"
+	"context"
 	"database/sql"
 	"encoding/xml"
 	"fmt"
-	"html/template"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -31,23 +29,6 @@ func (app *AppImpl) HandleRootParam(c echo.Context) error {
 	c.SetParamNames("category")
 	c.SetParamValues(param)
 	return app.HandleCategory(c)
-}
-
-func (app *AppImpl) getSimilarEntriesURL(entries []view.ViewEntry) template.URL {
-	if len(entries) == 0 {
-		return ""
-	}
-	var sb strings.Builder
-	sb.Grow(len(entries) * 20)
-	sb.WriteString("/api/similar?")
-	for i, e := range entries {
-		if i > 0 {
-			sb.WriteByte('&')
-		}
-		sb.WriteString("id=")
-		sb.WriteString(strconv.FormatInt(e.ID, 10))
-	}
-	return template.URL(sb.String())
 }
 
 func (app *AppImpl) HandleDateArchive(c echo.Context) error {
@@ -110,13 +91,13 @@ func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 	}
 
 	viewEntries := view.NewViewEntries(entries, app.config.BaseURL)
+	app.populateSimilarEntries(ctx, viewEntries)
 	data := &view.IndexData{
 		LayoutData: app.newLayoutData(c, pageTitle),
 		Entries:    viewEntries,
 		IsDetail:   false,
 		OlderPage:  "",
 	}
-	data.SimilarEntriesURL = app.getSimilarEntriesURL(viewEntries)
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
 
@@ -203,13 +184,13 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 
 	// HTMLレンダリング
 	viewEntries := view.NewViewEntries(entries, app.config.BaseURL)
+	app.populateSimilarEntries(ctx, viewEntries)
 	data := &view.IndexData{
 		LayoutData: app.newLayoutData(c, pageTitle),
 		Entries:    viewEntries,
 		IsDetail:   false,
 		OlderPage:  olderPage,
 	}
-	data.SimilarEntriesURL = app.getSimilarEntriesURL(viewEntries)
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
 func (app *AppImpl) HandleCategory(c echo.Context) error {
@@ -260,13 +241,13 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 	}
 
 	viewEntries := view.NewViewEntries(entries, app.config.BaseURL)
+	app.populateSimilarEntries(ctx, viewEntries)
 	data := &view.IndexData{
 		LayoutData: app.newLayoutData(c, category+" カテゴリ"),
 		Entries:    viewEntries,
 		IsDetail:   false,
 		OlderPage:  olderPage,
 	}
-	data.SimilarEntriesURL = app.getSimilarEntriesURL(viewEntries)
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
 
@@ -381,20 +362,14 @@ Sitemap: %s
 	return c.String(http.StatusOK, content)
 }
 
-func (app *AppImpl) HandleApiSimilar(c echo.Context) error {
-	ctx := c.Request().Context()
-	idsParam := c.QueryParams()["id"]
-
-	targetIDs := make([]int64, 0, len(idsParam))
-	for _, idStr := range idsParam {
-		if id, err := strconv.ParseInt(idStr, 10, 64); err == nil {
-			targetIDs = append(targetIDs, id)
-		}
+func (app *AppImpl) populateSimilarEntries(ctx context.Context, entries []view.ViewEntry) {
+	if len(entries) == 0 {
+		return
 	}
 
-	result := make(map[string]string)
-	if len(targetIDs) == 0 {
-		return c.JSON(http.StatusOK, map[string]interface{}{"result": result, "ad": ""})
+	targetIDs := make([]int64, len(entries))
+	for i, e := range entries {
+		targetIDs[i] = e.ID
 	}
 
 	// 1. Get related entries from tfidfDB in bulk
@@ -421,40 +396,33 @@ func (app *AppImpl) HandleApiSimilar(c echo.Context) error {
 				entryMap[r.ID] = r
 			}
 
-			// 3. Render for each target ID
-			for targetID, related := range relatedMap {
+			// 3. Set for each target ID
+			for i := range entries {
+				e := &entries[i]
+				related := relatedMap[e.ID]
 				similarEntries := make([]view.SimilarEntry, 0, len(related))
 				for _, rel := range related {
-					if e, ok := entryMap[rel.RelatedEntryID]; ok {
+					if re, ok := entryMap[rel.RelatedEntryID]; ok {
 						similarEntries = append(similarEntries, view.SimilarEntry{
-							ViewEntry: view.NewViewEntry(e, app.config.BaseURL),
+							ViewEntry: view.NewViewEntry(re, app.config.BaseURL),
 							Score:     rel.Score,
 						})
 					}
 				}
-
-				if len(similarEntries) > 0 {
-					var buf bytes.Buffer
-					data := &view.SimilarEntriesData{
-						Entries: similarEntries,
-					}
-					if err := app.templates.RenderTo(&buf, "similar-entries.html", data); err == nil {
-						result[strconv.FormatInt(targetID, 10)] = buf.String()
-					}
-				}
+				e.SimilarEntries = similarEntries
 			}
 		}
 	}
 
 	// 4. Fallback for IDs that don't have TF-IDF results yet
-	for _, id := range targetIDs {
-		idStr := strconv.FormatInt(id, 10)
-		if _, ok := result[idStr]; ok {
+	for i := range entries {
+		e := &entries[i]
+		if len(e.SimilarEntries) > 0 {
 			continue
 		}
 
-		// Similar Images fallback (one by one for now as it's less frequent)
-		images, err := app.imagesQueries.ListImagesByEntryID(ctx, id)
+		// Similar Images fallback
+		images, err := app.imagesQueries.ListImagesByEntryID(ctx, e.ID)
 		if err != nil || len(images) == 0 {
 			continue
 		}
@@ -483,43 +451,32 @@ func (app *AppImpl) HandleApiSimilar(c echo.Context) error {
 			}
 		}
 
-		entries, err := app.queries.ListEntriesByIds(ctx, entryIDs)
+		entryRows, err := app.queries.ListEntriesByIds(ctx, entryIDs)
 		if err != nil {
 			continue
 		}
 
 		entryMap := make(map[int64]model.Entry)
-		for _, e := range entries {
-			entryMap[e.ID] = e
+		for _, re := range entryRows {
+			entryMap[re.ID] = re
 		}
 
 		var viewImages []view.SimilarImage
 		for _, cand := range candidates {
-			if e, ok := entryMap[cand.EntryID]; ok {
+			if re, ok := entryMap[cand.EntryID]; ok {
 				viewImages = append(viewImages, view.SimilarImage{
 					URI:       cand.Uri,
-					EntryPath: e.Path,
+					EntryPath: re.Path,
 					Score:     cand.Score,
 				})
 			}
 		}
-
-		var buf bytes.Buffer
-		data := &view.SimilarImagesData{
-			Images: viewImages,
-		}
-		if err := app.templates.RenderTo(&buf, "similar-images.html", data); err == nil {
-			result[idStr] = buf.String()
-		}
+		e.SimilarImages = viewImages
 	}
-
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"result": result,
-		"ad":     "",
-	})
 }
 
 func (app *AppImpl) HandlePath(c echo.Context) error {
+
 	ctx := c.Request().Context()
 	// Get the full path from the catch-all parameter
 	path := c.Param("*")
@@ -580,6 +537,23 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 
 	viewEntry := view.NewViewEntry(entry, app.config.BaseURL)
 	viewEntries := []view.ViewEntry{viewEntry}
+	app.populateSimilarEntries(ctx, viewEntries)
+
+	// Deduplicate similar entries against trackbacks
+	if len(trackbacks) > 0 && len(viewEntries[0].SimilarEntries) > 0 {
+		trackbackIDs := make(map[int64]bool)
+		for _, tb := range trackbacks {
+			trackbackIDs[tb.ID] = true
+		}
+		filtered := make([]view.SimilarEntry, 0, len(viewEntries[0].SimilarEntries))
+		for _, se := range viewEntries[0].SimilarEntries {
+			if !trackbackIDs[se.ID] {
+				filtered = append(filtered, se)
+			}
+		}
+		viewEntries[0].SimilarEntries = filtered
+	}
+
 	data := &view.IndexData{
 		LayoutData: app.newLayoutData(c, entry.DisplayTitle()),
 		Entries:    viewEntries,
@@ -588,9 +562,8 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 		Older:      olderPtr,
 		Newer:      newerPtr,
 	}
-	data.SimilarEntriesURL = app.getSimilarEntriesURL(viewEntries)
 
-	data.Description = viewEntry.Summary
+	data.Description = viewEntries[0].Summary
 	data.OGType = "article"
 	firstImage := string(viewEntry.FirstImageURL)
 	if firstImage != "" {

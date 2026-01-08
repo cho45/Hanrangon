@@ -12,8 +12,6 @@
 {{$entries := .Entries}}
 {{$isAuth := .IsAuth}}
 {{$isDetail := .IsDetail}}
-{{$similarURL := .SimilarEntriesURL}}
-<link rel="preload" id="preload-similar-entries" href="{{$similarURL}}" as="fetch" crossorigin="anonymous"/>
 <div class="entries">
 	{{range $i, $e := $entries}}
 		{{if $e.IsDateBoundary}}
@@ -129,7 +127,35 @@
 			</div>
 			{{end}}
 
-			<div class="content similar-entries"></div>
+			<div class="content similar-entries">
+				{{if $e.SimilarEntries}}
+					<h3>関連エントリー</h3>
+					<ul>
+						{{range $e.SimilarEntries}}
+						<li data-id="{{.ID}}">
+							<a href="/{{.Path}}" data-score="{{printf "%f" .Score}}">
+								<em>{{.DisplayTitle}}</em>
+								<time datetime="{{.CreatedAtRFC3339}}" itemprop="datePublished">
+									<relative-time epoch="{{.CreatedAt.Unix}}">{{.DisplayTime}}</relative-time>
+								</time>
+								<span class="summary">{{.Summary}}</span>
+							</a>
+						</li>
+						{{end}}
+					</ul>
+				{{else if $e.SimilarImages}}
+					<h3>関連エントリー (画像)</h3>
+					<ul>
+						{{range $e.SimilarImages}}
+							<li>
+								<a href="/{{.EntryPath}}">
+									<img src="{{.URI}}" style="max-width: 100px; max-height: 100px" />
+								</a>
+							</li>
+						{{end}}
+					</ul>
+				{{end}}
+			</div>
 
 			<div class="social">
 				<p class="share-buttons">
