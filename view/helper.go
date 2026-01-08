@@ -12,10 +12,6 @@ import (
 var htmlTagRegexp = regexp.MustCompile(`<[^>]*>`)
 var whitespaceRegexp = regexp.MustCompile(`\s+`)
 
-func IsSameDay(t1Str, t2Str string) bool {
-	return t1Str == t2Str
-}
-
 // FormatDate formats a date string from "2006-01-02" to "2006年 01月 02日"
 func FormatDate(dateStr string) string {
 	parts := strings.Split(dateStr, "-")

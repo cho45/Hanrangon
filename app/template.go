@@ -41,10 +41,6 @@ func buildFuncMap() template.FuncMap {
 	funcMap := sprig.FuncMap()
 
 	// カスタム関数を追加
-	funcMap["safeURL"] = func(s string) template.URL {
-		return template.URL(s)
-	}
-	funcMap["isSameDay"] = view.IsSameDay
 	funcMap["isDateBoundary"] = func(i int, entries []view.ViewEntry) bool {
 		if i == 0 {
 			return true
