@@ -57,7 +57,8 @@ func TestSummary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := Summary(tt.html, tt.length); got != tt.want {
+			got, _ := ExtractSummaryAndFirstImage(tt.html, tt.length)
+			if got != tt.want {
 				t.Errorf("Summary() = %q, want %q", got, tt.want)
 			}
 		})

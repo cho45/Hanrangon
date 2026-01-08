@@ -12,11 +12,11 @@
 {{$entries := .Entries}}
 {{$isAuth := .IsAuth}}
 {{$isDetail := .IsDetail}}
-{{$similarURL := similarURL $entries}}
+{{$similarURL := .SimilarEntriesURL}}
 <link rel="preload" id="preload-similar-entries" href="{{$similarURL}}" as="fetch" crossorigin="anonymous"/>
 <div class="entries">
 	{{range $i, $e := $entries}}
-		{{if isDateBoundary $i $entries}}
+		{{if $e.IsDateBoundary}}
 			<div class="date"><a href="{{$e.DatePath}}">{{$e.FormattedDate}}</a></div>
 		{{end}}
 

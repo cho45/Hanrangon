@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/xml"
 	"fmt"
+	"html/template"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -30,6 +31,23 @@ func (app *AppImpl) HandleRootParam(c echo.Context) error {
 	c.SetParamNames("category")
 	c.SetParamValues(param)
 	return app.HandleCategory(c)
+}
+
+func (app *AppImpl) getSimilarEntriesURL(entries []view.ViewEntry) template.URL {
+	if len(entries) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.Grow(len(entries) * 20)
+	sb.WriteString("/api/similar?")
+	for i, e := range entries {
+		if i > 0 {
+			sb.WriteByte('&')
+		}
+		sb.WriteString("id=")
+		sb.WriteString(strconv.FormatInt(e.ID, 10))
+	}
+	return template.URL(sb.String())
 }
 
 func (app *AppImpl) HandleDateArchive(c echo.Context) error {
@@ -91,12 +109,14 @@ func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 		pageTitle = fmt.Sprintf("%s年", yyyy)
 	}
 
+	viewEntries := view.NewViewEntries(entries)
 	data := &view.IndexData{
 		LayoutData: app.newLayoutData(c, pageTitle),
-		Entries:    view.NewViewEntries(entries),
+		Entries:    viewEntries,
 		IsDetail:   false,
 		OlderPage:  "",
 	}
+	data.SimilarEntriesURL = app.getSimilarEntriesURL(viewEntries)
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
 
@@ -182,12 +202,14 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 	}
 
 	// HTMLレンダリング
+	viewEntries := view.NewViewEntries(entries)
 	data := &view.IndexData{
 		LayoutData: app.newLayoutData(c, pageTitle),
-		Entries:    view.NewViewEntries(entries),
+		Entries:    viewEntries,
 		IsDetail:   false,
 		OlderPage:  olderPage,
 	}
+	data.SimilarEntriesURL = app.getSimilarEntriesURL(viewEntries)
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
 func (app *AppImpl) HandleCategory(c echo.Context) error {
@@ -237,12 +259,14 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 		}
 	}
 
+	viewEntries := view.NewViewEntries(entries)
 	data := &view.IndexData{
 		LayoutData: app.newLayoutData(c, category+" カテゴリ"),
-		Entries:    view.NewViewEntries(entries),
+		Entries:    viewEntries,
 		IsDetail:   false,
 		OlderPage:  olderPage,
 	}
+	data.SimilarEntriesURL = app.getSimilarEntriesURL(viewEntries)
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
 
@@ -555,22 +579,25 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 	}
 
 	viewEntry := view.NewViewEntry(entry)
+	viewEntries := []view.ViewEntry{viewEntry}
 	data := &view.IndexData{
 		LayoutData: app.newLayoutData(c, entry.DisplayTitle()),
-		Entries:    []view.ViewEntry{viewEntry},
+		Entries:    viewEntries,
 		IsDetail:   true,
 		Trackbacks: trackbacks,
 		Older:      olderPtr,
 		Newer:      newerPtr,
 	}
+	data.SimilarEntriesURL = app.getSimilarEntriesURL(viewEntries)
 
 	data.Description = viewEntry.Summary
 	data.OGType = "article"
-	if img := view.ExtractFirstImage(entry.FormattedBody); img != "" {
-		if strings.HasPrefix(img, "http") {
-			data.ImageURL = img
+	firstImage := string(viewEntry.FirstImageURL)
+	if firstImage != "" {
+		if strings.HasPrefix(firstImage, "http") {
+			data.ImageURL = firstImage
 		} else {
-			data.ImageURL = app.JoinBaseURL(img)
+			data.ImageURL = app.JoinBaseURL(firstImage)
 		}
 	} else {
 		data.ImageURL = app.JoinBaseURL(fmt.Sprintf("/images/ogp/%d.png", entry.ID))

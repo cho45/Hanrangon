@@ -41,15 +41,6 @@ func buildFuncMap() template.FuncMap {
 	funcMap := sprig.FuncMap()
 
 	// カスタム関数を追加
-	funcMap["isDateBoundary"] = func(i int, entries []view.ViewEntry) bool {
-		if i == 0 {
-			return true
-		}
-		if i < 0 || i >= len(entries) {
-			return false
-		}
-		return entries[i].Date != entries[i-1].Date
-	}
 	funcMap["similarURL"] = func(entries []view.ViewEntry) string {
 		if len(entries) == 0 {
 			return ""

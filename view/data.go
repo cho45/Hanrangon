@@ -25,12 +25,14 @@ type ViewEntry struct {
 	DisplayTitle      string
 	Tags              []string
 	Summary           string
+	FirstImageURL     template.URL
 	FormattedDate     string
 	DatePath          string
 	DisplayTime       string
 	CreatedAtRFC3339  string
 	ModifiedAtRFC3339 string
 	FormattedBodyHTML template.HTML
+	IsDateBoundary    bool // Pre-calculated for template
 }
 
 func NewViewEntry(e model.Entry) ViewEntry {
@@ -38,11 +40,13 @@ func NewViewEntry(e model.Entry) ViewEntry {
 	if displayTitle == "" {
 		displayTitle = "✖"
 	}
+	summary, firstImage := ExtractSummaryAndFirstImage(e.FormattedBody, 100)
 	return ViewEntry{
 		Entry:             e,
 		DisplayTitle:      displayTitle,
 		Tags:              tags,
-		Summary:           Summary(e.FormattedBody, 100),
+		Summary:           summary,
+		FirstImageURL:     template.URL(firstImage),
 		FormattedDate:     FormatDate(e.Date),
 		DatePath:          DatePath(e.Date),
 		DisplayTime:       e.CreatedAt.Format("15:04"),
@@ -56,6 +60,11 @@ func NewViewEntries(entries []model.Entry) []ViewEntry {
 	res := make([]ViewEntry, len(entries))
 	for i, e := range entries {
 		res[i] = NewViewEntry(e)
+		if i == 0 {
+			res[i].IsDateBoundary = true
+		} else {
+			res[i].IsDateBoundary = res[i].Date != res[i-1].Date
+		}
 	}
 	return res
 }
@@ -74,10 +83,11 @@ func NewViewTrackback(row model.ListTrackbackEntriesRow) ViewTrackback {
 	if displayTitle == "" {
 		displayTitle = "✖"
 	}
+	summary, _ := ExtractSummaryAndFirstImage(row.Body, 140)
 	return ViewTrackback{
 		ListTrackbackEntriesRow: row,
 		DisplayTitle:            displayTitle,
-		Summary:                 Summary(row.Body, 140),
+		Summary:                 summary,
 		CreatedAtRFC3339:        row.CreatedAt.UTC().Format(time.RFC3339),
 		DisplayTime:             row.CreatedAt.Format("15:04"),
 	}
@@ -94,12 +104,13 @@ func NewViewTrackbacks(rows []model.ListTrackbackEntriesRow) []ViewTrackback {
 // IndexData holds data for both index and entry detail pages
 type IndexData struct {
 	LayoutData
-	Entries    []ViewEntry     // For index: multiple entries, for detail: single entry
-	IsDetail   bool            // true for entry detail page, false for list page
-	OlderPage  string          // For index pagination
-	Trackbacks []ViewTrackback // For entry detail
-	Older      *ViewEntry      // For entry detail navigation (past)
-	Newer      *ViewEntry      // For entry detail navigation (future)
+	Entries           []ViewEntry     // For index: multiple entries, for detail: single entry
+	IsDetail          bool            // true for entry detail page, false for list page
+	OlderPage         string          // For index pagination
+	Trackbacks        []ViewTrackback // For entry detail
+	Older             *ViewEntry      // For entry detail navigation (past)
+	Newer             *ViewEntry      // For entry detail navigation (future)
+	SimilarEntriesURL template.URL    // Pre-calculated URL for similar entries
 }
 
 // ArchiveData holds data for the archive page
