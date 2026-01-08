@@ -21,12 +21,10 @@
 		{{end}}
 
 		{{/* Article */}}
-		{{$cleanTitle := $e.DisplayTitle}}
-		{{$tags := $e.Tags}}
 		{{$canonical := (print $.BaseURL "/" $e.Path)}}
 		<article
 			id="post-{{$e.CreatedAt.Unix}}"
-			class="{{range $tags}}{{.}} {{end}}{{if eq $i 0}}first {{end}}status-{{$e.Status}}"
+			class="{{range $e.Tags}}{{.}} {{end}}{{if eq $i 0}}first {{end}}status-{{$e.Status}}"
 			data-id="{{$e.ID}}"
 			{{if not $isDetail}}
 			itemprop="blogPosts"
@@ -35,11 +33,11 @@
 			{{end}}
 		>
 			<header>
-				<h2 itemprop="name"><a href="{{$canonical}}" class="bookmark" rel="bookmark" itemprop="url"><budoux-ja>{{$cleanTitle}}</budoux-ja></a></h2>
+				<h2 itemprop="name"><a href="{{$canonical}}" class="bookmark" rel="bookmark" itemprop="url"><budoux-ja>{{$e.DisplayTitle}}</budoux-ja></a></h2>
 				<div class="metadata">
 					{{$baseURL := $.BaseURL}}
 					<span class="tags">
-						{{range $tags}}
+						{{range $e.Tags}}
 							<a href="{{$baseURL}}/{{.}}/"><span itemprop="keywords">{{.}}</span></a>
 						{{end}}
 					</span>
@@ -60,8 +58,8 @@
 
 					<div style="display: none">
 						<meta itemscope itemprop="mainEntityOfPage"  itemType="https://schema.org/WebPage" content="{{$canonical}}">
-						<span itemprop="headline">{{$cleanTitle}}</span>
-						<span itemprop="description">{{summary $e.FormattedBody 100}}</span>
+						<span itemprop="headline">{{$e.DisplayTitle}}</span>
+						<span itemprop="description">{{$e.Summary}}</span>
 
 						<span itemprop="author" itemscope itemtype="https://schema.org/Person">
 							<a href="http://www.lowreal.net/" itemprop="url">
@@ -94,7 +92,7 @@
 				{{$e.FormattedBody | safeHTML}}
 
 				{{$baseURL := $.BaseURL}}
-				{{range $tags}}
+				{{range $e.Tags}}
 				<ol itemscope itemtype="http://schema.org/BreadcrumbList">
 					<li itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem">
 						<a itemprop="item" href="{{$baseURL}}/"><span itemprop="name">トップ</span></a>
@@ -105,7 +103,7 @@
 						<meta itemprop="position" content="2">
 					</li>
 					<li itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem">
-						<a itemprop="item" href="{{$canonical}}"><span itemprop="name">{{$cleanTitle}}</span></a>
+						<a itemprop="item" href="{{$canonical}}"><span itemprop="name">{{$e.DisplayTitle}}</span></a>
 						<meta itemprop="position" content="3">
 					</li>
 				</ol>
@@ -142,7 +140,7 @@
 						<img src="/images/sharebuttons/FB-f-Logo__white_50.png" width="18" height="18" alt="Facebook"/>
 					</a>
 					<a class="share-button" style="background: #efefef" target="_blank" rel="noopener nofollow"
-						href="https://bsky.app/intent/compose?text={{$cleanTitle}} {{$canonical}}"
+						href="https://bsky.app/intent/compose?text={{$e.DisplayTitle}} {{$canonical}}"
 					>
 						<img src="/images/bluesky_media_kit_logo_svgs.svg" width="40" height="40" alt="Bluesky"/>
 					</a>

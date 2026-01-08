@@ -17,15 +17,44 @@ type LayoutData struct {
 	IsAuth       bool
 }
 
+// ViewEntry wraps model.Entry with pre-calculated display fields
+type ViewEntry struct {
+	model.Entry
+	DisplayTitle string
+	Tags         []string
+	Summary      string
+}
+
+func NewViewEntry(e model.Entry) ViewEntry {
+	displayTitle, tags := model.ParseTitle(e.Title)
+	if displayTitle == "" {
+		displayTitle = "✖"
+	}
+	return ViewEntry{
+		Entry:        e,
+		DisplayTitle: displayTitle,
+		Tags:         tags,
+		Summary:      Summary(e.FormattedBody, 100),
+	}
+}
+
+func NewViewEntries(entries []model.Entry) []ViewEntry {
+	res := make([]ViewEntry, len(entries))
+	for i, e := range entries {
+		res[i] = NewViewEntry(e)
+	}
+	return res
+}
+
 // IndexData holds data for both index and entry detail pages
 type IndexData struct {
 	LayoutData
-	Entries    []model.Entry                    // For index: multiple entries, for detail: single entry
+	Entries    []ViewEntry                      // For index: multiple entries, for detail: single entry
 	IsDetail   bool                             // true for entry detail page, false for list page
 	OlderPage  string                           // For index pagination
 	Trackbacks []*model.ListTrackbackEntriesRow // For entry detail
-	Older      *model.Entry                     // For entry detail navigation (past)
-	Newer      *model.Entry                     // For entry detail navigation (future)
+	Older      *ViewEntry                       // For entry detail navigation (past)
+	Newer      *ViewEntry                       // For entry detail navigation (future)
 }
 
 // ArchiveData holds data for the archive page

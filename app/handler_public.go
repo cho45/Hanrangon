@@ -16,9 +16,11 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+var yearArchiveRegexp = regexp.MustCompile(`^\d{4}$`)
+
 func (app *AppImpl) HandleRootParam(c echo.Context) error {
 	param := c.Param("param")
-	if regexp.MustCompile(`^\d{4}$`).MatchString(param) {
+	if yearArchiveRegexp.MatchString(param) {
 		// It's a year archive
 		c.SetParamNames("yyyy")
 		c.SetParamValues(param)
@@ -91,7 +93,7 @@ func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 
 	data := &view.IndexData{
 		LayoutData: app.newLayoutData(c, pageTitle),
-		Entries:    entries,
+		Entries:    view.NewViewEntries(entries),
 		IsDetail:   false,
 		OlderPage:  "",
 	}
@@ -159,7 +161,7 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 	if len(dates) == 0 {
 		data := &view.IndexData{
 			LayoutData: app.newLayoutData(c, pageTitle),
-			Entries:    []model.Entry{},
+			Entries:    []view.ViewEntry{},
 			IsDetail:   false,
 			OlderPage:  "",
 		}
@@ -182,7 +184,7 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 	// HTMLレンダリング
 	data := &view.IndexData{
 		LayoutData: app.newLayoutData(c, pageTitle),
-		Entries:    entries,
+		Entries:    view.NewViewEntries(entries),
 		IsDetail:   false,
 		OlderPage:  olderPage,
 	}
@@ -237,7 +239,7 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 
 	data := &view.IndexData{
 		LayoutData: app.newLayoutData(c, category+" カテゴリ"),
-		Entries:    entries,
+		Entries:    view.NewViewEntries(entries),
 		IsDetail:   false,
 		OlderPage:  olderPage,
 	}
@@ -540,30 +542,33 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 	if err != nil && err != sql.ErrNoRows {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch older entry").SetInternal(err)
 	}
-	var olderPtr *model.Entry
+	var olderPtr *view.ViewEntry
 	if err == nil {
-		olderPtr = &olderEntry
+		v := view.NewViewEntry(olderEntry)
+		olderPtr = &v
 	}
 
 	newerEntry, err := app.queries.GetNewerEntry(ctx, entry.CreatedAt)
 	if err != nil && err != sql.ErrNoRows {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch newer entry").SetInternal(err)
 	}
-	var newerPtr *model.Entry
+	var newerPtr *view.ViewEntry
 	if err == nil {
-		newerPtr = &newerEntry
+		v := view.NewViewEntry(newerEntry)
+		newerPtr = &v
 	}
 
+	viewEntry := view.NewViewEntry(entry)
 	data := &view.IndexData{
 		LayoutData: app.newLayoutData(c, entry.DisplayTitle()),
-		Entries:    []model.Entry{entry},
+		Entries:    []view.ViewEntry{viewEntry},
 		IsDetail:   true,
 		Trackbacks: trackbacks,
 		Older:      olderPtr,
 		Newer:      newerPtr,
 	}
 
-	data.Description = view.Summary(entry.FormattedBody, 100)
+	data.Description = viewEntry.Summary
 	data.OGType = "article"
 	if img := view.ExtractFirstImage(entry.FormattedBody); img != "" {
 		if strings.HasPrefix(img, "http") {

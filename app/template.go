@@ -65,7 +65,7 @@ func buildFuncMap() template.FuncMap {
 	}
 	funcMap["summary"] = view.Summary
 	funcMap["isSameDay"] = view.IsSameDay
-	funcMap["isDateBoundary"] = func(i int, entries []model.Entry) bool {
+	funcMap["isDateBoundary"] = func(i int, entries []view.ViewEntry) bool {
 		if i == 0 {
 			return true
 		}
@@ -74,7 +74,7 @@ func buildFuncMap() template.FuncMap {
 		}
 		return entries[i].Date != entries[i-1].Date
 	}
-	funcMap["similarURL"] = func(entries []model.Entry) string {
+	funcMap["similarURL"] = func(entries []view.ViewEntry) string {
 		if len(entries) == 0 {
 			return ""
 		}
