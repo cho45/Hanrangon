@@ -3,6 +3,7 @@ package view
 import (
 	"encoding/xml"
 	"html/template"
+	"strings"
 	"time"
 
 	"github.com/cho45/hanrangon/model"
@@ -26,6 +27,7 @@ type ViewEntry struct {
 	Tags              []string
 	Summary           string
 	FirstImageURL     template.URL
+	CanonicalURL      template.URL // Pre-calculated URL
 	FormattedDate     string
 	DatePath          string
 	DisplayTime       string
@@ -35,7 +37,7 @@ type ViewEntry struct {
 	IsDateBoundary    bool // Pre-calculated for template
 }
 
-func NewViewEntry(e model.Entry) ViewEntry {
+func NewViewEntry(e model.Entry, baseURL string) ViewEntry {
 	displayTitle, tags := model.ParseTitle(e.Title)
 	if displayTitle == "" {
 		displayTitle = "✖"
@@ -47,6 +49,7 @@ func NewViewEntry(e model.Entry) ViewEntry {
 		Tags:              tags,
 		Summary:           summary,
 		FirstImageURL:     template.URL(firstImage),
+		CanonicalURL:      template.URL(strings.TrimSuffix(baseURL, "/") + "/" + e.Path),
 		FormattedDate:     FormatDate(e.Date),
 		DatePath:          DatePath(e.Date),
 		DisplayTime:       e.CreatedAt.Format("15:04"),
@@ -56,10 +59,10 @@ func NewViewEntry(e model.Entry) ViewEntry {
 	}
 }
 
-func NewViewEntries(entries []model.Entry) []ViewEntry {
+func NewViewEntries(entries []model.Entry, baseURL string) []ViewEntry {
 	res := make([]ViewEntry, len(entries))
 	for i, e := range entries {
-		res[i] = NewViewEntry(e)
+		res[i] = NewViewEntry(e, baseURL)
 		if i == 0 {
 			res[i].IsDateBoundary = true
 		} else {

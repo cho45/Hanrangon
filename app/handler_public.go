@@ -109,7 +109,7 @@ func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 		pageTitle = fmt.Sprintf("%s年", yyyy)
 	}
 
-	viewEntries := view.NewViewEntries(entries)
+	viewEntries := view.NewViewEntries(entries, app.config.BaseURL)
 	data := &view.IndexData{
 		LayoutData: app.newLayoutData(c, pageTitle),
 		Entries:    viewEntries,
@@ -202,7 +202,7 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 	}
 
 	// HTMLレンダリング
-	viewEntries := view.NewViewEntries(entries)
+	viewEntries := view.NewViewEntries(entries, app.config.BaseURL)
 	data := &view.IndexData{
 		LayoutData: app.newLayoutData(c, pageTitle),
 		Entries:    viewEntries,
@@ -259,7 +259,7 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 		}
 	}
 
-	viewEntries := view.NewViewEntries(entries)
+	viewEntries := view.NewViewEntries(entries, app.config.BaseURL)
 	data := &view.IndexData{
 		LayoutData: app.newLayoutData(c, category+" カテゴリ"),
 		Entries:    viewEntries,
@@ -427,7 +427,7 @@ func (app *AppImpl) HandleApiSimilar(c echo.Context) error {
 				for _, rel := range related {
 					if e, ok := entryMap[rel.RelatedEntryID]; ok {
 						similarEntries = append(similarEntries, view.SimilarEntry{
-							ViewEntry: view.NewViewEntry(e),
+							ViewEntry: view.NewViewEntry(e, app.config.BaseURL),
 							Score:     rel.Score,
 						})
 					}
@@ -564,7 +564,7 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 	}
 	var olderPtr *view.ViewEntry
 	if err == nil {
-		v := view.NewViewEntry(olderEntry)
+		v := view.NewViewEntry(olderEntry, app.config.BaseURL)
 		olderPtr = &v
 	}
 
@@ -574,11 +574,11 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 	}
 	var newerPtr *view.ViewEntry
 	if err == nil {
-		v := view.NewViewEntry(newerEntry)
+		v := view.NewViewEntry(newerEntry, app.config.BaseURL)
 		newerPtr = &v
 	}
 
-	viewEntry := view.NewViewEntry(entry)
+	viewEntry := view.NewViewEntry(entry, app.config.BaseURL)
 	viewEntries := []view.ViewEntry{viewEntry}
 	data := &view.IndexData{
 		LayoutData: app.newLayoutData(c, entry.DisplayTitle()),

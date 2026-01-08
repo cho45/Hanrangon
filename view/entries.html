@@ -21,7 +21,6 @@
 		{{end}}
 
 		{{/* Article */}}
-		{{$canonical := (print $.BaseURL "/" $e.Path)}}
 		<article
 			id="post-{{$e.CreatedAt.Unix}}"
 			class="{{range $e.Tags}}{{.}} {{end}}{{if eq $i 0}}first {{end}}status-{{$e.Status}}"
@@ -33,7 +32,7 @@
 			{{end}}
 		>
 			<header>
-				<h2 itemprop="name"><a href="{{$canonical}}" class="bookmark" rel="bookmark" itemprop="url"><budoux-ja>{{$e.DisplayTitle}}</budoux-ja></a></h2>
+				<h2 itemprop="name"><a href="{{$e.CanonicalURL}}" class="bookmark" rel="bookmark" itemprop="url"><budoux-ja>{{$e.DisplayTitle}}</budoux-ja></a></h2>
 				<div class="metadata">
 					{{$baseURL := $.BaseURL}}
 					<span class="tags">
@@ -57,7 +56,7 @@
 					{{end}}
 
 					<div style="display: none">
-						<meta itemscope itemprop="mainEntityOfPage"  itemType="https://schema.org/WebPage" content="{{$canonical}}">
+						<meta itemscope itemprop="mainEntityOfPage"  itemType="https://schema.org/WebPage" content="{{$e.CanonicalURL}}">
 						<span itemprop="headline">{{$e.DisplayTitle}}</span>
 						<span itemprop="description">{{$e.Summary}}</span>
 
@@ -103,7 +102,7 @@
 						<meta itemprop="position" content="2">
 					</li>
 					<li itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem">
-						<a itemprop="item" href="{{$canonical}}"><span itemprop="name">{{$e.DisplayTitle}}</span></a>
+						<a itemprop="item" href="{{$e.CanonicalURL}}"><span itemprop="name">{{$e.DisplayTitle}}</span></a>
 						<meta itemprop="position" content="3">
 					</li>
 				</ol>
@@ -135,17 +134,17 @@
 			<div class="social">
 				<p class="share-buttons">
 					<a class="share-button" style="background: #3b5998" target="_blank" rel="noopener nofollow"
-						href="https://www.facebook.com/sharer/sharer.php?u={{$canonical}}"
+						href="https://www.facebook.com/sharer/sharer.php?u={{$e.CanonicalURL}}"
 					>
 						<img src="/images/sharebuttons/FB-f-Logo__white_50.png" width="18" height="18" alt="Facebook"/>
 					</a>
 					<a class="share-button" style="background: #efefef" target="_blank" rel="noopener nofollow"
-						href="https://bsky.app/intent/compose?text={{$e.DisplayTitle}} {{$canonical}}"
+						href="https://bsky.app/intent/compose?text={{$e.DisplayTitle}} {{$e.CanonicalURL}}"
 					>
 						<img src="/images/bluesky_media_kit_logo_svgs.svg" width="40" height="40" alt="Bluesky"/>
 					</a>
 					<a class="share-button" style="background: #00a4de" target="_blank" rel="noopener nofollow"
-						href="http://b.hatena.ne.jp/add?url={{$canonical}}"
+						href="http://b.hatena.ne.jp/add?url={{$e.CanonicalURL}}"
 					>
 						<img src="/images/sharebuttons/hatenabookmark-logomark.svg" width="40" height="40" alt="はてなブックマーク"/>
 					</a>
