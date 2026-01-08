@@ -36,6 +36,8 @@ func getOGPPalette() color.Palette {
 	ogpPaletteOnce.Do(func() {
 		p := make(color.Palette, 0, 16)
 		p = append(p, color.RGBA{ogpBgR, ogpBgG, ogpBgB, 255})
+
+		// 濃紺 (#2c3e50) へのグラデーション (14段階)
 		for i := 0; i < 14; i++ {
 			t := float64(i) / 13.0
 			p = append(p, color.RGBA{
@@ -45,6 +47,7 @@ func getOGPPalette() color.Palette {
 				A: 255,
 			})
 		}
+		// 単色グレー (#78828c) を追加
 		p = append(p, color.RGBA{120, 130, 140, 255})
 		ogpPalette = p
 	})
@@ -63,7 +66,7 @@ func (app *AppImpl) loadOGPAssets() {
 			} else if img != nil {
 				// RGBAでない場合は変換してキャッシュ
 				b := img.Bounds()
-				rgba = image.NewRGBA(b)
+				rgba := image.NewRGBA(b)
 				draw.Draw(rgba, b, img, b.Min, draw.Src)
 				ogpBaseImage = rgba
 			}
@@ -86,6 +89,7 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 
 	cachePath := filepath.Join("var", "cache", "ogp", fmt.Sprintf("%d.png", id))
 
+	// 開発環境かつスーパーリロード時はキャッシュを破棄する
 	if app.config.IsDevelopment() {
 		cc := c.Request().Header.Get("Cache-Control")
 		pragma := c.Request().Header.Get("Pragma")
@@ -94,22 +98,25 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 		}
 	}
 
+	// キャッシュがあれば即座に返す
 	if _, err := os.Stat(cachePath); err == nil {
 		return c.File(cachePath)
 	}
 
+	// 記事タイトルを取得
 	entry, err := app.queries.GetEntryById(c.Request().Context(), id)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
 	}
 
-	// 1. アセットのロード
+	// 1. アセットのロード（初回のみ）
 	app.loadOGPAssets()
 
-	// 2. 背景の準備（copyによる高速化）
+	// 2. 背景の準備
 	bounds := image.Rect(0, 0, 1200, 630)
 	dst := image.NewRGBA(bounds)
 	if ogpBaseImage != nil {
+		// メモリコピーによる高速化
 		copy(dst.Pix, ogpBaseImage.Pix)
 	} else {
 		draw.Draw(dst, dst.Bounds(), image.NewUniform(color.RGBA{ogpBgR, ogpBgG, ogpBgB, 255}), image.Point{}, draw.Src)
@@ -127,11 +134,15 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 
 	// 3. テキストの準備
 	title := entry.DisplayTitle()
+	// 豆腐対策: ✖ を一般的な × に置換
 	title = strings.ReplaceAll(title, "✖", "×")
+	// 極端に長いタイトルの描画負荷を避ける
 	if len([]rune(title)) > 200 {
 		title = string([]rune(title)[:200])
 	}
+
 	dateStr := entry.CreatedAt.Format("2006 . 01 . 02")
+	// パスからその日の何番目かを取得 (例: /2026/01/08/1 -> #1)
 	pathParts := strings.Split(strings.Trim(entry.Path, "/"), "/")
 	if len(pathParts) > 0 {
 		seq := pathParts[len(pathParts)-1]
@@ -139,6 +150,7 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 			dateStr = fmt.Sprintf("%s  #%s", dateStr, seq)
 		}
 	}
+
 	tags := entry.Tags()
 	tagStr := ""
 	for _, t := range tags {
@@ -157,7 +169,7 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 		needsFade = true
 	}
 
-	// 5. 描画ターゲットの決定
+	// 5. 描画ターゲットの決定（フェードが必要な場合のみレイヤーを使用）
 	var drawDst draw.Image = dst
 	var textLayer *image.RGBA
 	if needsFade {
@@ -195,7 +207,7 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 	d.Dot = fixed.Point26_6{X: titleX, Y: fixed.I(centerY - 20)}
 	d.DrawString(title)
 
-	// 6. 合成
+	// 6. 合成 (フェードと合成を統合して最適化)
 	if needsFade {
 		fadeEnd := dst.Bounds().Dx() - margin
 		fadeLen := 120
@@ -203,27 +215,40 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 		stride := textLayer.Stride
 		for y := 0; y < dst.Bounds().Dy(); y++ {
 			rowOffset := y * stride
-			for x := fadeStart; x < dst.Bounds().Dx(); x++ {
+			for x := 0; x < dst.Bounds().Dx(); x++ {
+				pixIdx := rowOffset + x*4
+				srcA := uint32(textLayer.Pix[pixIdx+3])
+				if srcA == 0 {
+					continue
+				}
+
 				var mask float64 = 1.0
 				if x >= fadeEnd {
 					mask = 0
-				} else {
+				} else if x >= fadeStart {
 					mask = float64(fadeEnd-x) / float64(fadeLen)
 				}
 
-				if mask < 1.0 {
-					pixIdx := rowOffset + x*4
-					a := textLayer.Pix[pixIdx+3]
-					if a > 0 {
-						textLayer.Pix[pixIdx] = uint8(float64(textLayer.Pix[pixIdx]) * mask)
-						textLayer.Pix[pixIdx+1] = uint8(float64(textLayer.Pix[pixIdx+1]) * mask)
-						textLayer.Pix[pixIdx+2] = uint8(float64(textLayer.Pix[pixIdx+2]) * mask)
-						textLayer.Pix[pixIdx+3] = uint8(float64(a) * mask)
-					}
+				if mask <= 0 {
+					continue
 				}
+
+				srcR := uint32(float64(textLayer.Pix[pixIdx]) * mask)
+				srcG := uint32(float64(textLayer.Pix[pixIdx+1]) * mask)
+				srcB := uint32(float64(textLayer.Pix[pixIdx+2]) * mask)
+				srcA = uint32(float64(srcA) * mask)
+
+				dstR := uint32(dst.Pix[pixIdx])
+				dstG := uint32(dst.Pix[pixIdx+1])
+				dstB := uint32(dst.Pix[pixIdx+2])
+
+				// Simplified Over blending
+				a := (255 - srcA)
+				dst.Pix[pixIdx] = uint8((srcR*255 + dstR*a) / 255)
+				dst.Pix[pixIdx+1] = uint8((srcG*255 + dstG*a) / 255)
+				dst.Pix[pixIdx+2] = uint8((srcB*255 + dstB*a) / 255)
 			}
 		}
-		draw.Draw(dst, dst.Bounds(), textLayer, image.Point{}, draw.Over)
 	}
 
 	// 7. パレット変換と保存
