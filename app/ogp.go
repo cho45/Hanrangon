@@ -11,12 +11,44 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/labstack/echo/v4"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/math/fixed"
 )
+
+var (
+	ogpPalette     color.Palette
+	ogpPaletteOnce sync.Once
+)
+
+const (
+	ogpBgR, ogpBgG, ogpBgB = 248, 249, 250 // #f8f9fa
+)
+
+func getOGPPalette() color.Palette {
+	ogpPaletteOnce.Do(func() {
+		p := make(color.Palette, 0, 16)
+		p = append(p, color.RGBA{ogpBgR, ogpBgG, ogpBgB, 255})
+
+		// 濃紺 (#2c3e50) へのグラデーション (14段階)
+		for i := 0; i < 14; i++ {
+			t := float64(i) / 13.0
+			p = append(p, color.RGBA{
+				R: uint8(float64(ogpBgR)*(1-t) + 44*t),
+				G: uint8(float64(ogpBgG)*(1-t) + 62*t),
+				B: uint8(float64(ogpBgB)*(1-t) + 80*t),
+				A: 255,
+			})
+		}
+		// 単色グレー (#78828c) を追加
+		p = append(p, color.RGBA{120, 130, 140, 255})
+		ogpPalette = p
+	})
+	return ogpPalette
+}
 
 func (app *AppImpl) HandleOGP(c echo.Context) error {
 	idStr := c.Param("id")
@@ -54,7 +86,7 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 	var bg image.Image
 	if err != nil {
 		rgba := image.NewRGBA(image.Rect(0, 0, 1200, 630))
-		draw.Draw(rgba, rgba.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
+		draw.Draw(rgba, rgba.Bounds(), image.NewUniform(color.RGBA{ogpBgR, ogpBgG, ogpBgB, 255}), image.Point{}, draw.Src)
 		bg = rgba
 	} else {
 		bg, err = png.Decode(bgFile)
@@ -98,7 +130,6 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 	// 3. テキストの準備
 	title := entry.DisplayTitle()
 	title = strings.ReplaceAll(title, "✖", "×")
-	// 極端に長いタイトルの描画負荷を避ける
 	if len([]rune(title)) > 200 {
 		title = string([]rune(title)[:200])
 	}
@@ -120,7 +151,7 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 	}
 	tagStr = strings.TrimSpace(tagStr)
 
-	// テキストレイヤー（透明背景）
+	// テキストレイヤー
 	textLayer := image.NewRGBA(bounds)
 	d := &font.Drawer{
 		Dst: textLayer,
@@ -131,7 +162,7 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 
 	// 日付
 	d.Face = metaFace
-	d.Src = image.NewUniform(color.RGBA{R: 120, G: 130, B: 140, A: 255})
+	d.Src = image.NewUniform(color.RGBA{120, 130, 140, 255})
 	dateWidth := d.MeasureString(dateStr)
 	d.Dot = fixed.Point26_6{
 		X: (fixed.I(bounds.Dx()) - dateWidth) / 2,
@@ -141,12 +172,10 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 
 	// タグ
 	if tagStr != "" {
-		d.Src = image.NewUniform(color.RGBA{R: 44, G: 62, B: 80, A: 255})
+		d.Src = image.NewUniform(color.RGBA{44, 62, 80, 255})
 		tagWidth := d.MeasureString(tagStr)
 		tagX := (fixed.I(bounds.Dx()) - tagWidth) / 2
-		if tagX < fixed.I(margin) {
-			tagX = fixed.I(margin)
-		}
+		if tagX < fixed.I(margin) { tagX = fixed.I(margin) }
 		d.Dot = fixed.Point26_6{
 			X: tagX,
 			Y: fixed.I(centerY - 120),
@@ -156,12 +185,10 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 
 	// タイトル
 	d.Face = titleFace
-	d.Src = image.NewUniform(color.RGBA{R: 44, G: 62, B: 80, A: 255})
+	d.Src = image.NewUniform(color.RGBA{44, 62, 80, 255})
 	titleWidth := d.MeasureString(title)
 	titleX := (fixed.I(bounds.Dx()) - titleWidth) / 2
-	if titleX < fixed.I(margin) {
-		titleX = fixed.I(margin)
-	}
+	if titleX < fixed.I(margin) { titleX = fixed.I(margin) }
 	d.Dot = fixed.Point26_6{
 		X: titleX,
 		Y: fixed.I(centerY - 20),
@@ -171,8 +198,6 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 	// 4. 右端フェードアウト処理
 	fadeEnd := bounds.Dx() - margin
 	fadeLen := 120
-	
-	// タイトルかタグのどちらかがフェード境界を超えている場合のみ処理
 	needsFade := false
 	if tagStr != "" && (fixed.I(bounds.Dx()) - d.MeasureString(tagStr)) / 2 < fixed.I(margin) {
 		needsFade = true
@@ -210,7 +235,7 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 	draw.Draw(dst, bounds, textLayer, image.Point{}, draw.Over)
 
 	// 6. 栞（しおり）タブ
-	tabColor := color.RGBA{R: 44, G: 62, B: 80, A: 255}
+	tabColor := color.RGBA{44, 62, 80, 255}
 	tabW := 60
 	tabH := 80
 	tabX := (bounds.Dx() - tabW) / 2
@@ -226,7 +251,7 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 	}
 
 	// 7. 下部ライン
-	lineColor := color.RGBA{R: 44, G: 62, B: 80, A: 255}
+	lineColor := color.RGBA{44, 62, 80, 255}
 	for x := 0; x < bounds.Dx(); x++ {
 		for y := bounds.Dy() - 12; y < bounds.Dy(); y++ {
 			dst.Set(x, y, lineColor)
@@ -234,28 +259,7 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 	}
 
 	// 8. パレット変換と保存
-	palette := make(color.Palette, 0, 256)
-	palette = append(palette, color.White)
-	for i := 0; i < 127; i++ {
-		t := float64(i) / 126.0
-		palette = append(palette, color.RGBA{
-			R: uint8(255*(1-t) + 44*t),
-			G: uint8(255*(1-t) + 62*t),
-			B: uint8(255*(1-t) + 80*t),
-			A: 255,
-		})
-	}
-	for i := 0; i < 128; i++ {
-		t := float64(i) / 127.0
-		palette = append(palette, color.RGBA{
-			R: uint8(255*(1-t) + 120*t),
-			G: uint8(255*(1-t) + 130*t),
-			B: uint8(255*(1-t) + 140*t),
-			A: 255,
-		})
-	}
-
-	paletted := image.NewPaletted(bounds, palette)
+	paletted := image.NewPaletted(bounds, getOGPPalette())
 	draw.Draw(paletted, bounds, dst, image.Point{}, draw.Src)
 
 	if err := os.MkdirAll(filepath.Dir(cachePath), 0755); err != nil {
