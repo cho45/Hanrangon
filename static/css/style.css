@@ -246,6 +246,12 @@ article header .metadata a:hover {
 	text-decoration: underline;
 }
 
+relative-time {
+	display: inline-block;
+	min-width: 4.5em;
+	text-align: center;
+}
+
 /* Content specific styles */
 .content {
 	text-align: justify;

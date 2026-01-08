@@ -101,6 +101,87 @@ func TestHandleEntry(t *testing.T) {
 		}
 	})
 
+	t.Run("Entry with similar entries", func(t *testing.T) {
+		// Insert another entry and a relationship
+		_, err := env.db.Exec(`
+			INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at)
+			VALUES (3, 'Similar Entry', 'Body 3', '<p>Body 3</p>', '2025/01/01/3', 'Markdown', '2025-01-01', '2025-01-01 11:00:00', '2025-01-01 11:00:00')
+		`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = env.tfidfDB.Exec(`
+			INSERT INTO related_entries (entry_id, related_entry_id, score)
+			VALUES (1, 3, 0.9)
+		`)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "/2025/01/01/1", nil)
+		rec := httptest.NewRecorder()
+		env.server.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("want status 200, got %d", rec.Code)
+		}
+
+		body := rec.Body.String()
+		if !strings.Contains(body, "<h3>関連エントリー</h3>") {
+			t.Errorf("body does not contain '関連エントリー' header")
+		}
+		if !strings.Contains(body, "Similar Entry") {
+			t.Errorf("body does not contain similar entry title 'Similar Entry'")
+		}
+		if !strings.Contains(body, "data-score=\"0.900000\"") {
+			t.Errorf("body does not contain similar entry score")
+		}
+	})
+
+	t.Run("Entry with similar images fallback", func(t *testing.T) {
+		// Entry 4 with an image, and Entry 5 which is similar via image ngram
+		_, err := env.db.Exec(`
+			INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at)
+			VALUES 
+			(4, 'Image Entry 4', 'Body 4', '', '2025/01/01/4', 'Markdown', '2025-01-01', '2025-01-01 12:00:00', '2025-01-01 12:00:00'),
+			(5, 'Image Entry 5', 'Body 5', '', '2025/01/01/5', 'Markdown', '2025-01-01', '2025-01-01 13:00:00', '2025-01-01 13:00:00')
+		`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = env.imagesDB.Exec(`
+			INSERT INTO images (id, uri, entry_id, sig) VALUES
+			(10, 'http://example.com/img4.jpg', 4, ''),
+			(11, 'http://example.com/img5.jpg', 5, '')
+		`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = env.imagesDB.Exec(`
+			INSERT INTO ngram (image_id, word) VALUES
+			(10, 'common'),
+			(11, 'common')
+		`)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "/2025/01/01/4", nil)
+		rec := httptest.NewRecorder()
+		env.server.ServeHTTP(rec, req)
+
+		body := rec.Body.String()
+		if !strings.Contains(body, "<h3>関連エントリー (画像)</h3>") {
+			t.Errorf("body does not contain '関連エントリー (画像)' header")
+		}
+		if !strings.Contains(body, "http://example.com/img5.jpg") {
+			t.Errorf("body does not contain related image URL")
+		}
+		if !strings.Contains(body, "/2025/01/01/5") {
+			t.Errorf("body does not contain link to related image entry")
+		}
+	})
+
 	t.Run("Non-existing entry", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/2025/01/01/999", nil)
 		rec := httptest.NewRecorder()
@@ -322,127 +403,6 @@ func TestHandleSitemap(t *testing.T) {
 	if !strings.Contains(body, "<loc>http://localhost:5555/2025/01/01/1</loc>") {
 		t.Errorf("body does not contain entry location")
 	}
-}
-
-func TestHandleApiSimilar(t *testing.T) {
-	t.Run("TFIDF related", func(t *testing.T) {
-		env := setupTest(t)
-		defer env.close()
-
-		// Insert entries into main DB
-		_, err := env.db.Exec(`
-			INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at)
-			VALUES
-			(1, 'Target Entry', 'Body 1', '<p>Body 1</p>', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
-			(2, 'Related Entry', 'Body 2', '<p>Body 2</p>', '2025/01/01/2', 'Markdown', '2025-01-01', '2025-01-01 11:00:00', '2025-01-01 11:00:00')
-		`)
-		if err != nil {
-			t.Fatalf("failed to insert entries: %v", err)
-		}
-
-		// Insert relationship into TFIDF DB
-		_, err = env.tfidfDB.Exec(`
-			INSERT INTO related_entries (entry_id, related_entry_id, score)
-			VALUES (1, 2, 0.95)
-		`)
-		if err != nil {
-			t.Fatalf("failed to insert related_entries: %v", err)
-		}
-
-		req := httptest.NewRequest(http.MethodGet, "/api/similar?id=1", nil)
-		rec := httptest.NewRecorder()
-		env.server.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Errorf("want status 200, got %d", rec.Code)
-		}
-
-		var res struct {
-			Result map[string]string `json:"result"`
-			Ad     string            `json:"ad"`
-		}
-		importJSON := strings.NewReader(rec.Body.String())
-		if err := json.NewDecoder(importJSON).Decode(&res); err != nil {
-			t.Fatalf("failed to decode response: %v", err)
-		}
-
-		html, ok := res.Result["1"]
-		if !ok {
-			t.Fatalf("result for id=1 not found")
-		}
-
-		if !strings.Contains(html, "Related Entry") {
-			t.Errorf("rendered HTML does not contain 'Related Entry'")
-		}
-		if !strings.Contains(html, "data-score=\"0.950000\"") {
-			t.Errorf("rendered HTML does not contain correct score")
-		}
-	})
-
-	t.Run("Image fallback", func(t *testing.T) {
-		env := setupTest(t)
-		defer env.close()
-
-		// Insert entries
-		_, err := env.db.Exec(`
-			INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at)
-			VALUES
-			(3, 'Target Image Entry', 'Body 3', '', '2025/01/01/3', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
-			(4, 'Related Image Entry', 'Body 4', '', '2025/01/01/4', 'Markdown', '2025-01-01', '2025-01-01 11:00:00', '2025-01-01 11:00:00')
-		`)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		// Insert images
-		_, err = env.imagesDB.Exec(`
-			INSERT INTO images (id, uri, entry_id, sig) VALUES
-			(1, 'http://example.com/img1.jpg', 3, ''),
-			(2, 'http://example.com/img2.jpg', 4, '')
-		`)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		// Insert ngrams (share "test" word)
-		_, err = env.imagesDB.Exec(`
-			INSERT INTO ngram (image_id, word) VALUES
-			(1, 'test'),
-			(2, 'test')
-		`)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		req := httptest.NewRequest(http.MethodGet, "/api/similar?id=3", nil)
-		rec := httptest.NewRecorder()
-		env.server.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusOK {
-			t.Errorf("want status 200, got %d", rec.Code)
-		}
-
-		var res struct {
-			Result map[string]string `json:"result"`
-		}
-		if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
-			t.Fatal(err)
-		}
-
-		html, ok := res.Result["3"]
-		if !ok {
-			t.Fatal("result for id=3 not found")
-		}
-
-		// Should verify that html contains the image or link to entry 4
-		// view/similar.templ: <a href="/2025/01/01/4"> <img src="http://example.com/img2.jpg" ... />
-		if !strings.Contains(html, "/2025/01/01/4") {
-			t.Error("rendered HTML does not contain link to related entry")
-		}
-		if !strings.Contains(html, "http://example.com/img2.jpg") {
-			t.Error("rendered HTML does not contain related image URI")
-		}
-	})
 }
 
 func TestHandleApiEdit(t *testing.T) {

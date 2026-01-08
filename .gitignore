@@ -35,3 +35,8 @@ todo.md
 static/**/*.gz
 static/**/*.br
 static/images/entry
+var/cache/
+
+
+tmp/
+*.prof

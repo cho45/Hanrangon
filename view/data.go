@@ -2,6 +2,9 @@ package view
 
 import (
 	"encoding/xml"
+	"html/template"
+	"strings"
+	"time"
 
 	"github.com/cho45/hanrangon/model"
 )
@@ -17,15 +20,101 @@ type LayoutData struct {
 	IsAuth       bool
 }
 
+// ViewEntry wraps model.Entry with pre-calculated display fields
+type ViewEntry struct {
+	model.Entry
+	DisplayTitle      string
+	Tags              []string
+	Summary           string
+	FirstImageURL     template.URL
+	CanonicalURL      template.URL // Pre-calculated URL
+	FormattedDate     string
+	DatePath          string
+	DisplayTime       string
+	CreatedAtRFC3339  string
+	ModifiedAtRFC3339 string
+	FormattedBodyHTML template.HTML
+	IsDateBoundary    bool // Pre-calculated for template
+	SimilarEntries    []SimilarEntry
+	SimilarImages     []SimilarImage
+}
+
+func NewViewEntry(e model.Entry, baseURL string) ViewEntry {
+	displayTitle, tags := model.ParseTitle(e.Title)
+	if displayTitle == "" {
+		displayTitle = "✖"
+	}
+	summary, firstImage := ExtractSummaryAndFirstImage(e.FormattedBody, 100)
+	return ViewEntry{
+		Entry:             e,
+		DisplayTitle:      displayTitle,
+		Tags:              tags,
+		Summary:           summary,
+		FirstImageURL:     template.URL(firstImage),
+		CanonicalURL:      template.URL(strings.TrimSuffix(baseURL, "/") + "/" + e.Path),
+		FormattedDate:     FormatDate(e.Date),
+		DatePath:          DatePath(e.Date),
+		DisplayTime:       e.CreatedAt.Format("15:04"),
+		CreatedAtRFC3339:  e.CreatedAt.UTC().Format(time.RFC3339),
+		ModifiedAtRFC3339: e.ModifiedAt.UTC().Format(time.RFC3339),
+		FormattedBodyHTML: template.HTML(e.FormattedBody),
+	}
+}
+
+func NewViewEntries(entries []model.Entry, baseURL string) []ViewEntry {
+	res := make([]ViewEntry, len(entries))
+	for i, e := range entries {
+		res[i] = NewViewEntry(e, baseURL)
+		if i == 0 {
+			res[i].IsDateBoundary = true
+		} else {
+			res[i].IsDateBoundary = res[i].Date != res[i-1].Date
+		}
+	}
+	return res
+}
+
+// ViewTrackback represents pre-calculated trackback data
+type ViewTrackback struct {
+	model.ListTrackbackEntriesRow
+	DisplayTitle     string
+	Summary          string
+	CreatedAtRFC3339 string
+	DisplayTime      string
+}
+
+func NewViewTrackback(row model.ListTrackbackEntriesRow) ViewTrackback {
+	displayTitle, _ := model.ParseTitle(row.Title)
+	if displayTitle == "" {
+		displayTitle = "✖"
+	}
+	summary, _ := ExtractSummaryAndFirstImage(row.Body, 140)
+	return ViewTrackback{
+		ListTrackbackEntriesRow: row,
+		DisplayTitle:            displayTitle,
+		Summary:                 summary,
+		CreatedAtRFC3339:        row.CreatedAt.UTC().Format(time.RFC3339),
+		DisplayTime:             row.CreatedAt.Format("15:04"),
+	}
+}
+
+func NewViewTrackbacks(rows []model.ListTrackbackEntriesRow) []ViewTrackback {
+	res := make([]ViewTrackback, len(rows))
+	for i, r := range rows {
+		res[i] = NewViewTrackback(r)
+	}
+	return res
+}
+
 // IndexData holds data for both index and entry detail pages
 type IndexData struct {
 	LayoutData
-	Entries    []model.Entry                    // For index: multiple entries, for detail: single entry
-	IsDetail   bool                             // true for entry detail page, false for list page
-	OlderPage  string                           // For index pagination
-	Trackbacks []*model.ListTrackbackEntriesRow // For entry detail
-	Older      *model.Entry                     // For entry detail navigation (past)
-	Newer      *model.Entry                     // For entry detail navigation (future)
+	Entries    []ViewEntry     // For index: multiple entries, for detail: single entry
+	IsDetail   bool            // true for entry detail page, false for list page
+	OlderPage  string          // For index pagination
+	Trackbacks []ViewTrackback // For entry detail
+	Older      *ViewEntry      // For entry detail navigation (past)
+	Newer      *ViewEntry      // For entry detail navigation (future)
 }
 
 // ArchiveData holds data for the archive page
@@ -101,7 +190,7 @@ type SitemapURL struct {
 
 // SimilarEntry represents an entry with similarity score
 type SimilarEntry struct {
-	model.Entry
+	ViewEntry
 	Score float64
 }
 

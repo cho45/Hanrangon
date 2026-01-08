@@ -35,6 +35,10 @@ generate:
 fmt:
 	goimports -w .
 
+ogp-base:
+	convert static/images/ogp.png -resize 1200x630 static/images/ogp_base.png
+	optipng -o7 static/images/ogp_base.png
+
 postprocess-test:
 	cd postprocess && npm test
 

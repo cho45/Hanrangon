@@ -302,6 +302,11 @@ func (app *AppImpl) HandleAdminApiEdit(c echo.Context) error {
 			}
 			location = "/" + row.Path
 
+			// OGPキャッシュを破棄
+			if err := app.InvalidateOGPCache(row.ID); err != nil {
+				log.Printf("Failed to invalidate OGP cache: %v", err)
+			}
+
 			// ジョブエンキュー
 			if row.Status == "public" {
 				if err := app.EnqueuePublishedEntryJobs(ctx, row.ID); err != nil {

@@ -1,14 +1,13 @@
 package app
 
 import (
-	"bytes"
+	"context"
 	"database/sql"
 	"encoding/xml"
 	"fmt"
 	"net/http"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -17,9 +16,11 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+var yearArchiveRegexp = regexp.MustCompile(`^\d{4}$`)
+
 func (app *AppImpl) HandleRootParam(c echo.Context) error {
 	param := c.Param("param")
-	if regexp.MustCompile(`^\d{4}$`).MatchString(param) {
+	if yearArchiveRegexp.MatchString(param) {
 		// It's a year archive
 		c.SetParamNames("yyyy")
 		c.SetParamValues(param)
@@ -90,9 +91,11 @@ func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 		pageTitle = fmt.Sprintf("%s年", yyyy)
 	}
 
+	viewEntries := view.NewViewEntries(entries, app.config.BaseURL)
+	app.populateSimilarEntries(ctx, viewEntries)
 	data := &view.IndexData{
 		LayoutData: app.newLayoutData(c, pageTitle),
-		Entries:    entries,
+		Entries:    viewEntries,
 		IsDetail:   false,
 		OlderPage:  "",
 	}
@@ -160,7 +163,7 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 	if len(dates) == 0 {
 		data := &view.IndexData{
 			LayoutData: app.newLayoutData(c, pageTitle),
-			Entries:    []model.Entry{},
+			Entries:    []view.ViewEntry{},
 			IsDetail:   false,
 			OlderPage:  "",
 		}
@@ -181,9 +184,11 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 	}
 
 	// HTMLレンダリング
+	viewEntries := view.NewViewEntries(entries, app.config.BaseURL)
+	app.populateSimilarEntries(ctx, viewEntries)
 	data := &view.IndexData{
 		LayoutData: app.newLayoutData(c, pageTitle),
-		Entries:    entries,
+		Entries:    viewEntries,
 		IsDetail:   false,
 		OlderPage:  olderPage,
 	}
@@ -236,9 +241,11 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 		}
 	}
 
+	viewEntries := view.NewViewEntries(entries, app.config.BaseURL)
+	app.populateSimilarEntries(ctx, viewEntries)
 	data := &view.IndexData{
 		LayoutData: app.newLayoutData(c, category+" カテゴリ"),
-		Entries:    entries,
+		Entries:    viewEntries,
 		IsDetail:   false,
 		OlderPage:  olderPage,
 	}
@@ -352,24 +359,20 @@ func (app *AppImpl) HandleRobotsTxt(c echo.Context) error {
 Disallow: /admin/
 Disallow: /login
 Sitemap: %s
-`, app.JoinBaseURL("/sitemap.xml"))
+`,
+		app.JoinBaseURL("/sitemap.xml"),
+	)
 	return c.String(http.StatusOK, content)
 }
 
-func (app *AppImpl) HandleApiSimilar(c echo.Context) error {
-	ctx := c.Request().Context()
-	idsParam := c.QueryParams()["id"]
-
-	targetIDs := make([]int64, 0, len(idsParam))
-	for _, idStr := range idsParam {
-		if id, err := strconv.ParseInt(idStr, 10, 64); err == nil {
-			targetIDs = append(targetIDs, id)
-		}
+func (app *AppImpl) populateSimilarEntries(ctx context.Context, entries []view.ViewEntry) {
+	if len(entries) == 0 {
+		return
 	}
 
-	result := make(map[string]string)
-	if len(targetIDs) == 0 {
-		return c.JSON(http.StatusOK, map[string]interface{}{"result": result, "ad": ""})
+	targetIDs := make([]int64, len(entries))
+	for i, e := range entries {
+		targetIDs[i] = e.ID
 	}
 
 	// 1. Get related entries from tfidfDB in bulk
@@ -396,40 +399,33 @@ func (app *AppImpl) HandleApiSimilar(c echo.Context) error {
 				entryMap[r.ID] = r
 			}
 
-			// 3. Render for each target ID
-			for targetID, related := range relatedMap {
+			// 3. Set for each target ID
+			for i := range entries {
+				e := &entries[i]
+				related := relatedMap[e.ID]
 				similarEntries := make([]view.SimilarEntry, 0, len(related))
 				for _, rel := range related {
-					if e, ok := entryMap[rel.RelatedEntryID]; ok {
+					if re, ok := entryMap[rel.RelatedEntryID]; ok {
 						similarEntries = append(similarEntries, view.SimilarEntry{
-							Entry: e,
-							Score: rel.Score,
+							ViewEntry: view.NewViewEntry(re, app.config.BaseURL),
+							Score:     rel.Score,
 						})
 					}
 				}
-
-				if len(similarEntries) > 0 {
-					var buf bytes.Buffer
-					data := &view.SimilarEntriesData{
-						Entries: similarEntries,
-					}
-					if err := app.templates.RenderTo(&buf, "similar-entries.html", data); err == nil {
-						result[strconv.FormatInt(targetID, 10)] = buf.String()
-					}
-				}
+				e.SimilarEntries = similarEntries
 			}
 		}
 	}
 
 	// 4. Fallback for IDs that don't have TF-IDF results yet
-	for _, id := range targetIDs {
-		idStr := strconv.FormatInt(id, 10)
-		if _, ok := result[idStr]; ok {
+	for i := range entries {
+		e := &entries[i]
+		if len(e.SimilarEntries) > 0 {
 			continue
 		}
 
-		// Similar Images fallback (one by one for now as it's less frequent)
-		images, err := app.imagesQueries.ListImagesByEntryID(ctx, id)
+		// Similar Images fallback
+		images, err := app.imagesQueries.ListImagesByEntryID(ctx, e.ID)
 		if err != nil || len(images) == 0 {
 			continue
 		}
@@ -458,43 +454,32 @@ func (app *AppImpl) HandleApiSimilar(c echo.Context) error {
 			}
 		}
 
-		entries, err := app.queries.ListEntriesByIds(ctx, entryIDs)
+		entryRows, err := app.queries.ListEntriesByIds(ctx, entryIDs)
 		if err != nil {
 			continue
 		}
 
 		entryMap := make(map[int64]model.Entry)
-		for _, e := range entries {
-			entryMap[e.ID] = e
+		for _, re := range entryRows {
+			entryMap[re.ID] = re
 		}
 
 		var viewImages []view.SimilarImage
 		for _, cand := range candidates {
-			if e, ok := entryMap[cand.EntryID]; ok {
+			if re, ok := entryMap[cand.EntryID]; ok {
 				viewImages = append(viewImages, view.SimilarImage{
 					URI:       cand.Uri,
-					EntryPath: e.Path,
+					EntryPath: re.Path,
 					Score:     cand.Score,
 				})
 			}
 		}
-
-		var buf bytes.Buffer
-		data := &view.SimilarImagesData{
-			Images: viewImages,
-		}
-		if err := app.templates.RenderTo(&buf, "similar-images.html", data); err == nil {
-			result[idStr] = buf.String()
-		}
+		e.SimilarImages = viewImages
 	}
-
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"result": result,
-		"ad":     "",
-	})
 }
 
 func (app *AppImpl) HandlePath(c echo.Context) error {
+
 	ctx := c.Request().Context()
 	// Get the full path from the catch-all parameter
 	path := c.Param("*")
@@ -531,47 +516,67 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 	if err != nil && err != sql.ErrNoRows {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch trackbacks").SetInternal(err)
 	}
-	trackbacks := make([]*model.ListTrackbackEntriesRow, len(rows))
-	for i, r := range rows {
-		row := r
-		trackbacks[i] = &row
-	}
+	trackbacks := view.NewViewTrackbacks(rows)
 
 	olderEntry, err := app.queries.GetOlderEntry(ctx, entry.CreatedAt)
 	if err != nil && err != sql.ErrNoRows {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch older entry").SetInternal(err)
 	}
-	var olderPtr *model.Entry
+	var olderPtr *view.ViewEntry
 	if err == nil {
-		olderPtr = &olderEntry
+		v := view.NewViewEntry(olderEntry, app.config.BaseURL)
+		olderPtr = &v
 	}
 
 	newerEntry, err := app.queries.GetNewerEntry(ctx, entry.CreatedAt)
 	if err != nil && err != sql.ErrNoRows {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch newer entry").SetInternal(err)
 	}
-	var newerPtr *model.Entry
+	var newerPtr *view.ViewEntry
 	if err == nil {
-		newerPtr = &newerEntry
+		v := view.NewViewEntry(newerEntry, app.config.BaseURL)
+		newerPtr = &v
+	}
+
+	viewEntry := view.NewViewEntry(entry, app.config.BaseURL)
+	viewEntries := []view.ViewEntry{viewEntry}
+	app.populateSimilarEntries(ctx, viewEntries)
+
+	// Deduplicate similar entries against trackbacks
+	if len(trackbacks) > 0 && len(viewEntries[0].SimilarEntries) > 0 {
+		trackbackIDs := make(map[int64]bool)
+		for _, tb := range trackbacks {
+			trackbackIDs[tb.ID] = true
+		}
+		filtered := make([]view.SimilarEntry, 0, len(viewEntries[0].SimilarEntries))
+		for _, se := range viewEntries[0].SimilarEntries {
+			if !trackbackIDs[se.ID] {
+				filtered = append(filtered, se)
+			}
+		}
+		viewEntries[0].SimilarEntries = filtered
 	}
 
 	data := &view.IndexData{
 		LayoutData: app.newLayoutData(c, entry.DisplayTitle()),
-		Entries:    []model.Entry{entry},
+		Entries:    viewEntries,
 		IsDetail:   true,
 		Trackbacks: trackbacks,
 		Older:      olderPtr,
 		Newer:      newerPtr,
 	}
 
-	data.Description = view.Summary(entry.FormattedBody, 100)
+	data.Description = viewEntries[0].Summary
 	data.OGType = "article"
-	if img := view.ExtractFirstImage(entry.FormattedBody); img != "" {
-		if strings.HasPrefix(img, "http") {
-			data.ImageURL = img
+	firstImage := string(viewEntry.FirstImageURL)
+	if firstImage != "" {
+		if strings.HasPrefix(firstImage, "http") {
+			data.ImageURL = firstImage
 		} else {
-			data.ImageURL = app.JoinBaseURL(img)
+			data.ImageURL = app.JoinBaseURL(firstImage)
 		}
+	} else {
+		data.ImageURL = app.JoinBaseURL(fmt.Sprintf("/images/ogp/%d.png", entry.ID))
 	}
 
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)

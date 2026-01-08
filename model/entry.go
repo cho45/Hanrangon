@@ -10,14 +10,16 @@ var titleTagRegexp = regexp.MustCompile(`\s*\[([^\]]+)\]\s*`)
 // ParseTitle separates tags like [tag] from the title.
 // This is used internally by Entry methods and also available for cases where only a title string is available.
 func ParseTitle(rawTitle string) (string, []string) {
-	tags := []string{}
-	cleanTitle := titleTagRegexp.ReplaceAllStringFunc(rawTitle, func(match string) string {
-		submatch := titleTagRegexp.FindStringSubmatch(match)
-		if len(submatch) > 1 {
-			tags = append(tags, submatch[1])
-		}
-		return ""
-	})
+	submatches := titleTagRegexp.FindAllStringSubmatch(rawTitle, -1)
+	if len(submatches) == 0 {
+		return strings.TrimSpace(rawTitle), nil
+	}
+
+	tags := make([]string, len(submatches))
+	for i, sub := range submatches {
+		tags[i] = sub[1]
+	}
+	cleanTitle := titleTagRegexp.ReplaceAllString(rawTitle, "")
 	return strings.TrimSpace(cleanTitle), tags
 }
 

@@ -13,7 +13,6 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/Masterminds/sprig/v3"
-	"github.com/cho45/hanrangon/model"
 	"github.com/cho45/hanrangon/view"
 	"github.com/labstack/echo/v4"
 )
@@ -42,39 +41,7 @@ func buildFuncMap() template.FuncMap {
 	funcMap := sprig.FuncMap()
 
 	// カスタム関数を追加
-	funcMap["safeHTML"] = func(s string) template.HTML {
-		return template.HTML(s)
-	}
-	funcMap["safeURL"] = func(s string) template.URL {
-		return template.URL(s)
-	}
-	funcMap["formatDate"] = formatDate
-	funcMap["datePath"] = datePath
-	// parseTitleはエラー戻り値付きに変換
-	funcMap["parseTitle"] = func(title string) (interface{}, error) {
-		clean, tags := model.ParseTitle(title)
-		return []interface{}{clean, tags}, nil
-	}
-	funcMap["cleanTitle"] = func(title string) string {
-		clean, _ := model.ParseTitle(title)
-		return clean
-	}
-	funcMap["getTags"] = func(title string) []string {
-		_, tags := model.ParseTitle(title)
-		return tags
-	}
-	funcMap["summary"] = view.Summary
-	funcMap["isSameDay"] = view.IsSameDay
-	funcMap["isDateBoundary"] = func(i int, entries []model.Entry) bool {
-		if i == 0 {
-			return true
-		}
-		if i < 0 || i >= len(entries) {
-			return false
-		}
-		return entries[i].Date != entries[i-1].Date
-	}
-	funcMap["similarURL"] = func(entries []model.Entry) string {
+	funcMap["similarURL"] = func(entries []view.ViewEntry) string {
 		if len(entries) == 0 {
 			return ""
 		}
@@ -94,11 +61,11 @@ func buildFuncMap() template.FuncMap {
 	return funcMap
 }
 
-// LoadTemplates loads each template as an isolated set to avoid cross-template name collisions (e.g., "head").
-func (t *Templates) LoadTemplates() (map[string]*template.Template, error) {
+// loadTemplates loads each template as an isolated set to avoid cross-template name collisions (e.g., "head").
+func (t *Templates) loadTemplates() (map[string]*template.Template, map[string]*TemplateMetadata, error) {
 	templates := make(map[string]*template.Template)
 	funcMap := buildFuncMap()
-	t.metadata = make(map[string]*TemplateMetadata)
+	metadata := make(map[string]*TemplateMetadata)
 
 	basePath := "view/"
 	if _, err := os.Stat(basePath); os.IsNotExist(err) {
@@ -135,7 +102,7 @@ func (t *Templates) LoadTemplates() (map[string]*template.Template, error) {
 			if len(parts) == 3 {
 				var meta TemplateMetadata
 				if _, err := toml.Decode(parts[1], &meta); err == nil {
-					t.metadata[rel] = &meta
+					metadata[rel] = &meta
 					content = parts[2]
 				} else {
 					log.Printf("Error parsing TOML front matter in %s: %v", path, err)
@@ -155,9 +122,21 @@ func (t *Templates) LoadTemplates() (map[string]*template.Template, error) {
 	})
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
+	return templates, metadata, nil
+}
+
+// LoadTemplates is a thread-safe wrapper for loadTemplates.
+func (t *Templates) LoadTemplates() (map[string]*template.Template, error) {
+	templates, metadata, err := t.loadTemplates()
+	if err != nil {
+		return nil, err
+	}
+	t.mu.Lock()
+	t.metadata = metadata
+	t.mu.Unlock()
 	return templates, nil
 }
 
@@ -171,26 +150,27 @@ func InitTemplates(config *Config) (*Templates, error) {
 
 	if !config.IsDevelopment() {
 		// 本番モードでは起動時に一度だけ読み込む
-		templates, err := t.LoadTemplates()
+		templates, metadata, err := t.loadTemplates()
 		if err != nil {
 			return nil, err
 		}
 		t.templates = templates
+		t.metadata = metadata
 	}
 
 	return t, nil
 }
 
-// getTemplates returns the template map, reloading in development mode.
-func (t *Templates) getTemplates() (map[string]*template.Template, error) {
+// getTemplates returns the template map and metadata map, reloading in development mode.
+func (t *Templates) getTemplates() (map[string]*template.Template, map[string]*TemplateMetadata, error) {
 	if t.config.IsDevelopment() {
-		return t.LoadTemplates()
+		return t.loadTemplates()
 	}
 
 	t.mu.RLock()
 	if t.templates != nil {
 		defer t.mu.RUnlock()
-		return t.templates, nil
+		return t.templates, t.metadata, nil
 	}
 	t.mu.RUnlock()
 
@@ -199,23 +179,24 @@ func (t *Templates) getTemplates() (map[string]*template.Template, error) {
 
 	// Double check
 	if t.templates != nil {
-		return t.templates, nil
+		return t.templates, t.metadata, nil
 	}
 
-	tmpl, err := t.LoadTemplates()
+	tmpl, meta, err := t.loadTemplates()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	t.templates = tmpl
+	t.metadata = meta
 	// Clear merged cache when templates are reloaded
 	t.merged = make(map[string]*template.Template)
-	return t.templates, nil
+	return t.templates, t.metadata, nil
 }
 
 // RenderWithLayout renders a template with the specified layout.
 // It merges the layout and content templates into a fresh set for isolation.
 func (t *Templates) RenderWithLayout(c echo.Context, layoutName, contentName string, data interface{}) error {
-	templates, err := t.getTemplates()
+	templates, metadata, err := t.getTemplates()
 	if err != nil {
 		return err
 	}
@@ -226,7 +207,7 @@ func (t *Templates) RenderWithLayout(c echo.Context, layoutName, contentName str
 		mergedTmpl, ok := t.merged[key]
 		t.mu.RUnlock()
 		if ok {
-			t.setHeaders(c, layoutName, contentName)
+			t.setHeaders(c, metadata, layoutName, contentName)
 			err = mergedTmpl.ExecuteTemplate(c.Response(), layoutName, data)
 			if err != nil {
 				log.Printf("Template execution error (RenderWithLayout cached): %v", err)
@@ -277,7 +258,7 @@ func (t *Templates) RenderWithLayout(c echo.Context, layoutName, contentName str
 		t.mu.Unlock()
 	}
 
-	t.setHeaders(c, layoutName, contentName)
+	t.setHeaders(c, metadata, layoutName, contentName)
 
 	err = mergedTmpl.ExecuteTemplate(c.Response(), layoutName, data)
 	if err != nil {
@@ -288,7 +269,7 @@ func (t *Templates) RenderWithLayout(c echo.Context, layoutName, contentName str
 
 // Render renders a template by name
 func (t *Templates) Render(c echo.Context, name string, data interface{}) error {
-	templates, err := t.getTemplates()
+	templates, metadata, err := t.getTemplates()
 	if err != nil {
 		return err
 	}
@@ -298,7 +279,7 @@ func (t *Templates) Render(c echo.Context, name string, data interface{}) error 
 		return fmt.Errorf("template %s not found", name)
 	}
 
-	t.setHeaders(c, name)
+	t.setHeaders(c, metadata, name)
 
 	err = tmpl.ExecuteTemplate(c.Response(), name, data)
 	if err != nil {
@@ -309,7 +290,7 @@ func (t *Templates) Render(c echo.Context, name string, data interface{}) error 
 
 // RenderTo renders a template to an io.Writer (no header setting)
 func (t *Templates) RenderTo(w io.Writer, name string, data interface{}) error {
-	templates, err := t.getTemplates()
+	templates, _, err := t.getTemplates()
 	if err != nil {
 		return err
 	}
@@ -326,9 +307,9 @@ func (t *Templates) RenderTo(w io.Writer, name string, data interface{}) error {
 	return err
 }
 
-func (t *Templates) setHeaders(c echo.Context, names ...string) {
+func (t *Templates) setHeaders(c echo.Context, metadata map[string]*TemplateMetadata, names ...string) {
 	for _, name := range names {
-		if meta, ok := t.metadata[name]; ok {
+		if meta, ok := metadata[name]; ok {
 			for _, l := range meta.Links {
 				rel := l.Rel
 				if rel == "" {
@@ -345,21 +326,4 @@ func (t *Templates) setHeaders(c echo.Context, names ...string) {
 			}
 		}
 	}
-}
-
-// formatDate formats a date string from "2006-01-02" to "2006年 01月 02日"
-func formatDate(dateStr string) string {
-	parts := strings.Split(dateStr, "-")
-	if len(parts) != 3 {
-		return dateStr
-	}
-	return parts[0] + "年 " + parts[1] + "月 " + parts[2] + "日"
-}
-
-// datePath converts a date string from "2006-01-02" to "/2006/01/02/"
-func datePath(dateStr string) string {
-	if len(dateStr) != 10 { // YYYY-MM-DD
-		return "/" + strings.ReplaceAll(dateStr, "-", "/") + "/"
-	}
-	return "/" + dateStr[0:4] + "/" + dateStr[5:7] + "/" + dateStr[8:10] + "/"
 }
