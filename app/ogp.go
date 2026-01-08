@@ -1,6 +1,7 @@
 package app
 
 import (
+	"database/sql"
 	"fmt"
 	"image"
 	"image/color"
@@ -23,21 +24,36 @@ var (
 	ogpPalette     color.Palette
 	ogpPaletteOnce sync.Once
 
-	ogpBaseImage *image.RGBA
-	ogpFont      *opentype.Font
-	ogpAssetOnce sync.Once
+	ogpBaseImage    *image.RGBA
+	ogpBasePaletted *image.Paletted
+	ogpPaletteLUT   []uint8
+	ogpFont         *opentype.Font
+	ogpTitleFace    font.Face
+	ogpMetaFace     font.Face
+	ogpAssetOnce    sync.Once
+
+	rgbaPool = sync.Pool{
+		New: func() any { return make([]byte, 1200*630*4) },
+	}
+	palettedPool = sync.Pool{
+		New: func() any { return make([]byte, 1200*630) },
+	}
 )
 
 const (
 	ogpBgR, ogpBgG, ogpBgB = 248, 249, 250 // #f8f9fa
 )
 
+type opaquePaletted struct {
+	*image.Paletted
+}
+
+func (p *opaquePaletted) Opaque() bool { return true }
+
 func getOGPPalette() color.Palette {
 	ogpPaletteOnce.Do(func() {
 		p := make(color.Palette, 0, 16)
 		p = append(p, color.RGBA{ogpBgR, ogpBgG, ogpBgB, 255})
-
-		// 濃紺 (#2c3e50) へのグラデーション (14段階)
 		for i := 0; i < 14; i++ {
 			t := float64(i) / 13.0
 			p = append(p, color.RGBA{
@@ -47,7 +63,6 @@ func getOGPPalette() color.Palette {
 				A: 255,
 			})
 		}
-		// 単色グレー (#78828c) を追加
 		p = append(p, color.RGBA{120, 130, 140, 255})
 		ogpPalette = p
 	})
@@ -56,26 +71,43 @@ func getOGPPalette() color.Palette {
 
 func (app *AppImpl) loadOGPAssets() {
 	ogpAssetOnce.Do(func() {
-		// 背景画像のロード
+		// ディレクトリを事前に作成
+		os.MkdirAll("var/cache/ogp", 0755)
+
+		p := getOGPPalette()
 		bgPath := filepath.Join(app.config.StaticDir, "images", "ogp_base.png")
 		if f, err := os.Open(bgPath); err == nil {
 			img, _ := png.Decode(f)
 			f.Close()
-			if rgba, ok := img.(*image.RGBA); ok {
-				ogpBaseImage = rgba
-			} else if img != nil {
-				// RGBAでない場合は変換してキャッシュ
+			if img != nil {
 				b := img.Bounds()
 				rgba := image.NewRGBA(b)
 				draw.Draw(rgba, b, img, b.Min, draw.Src)
 				ogpBaseImage = rgba
+				pal := image.NewPaletted(b, p)
+				draw.Draw(pal, b, rgba, b.Min, draw.Src)
+				ogpBasePaletted = pal
 			}
 		}
-		// フォントのロード
 		fontPath := filepath.Join(app.config.StaticDir, "fonts", "NotoSansJP-Bold.ttf")
 		if fontBytes, err := os.ReadFile(fontPath); err == nil {
 			ogpFont, _ = opentype.Parse(fontBytes)
+			if ogpFont != nil {
+				const dpi = 72
+				ogpTitleFace, _ = opentype.NewFace(ogpFont, &opentype.FaceOptions{Size: 64, DPI: dpi, Hinting: font.HintingFull})
+				ogpMetaFace, _ = opentype.NewFace(ogpFont, &opentype.FaceOptions{Size: 36, DPI: dpi, Hinting: font.HintingFull})
+			}
 		}
+		lut := make([]uint8, 32768)
+		for r := 0; r < 32; r++ {
+			for g := 0; g < 32; g++ {
+				for b := 0; b < 32; b++ {
+					c := color.RGBA{uint8(r<<3 | r>>2), uint8(g<<3 | g>>2), uint8(b<<3 | b>>2), 255}
+					lut[(r<<10)|(g<<5)|b] = uint8(p.Index(c))
+				}
+			}
+		}
+		ogpPaletteLUT = lut
 	})
 }
 
@@ -88,51 +120,31 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 	}
 
 	cachePath := filepath.Join("var", "cache", "ogp", fmt.Sprintf("%d.png", id))
+	cc := c.Request().Header.Get("Cache-Control")
+	pragma := c.Request().Header.Get("Pragma")
+	noCache := (cc == "no-cache" || pragma == "no-cache") && app.config.IsDevelopment()
 
-	// 開発環境かつスーパーリロード時はキャッシュを破棄する
-	if app.config.IsDevelopment() {
-		cc := c.Request().Header.Get("Cache-Control")
-		pragma := c.Request().Header.Get("Pragma")
-		if cc == "no-cache" || pragma == "no-cache" {
-			os.Remove(cachePath)
+	if !noCache {
+		if _, err := os.Stat(cachePath); err == nil {
+			return c.File(cachePath)
 		}
 	}
 
-	// キャッシュがあれば即座に返す
-	if _, err := os.Stat(cachePath); err == nil {
-		return c.File(cachePath)
-	}
-
-	// 記事タイトルを取得
 	entry, err := app.queries.GetEntryById(c.Request().Context(), id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
+		if err == sql.ErrNoRows {
+			return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("DB error: %v", err))
 	}
 
 	// 1. アセットのロード（初回のみ）
 	app.loadOGPAssets()
-
-	// 2. 背景の準備
-	bounds := image.Rect(0, 0, 1200, 630)
-	dst := image.NewRGBA(bounds)
-	if ogpBaseImage != nil {
-		// メモリコピーによる高速化
-		copy(dst.Pix, ogpBaseImage.Pix)
-	} else {
-		draw.Draw(dst, dst.Bounds(), image.NewUniform(color.RGBA{ogpBgR, ogpBgG, ogpBgB, 255}), image.Point{}, draw.Src)
-	}
-
 	if ogpFont == nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Font not loaded")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Assets not loaded")
 	}
 
-	const dpi = 72
-	titleFace, _ := opentype.NewFace(ogpFont, &opentype.FaceOptions{Size: 64, DPI: dpi, Hinting: font.HintingFull})
-	defer titleFace.Close()
-	metaFace, _ := opentype.NewFace(ogpFont, &opentype.FaceOptions{Size: 36, DPI: dpi, Hinting: font.HintingFull})
-	defer metaFace.Close()
-
-	// 3. テキストの準備
+	// 2. テキスト情報の準備
 	title := entry.DisplayTitle()
 	// 豆腐対策: ✖ を一般的な × に置換
 	title = strings.ReplaceAll(title, "✖", "×")
@@ -140,17 +152,15 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 	if len([]rune(title)) > 200 {
 		title = string([]rune(title)[:200])
 	}
-
 	dateStr := entry.CreatedAt.Format("2006 . 01 . 02")
-	// パスからその日の何番目かを取得 (例: /2026/01/08/1 -> #1)
 	pathParts := strings.Split(strings.Trim(entry.Path, "/"), "/")
 	if len(pathParts) > 0 {
-		seq := pathParts[len(pathParts)-1]
-		if _, err := strconv.Atoi(seq); err == nil {
-			dateStr = fmt.Sprintf("%s  #%s", dateStr, seq)
+		if seq := pathParts[len(pathParts)-1]; seq != "" {
+			if _, err := strconv.Atoi(seq); err == nil {
+				dateStr = fmt.Sprintf("%s  #%s", dateStr, seq)
+			}
 		}
 	}
-
 	tags := entry.Tags()
 	tagStr := ""
 	for _, t := range tags {
@@ -158,38 +168,60 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 	}
 	tagStr = strings.TrimSpace(tagStr)
 
-	// 4. フェードアウトの必要判定
+	// 3. 描画コンテキストの準備
+	// Faceはスレッドセーフではないため、リクエストごとに生成する
+	const dpi = 72
+	titleFace, _ := opentype.NewFace(ogpFont, &opentype.FaceOptions{Size: 64, DPI: dpi, Hinting: font.HintingFull})
+	defer titleFace.Close()
+	metaFace, _ := opentype.NewFace(ogpFont, &opentype.FaceOptions{Size: 36, DPI: dpi, Hinting: font.HintingFull})
+	defer metaFace.Close()
+
 	const margin = 80
 	titleWidth := (&font.Drawer{Face: titleFace}).MeasureString(title)
+	tagWidth := (&font.Drawer{Face: metaFace}).MeasureString(tagStr)
+	
+	// フェードアウトの必要判定
 	needsFade := false
-	if tagStr != "" && (fixed.I(dst.Bounds().Dx())-(&font.Drawer{Face: metaFace}).MeasureString(tagStr))/2 < fixed.I(margin) {
+	if tagStr != "" && (fixed.I(1200)-tagWidth)/2 < fixed.I(margin) {
 		needsFade = true
 	}
-	if (fixed.I(dst.Bounds().Dx())-titleWidth)/2 < fixed.I(margin) {
+	if (fixed.I(1200)-titleWidth)/2 < fixed.I(margin) {
 		needsFade = true
 	}
 
-	// 5. 描画ターゲットの決定（フェードが必要な場合のみレイヤーを使用）
-	var drawDst draw.Image = dst
+	// 4. 描画実行
+	pix := rgbaPool.Get().([]byte)
+	defer rgbaPool.Put(pix)
+	dst := &image.RGBA{Pix: pix, Stride: 1200 * 4, Rect: image.Rect(0, 0, 1200, 630)}
+
 	var textLayer *image.RGBA
+	var d *font.Drawer
 	if needsFade {
-		textLayer = image.NewRGBA(dst.Bounds())
-		drawDst = textLayer
+		tpix := rgbaPool.Get().([]byte)
+		defer rgbaPool.Put(tpix)
+		for i := range tpix {
+			tpix[i] = 0
+		}
+		textLayer = &image.RGBA{Pix: tpix, Stride: 1200 * 4, Rect: dst.Rect}
+		d = &font.Drawer{Dst: textLayer}
+	} else {
+		if ogpBaseImage != nil {
+			copy(dst.Pix, ogpBaseImage.Pix)
+		} else {
+			draw.Draw(dst, dst.Bounds(), image.NewUniform(color.RGBA{ogpBgR, ogpBgG, ogpBgB, 255}), image.Point{}, draw.Src)
+		}
+		d = &font.Drawer{Dst: dst}
 	}
 
-	centerY := dst.Bounds().Dy() / 2
-	d := &font.Drawer{Dst: drawDst}
-
-	// 日付
+	centerY := 315
 	d.Face = metaFace
 	d.Src = image.NewUniform(color.RGBA{120, 130, 140, 255})
-	d.Dot = fixed.Point26_6{X: (fixed.I(dst.Bounds().Dx()) - d.MeasureString(dateStr)) / 2, Y: fixed.I(centerY - 180)}
+	d.Dot = fixed.Point26_6{X: (fixed.I(1200) - d.MeasureString(dateStr)) / 2, Y: fixed.I(centerY - 180)}
 	d.DrawString(dateStr)
 
-	// タグ
 	if tagStr != "" {
 		d.Src = image.NewUniform(color.RGBA{44, 62, 80, 255})
-		tagX := (fixed.I(dst.Bounds().Dx()) - d.MeasureString(tagStr)) / 2
+		tagX := (fixed.I(1200) - d.MeasureString(tagStr)) / 2
 		if tagX < fixed.I(margin) {
 			tagX = fixed.I(margin)
 		}
@@ -197,75 +229,103 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 		d.DrawString(tagStr)
 	}
 
-	// タイトル
 	d.Face = titleFace
 	d.Src = image.NewUniform(color.RGBA{44, 62, 80, 255})
-	titleX := (fixed.I(dst.Bounds().Dx()) - titleWidth) / 2
+	titleX := (fixed.I(1200) - titleWidth) / 2
 	if titleX < fixed.I(margin) {
 		titleX = fixed.I(margin)
 	}
 	d.Dot = fixed.Point26_6{X: titleX, Y: fixed.I(centerY - 20)}
 	d.DrawString(title)
 
-	// 6. 合成 (フェードと合成を統合して最適化)
+	// 5. パレットへのマージ
+	ppix := palettedPool.Get().([]byte)
+	defer palettedPool.Put(ppix)
+	paletted := &image.Paletted{Pix: ppix, Stride: 1200, Rect: dst.Rect, Palette: getOGPPalette()}
+
+	lut, pPix, dPix := ogpPaletteLUT, paletted.Pix, dst.Pix
+	var bRPix, bPPix []uint8
+	if ogpBaseImage != nil {
+		bRPix = ogpBaseImage.Pix
+	}
+	if ogpBasePaletted != nil {
+		bPPix = ogpBasePaletted.Pix
+	}
+
 	if needsFade {
-		fadeEnd := dst.Bounds().Dx() - margin
-		fadeLen := 120
+		// フェード計算と合成を 1 パスで実行
+		fadeEnd, fadeLen := 1120, 120
 		fadeStart := fadeEnd - fadeLen
-		stride := textLayer.Stride
-		for y := 0; y < dst.Bounds().Dy(); y++ {
-			rowOffset := y * stride
-			for x := 0; x < dst.Bounds().Dx(); x++ {
-				pixIdx := rowOffset + x*4
-				srcA := uint32(textLayer.Pix[pixIdx+3])
+		tPix := textLayer.Pix
+		for y := 0; y < 630; y++ {
+			off, pOff := y*4800, y*1200
+			for x := 0; x < 1200; x++ {
+				i, j := off+x*4, pOff+x
+				srcA := uint32(tPix[i+3])
 				if srcA == 0 {
+					if bPPix != nil {
+						pPix[j] = bPPix[j]
+					} else {
+						pPix[j] = 0
+					}
 					continue
 				}
-
-				var mask float64 = 1.0
+				mask := uint32(255)
 				if x >= fadeEnd {
 					mask = 0
 				} else if x >= fadeStart {
-					mask = float64(fadeEnd-x) / float64(fadeLen)
+					mask = uint32((fadeEnd - x) * 255 / fadeLen)
 				}
-
-				if mask <= 0 {
+				if mask == 0 {
+					if bPPix != nil {
+						pPix[j] = bPPix[j]
+					} else {
+						pPix[j] = 0
+					}
 					continue
 				}
-
-				srcR := uint32(float64(textLayer.Pix[pixIdx]) * mask)
-				srcG := uint32(float64(textLayer.Pix[pixIdx+1]) * mask)
-				srcB := uint32(float64(textLayer.Pix[pixIdx+2]) * mask)
-				srcA = uint32(float64(srcA) * mask)
-
-				dstR := uint32(dst.Pix[pixIdx])
-				dstG := uint32(dst.Pix[pixIdx+1])
-				dstB := uint32(dst.Pix[pixIdx+2])
-
-				// Simplified Over blending
-				a := (255 - srcA)
-				dst.Pix[pixIdx] = uint8((srcR*255 + dstR*a) / 255)
-				dst.Pix[pixIdx+1] = uint8((srcG*255 + dstG*a) / 255)
-				dst.Pix[pixIdx+2] = uint8((srcB*255 + dstB*a) / 255)
+				sR, sG, sB, sA := (uint32(tPix[i])*mask)/255, (uint32(tPix[i+1])*mask)/255, (uint32(tPix[i+2])*mask)/255, (srcA*mask)/255
+				var dR, dG, dB uint32
+				if bRPix != nil {
+					dR, dG, dB = uint32(bRPix[i]), uint32(bRPix[i+1]), uint32(bRPix[i+2])
+				} else {
+					dR, dG, dB = ogpBgR, ogpBgG, ogpBgB
+				}
+				invA := 255 - sA
+				r, g, b := (sR*255+dR*invA)/255, (sG*255+dG*invA)/255, (sB*255+dB*invA)/255
+				pPix[j] = lut[((r>>3)<<10)|((g>>3)<<5)|(b>>3)]
 			}
+		}
+	} else {
+		// フェード不要な場合は極めて高速なLUT変換
+		for i, j := 0, 0; i < len(dPix); i, j = i+4, j+1 {
+			pPix[j] = lut[((uint32(dPix[i])>>3)<<10)|((uint32(dPix[i+1])>>3)<<5)|(uint32(dPix[i+2])>>3)]
 		}
 	}
 
-	// 7. パレット変換と保存
-	paletted := image.NewPaletted(dst.Bounds(), getOGPPalette())
-	draw.Draw(paletted, dst.Bounds(), dst, image.Point{}, draw.Src)
-
+	// 6. Atomic 保存 (CreateTempによる一意なファイル作成)
 	if err := os.MkdirAll(filepath.Dir(cachePath), 0755); err != nil {
-		return fmt.Errorf("failed to create cache directory: %w", err)
+		return fmt.Errorf("mkdir: %w", err)
 	}
-	outFile, err := os.Create(cachePath)
+	tmpFile, err := os.CreateTemp(filepath.Dir(cachePath), ".ogp-*.tmp")
 	if err != nil {
-		return fmt.Errorf("failed to create cache file: %w", err)
+		return fmt.Errorf("create temp: %w", err)
 	}
-	defer outFile.Close()
+	tmpPath := tmpFile.Name()
+
 	enc := &png.Encoder{CompressionLevel: png.DefaultCompression}
-	if err := enc.Encode(outFile, paletted); err != nil {
-		return fmt.Errorf("failed to encode png: %w", err)
+	// 不透明ラッパーを使用して opacity チェックをスキップ
+	err = enc.Encode(tmpFile, &opaquePaletted{paletted})
+	tmpFile.Close()
+
+	if err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("encode: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, cachePath); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("rename: %w", err)
 	}
 
 	return c.File(cachePath)
