@@ -54,7 +54,7 @@ func TestRunServe_GracefulShutdownOrder(t *testing.T) {
 
 	// Create minimal App
 	// We need to satisfy the App interface. Using app.NewApp with mostly nil/minimal values
-	application := app.NewApp(config, db, db, db, db, &tfidf.Calculator{}, &tfidf.SimilarityCalculator{}, worker)
+	application := app.NewApp(config, db, db, db, db, &tfidf.Calculator{}, &tfidf.SimilarityCalculator{}, &tfidf.Searcher{}, worker)
 
 	// Capture logs
 	var logBuf bytes.Buffer

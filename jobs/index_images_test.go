@@ -41,13 +41,14 @@ func TestIndexImagesJob_Execute(t *testing.T) {
 		t.Fatalf("failed to create calculator: %v", err)
 	}
 	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
 
 	// Create job queue
 	registry := jobqueue.NewRegistry()
 	workerQueries := model.New(workerDB)
 	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
 
-	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, worker)
+	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
 	job := NewIndexImagesJob(application)
 
 	// Create a dummy image

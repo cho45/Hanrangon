@@ -2,6 +2,7 @@ package app
 
 import (
 	"log"
+	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
@@ -33,12 +34,56 @@ func NewServer(app *AppImpl) *echo.Echo {
 		LogMethod:   true,
 		LogLatency:  true,
 		LogRemoteIP: true,
+		LogError:    true,
 		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
-			log.Printf("REQUEST: method=%s, uri=%s, status=%d, latency=%v, remote_ip=%s",
-				v.Method, v.URI, v.Status, v.Latency, v.RemoteIP)
+			if v.Error != nil {
+				log.Printf("REQUEST ERROR: method=%s, uri=%s, status=%d, latency=%v, remote_ip=%s, error=%v",
+					v.Method, v.URI, v.Status, v.Latency, v.RemoteIP, v.Error)
+			} else {
+				log.Printf("REQUEST: method=%s, uri=%s, status=%d, latency=%v, remote_ip=%s",
+					v.Method, v.URI, v.Status, v.Latency, v.RemoteIP)
+			}
 			return nil
 		},
 	}))
+
+	// Custom HTTP Error Handler
+	e.HTTPErrorHandler = func(err error, c echo.Context) {
+		code := http.StatusInternalServerError
+		var message interface{} = "Internal Server Error"
+
+		if he, ok := err.(*echo.HTTPError); ok {
+			code = he.Code
+			message = he.Message
+			if he.Internal != nil {
+				log.Printf("[ERROR] Internal error: %v", he.Internal)
+			}
+		}
+
+		log.Printf("[ERROR] HTTP Error: code=%d, message=%v, error=%v", code, message, err)
+
+		if !c.Response().Committed {
+			if c.Request().Method == http.MethodHead {
+				err = c.NoContent(code)
+			} else {
+				// In development, return detailed error
+				if config.IsDevelopment() {
+					err = c.JSON(code, map[string]interface{}{
+						"message": message,
+						"error":   err.Error(),
+					})
+				} else {
+					err = c.JSON(code, map[string]interface{}{
+						"message": message,
+					})
+				}
+			}
+			if err != nil {
+				log.Printf("[ERROR] Failed to send error response: %v", err)
+			}
+		}
+	}
+
 	e.Use(middleware.Recover())
 	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
 		Level: 1, // BestSpeed
@@ -103,6 +148,7 @@ func NewServer(app *AppImpl) *echo.Echo {
 	e.GET("/", app.HandleIndex)
 	e.GET("/.page/:date/:limit", app.HandleIndex)
 	e.GET("/archive", app.HandleArchive)
+	e.GET("/search", app.HandleSearch)
 
 	// Date archives (order matters)
 	e.GET("/:param/", app.HandleRootParam) // Year archive OR Category
@@ -115,6 +161,7 @@ func NewServer(app *AppImpl) *echo.Echo {
 	e.GET("/sitemap.xml", app.HandleSitemap)
 	e.GET("/robots.txt", app.HandleRobotsTxt)
 
+	e.GET("/api/search", app.HandleApiSearch)
 	e.GET("/images/ogp/:id", app.HandleOGP)
 
 	// Auth

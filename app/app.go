@@ -45,6 +45,7 @@ type AppImpl struct {
 	imagesDB             *sql.DB
 	calculator           *tfidf.Calculator
 	similarityCalculator *tfidf.SimilarityCalculator
+	searcher             *tfidf.Searcher
 	jobQueue             *jobqueue.Worker
 	config               *Config
 	templates            *Templates
@@ -60,6 +61,7 @@ func NewApp(
 	imagesDB *sql.DB,
 	calculator *tfidf.Calculator,
 	similarityCalculator *tfidf.SimilarityCalculator,
+	searcher *tfidf.Searcher,
 	worker *jobqueue.Worker,
 ) *AppImpl {
 	templates, err := InitTemplates(config)
@@ -78,6 +80,7 @@ func NewApp(
 		imagesDB:             imagesDB,
 		calculator:           calculator,
 		similarityCalculator: similarityCalculator,
+		searcher:             searcher,
 		jobQueue:             worker,
 		config:               config,
 		templates:            templates,
@@ -95,6 +98,7 @@ func (a *AppImpl) ImagesQueries() *model.Queries                     { return a.
 func (a *AppImpl) ImagesDB() *sql.DB                                 { return a.imagesDB }
 func (a *AppImpl) Calculator() *tfidf.Calculator                     { return a.calculator }
 func (a *AppImpl) SimilarityCalculator() *tfidf.SimilarityCalculator { return a.similarityCalculator }
+func (a *AppImpl) Searcher() *tfidf.Searcher                         { return a.searcher }
 func (a *AppImpl) JobQueue() *jobqueue.Worker                        { return a.jobQueue }
 func (a *AppImpl) Config() *Config                                   { return a.config }
 func (a *AppImpl) Templates() *Templates                             { return a.templates }
