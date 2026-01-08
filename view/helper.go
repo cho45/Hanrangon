@@ -73,9 +73,23 @@ func Summary(htmlContent string, length interface{}) string {
 	text := textBuilder.String()
 	text = strings.ReplaceAll(text, "\n", " ")
 	text = strings.ReplaceAll(text, "\r", "")
-	// Replace multiple spaces with a single space
-	text = whitespaceRegexp.ReplaceAllString(text, " ")
-	text = strings.TrimSpace(text)
+
+	// Replace multiple spaces with a single space without using regexp
+	var finalBuilder strings.Builder
+	finalBuilder.Grow(len(text))
+	lastWasSpace := false
+	for _, r := range text {
+		if r == ' ' {
+			if !lastWasSpace {
+				finalBuilder.WriteRune(r)
+			}
+			lastWasSpace = true
+		} else {
+			finalBuilder.WriteRune(r)
+			lastWasSpace = false
+		}
+	}
+	text = strings.TrimSpace(finalBuilder.String())
 
 	runes := []rune(text)
 	if len(runes) > l {
