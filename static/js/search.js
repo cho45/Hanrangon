@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	const resultsContainer = document.getElementById('search-results');
 	const loadingSpinner = document.getElementById('loading-spinner');
 	const noResults = document.getElementById('no-results');
+	const ariaStatus = document.getElementById('aria-status');
 
 	let currentQuery = '';
 
@@ -17,10 +18,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
 	async function performSearch(query) {
 		query = query.trim();
-		if (!query) {
+		if (query.length < 2) {
 			resultsContainer.innerHTML = '';
 			noResults.style.display = 'none';
 			loadingSpinner.style.display = 'none';
+			ariaStatus.textContent = '';
+			currentQuery = query;
 			return;
 		}
 		if (query === currentQuery) return;
@@ -30,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
 		resultsContainer.innerHTML = '';
 		noResults.style.display = 'none';
 		loadingSpinner.style.display = 'block';
+		ariaStatus.textContent = '検索中...';
 
 		// Update URL without reloading
 		const newURL = new URL(window.location.href);
@@ -49,15 +53,22 @@ document.addEventListener('DOMContentLoaded', () => {
 			loadingSpinner.style.display = 'none';
 
 			if (!data.results || data.results.length === 0) {
+				const msg = `「${query}」に一致する記事は見つかりませんでした。`;
+				noResults.textContent = msg;
 				noResults.style.display = 'block';
+				ariaStatus.textContent = msg;
 				return;
 			}
+
+			ariaStatus.textContent = `${data.results.length}件の記事が見つかりました。`;
 
 			data.results.forEach(item => {
 				const div = document.createElement('div');
 				div.className = 'search-result-item';
+				div.setAttribute('role', 'listitem');
 				
-				const displayTitle = item.title || `(無題: ${item.path})`;
+				// 抽出したタグをHTML化
+				const tagsHTML = (item.tags || []).map(tag => `<span class="tag">${escapeHTML(tag)}</span>`).join('');
 				
 				// formatted_body から不要なタグ(script, style等)を除去してサマリを作成
 				const parser = new DOMParser();
@@ -67,10 +78,13 @@ document.addEventListener('DOMContentLoaded', () => {
 				const summary = textContent.replace(/\s+/g, ' ').trim().substring(0, 200) + (textContent.length > 200 ? '...' : '');
 
 				div.innerHTML = `
-					<h3><a href="/${item.path}">${escapeHTML(displayTitle)}</a></h3>
+					<h3>
+						<a href="/${item.path}">${escapeHTML(item.title)}</a>
+						${tagsHTML}
+					</h3>
 					<div class="summary">${escapeHTML(summary)}</div>
 					<div class="meta">
-						<span class="date">${item.date}</span>
+						<span class="date"><relative-time epoch="${item.created_at}">${item.date}</relative-time></span>
 						<span class="score">Score: ${item.score.toFixed(4)}</span>
 					</div>
 				`;

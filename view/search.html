@@ -9,6 +9,12 @@
 		display: flex;
 		gap: 10px;
 		margin-bottom: 30px;
+		position: sticky;
+		top: 0;
+		background: #fff;
+		padding: 15px 0;
+		z-index: 10;
+		box-shadow: 0 4px 4px -4px rgba(0,0,0,0.1);
 	}
 	.search-form input[type="search"] {
 		flex: 1;
@@ -34,6 +40,19 @@
 	.search-result-item h3 {
 		margin: 0 0 5px 0;
 		font-size: 1.2rem;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		align-items: center;
+	}
+	.search-result-item .tag {
+		background: #e3f2fd;
+		color: #1976d2;
+		font-size: 0.75rem;
+		padding: 2px 8px;
+		border-radius: 12px;
+		border: 1px solid #bbdefb;
+		font-weight: normal;
 	}
 	.search-result-item .summary {
 		font-size: 0.95rem;
@@ -62,23 +81,35 @@
 		color: #666;
 		display: none;
 	}
+	.visually-hidden {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
 </style>
 {{end}}
 
 {{define "content"}}
 <div class="search-container">
 	<h2>検索</h2>
-	<form class="search-form" id="search-form" action="/search" method="GET">
-		<input type="search" name="q" id="search-input" placeholder="キーワードを入力..." required autofocus>
+	<form class="search-form" id="search-form" action="/search" method="GET" role="search">
+		<input type="search" name="q" id="search-input" placeholder="キーワードを入力..." aria-label="検索キーワード" required autofocus>
 		<button type="submit">検索</button>
 	</form>
 
 	<div id="search-status">
 		<div class="loading-spinner" id="loading-spinner">検索中...</div>
-		<div class="no-results" id="no-results">該当する記事が見つかりませんでした。</div>
+		<div class="no-results" id="no-results">該当する記事は見つかりませんでした。</div>
+		<div class="visually-hidden" id="aria-status" aria-live="polite"></div>
 	</div>
 
-	<div id="search-results">
+	<div id="search-results" role="list">
 		<!-- Results will be injected here -->
 	</div>
 </div>

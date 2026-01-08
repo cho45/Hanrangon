@@ -632,12 +632,14 @@ func (app *AppImpl) HandleApiSearch(c echo.Context) error {
 
 	// 3. フィルタリングと並び替え
 	type SearchEntryResponse struct {
-		ID            int64   `json:"id"`
-		Title         string  `json:"title"`
-		Path          string  `json:"path"`
-		Date          string  `json:"date"`
-		FormattedBody string  `json:"formatted_body"`
-		Score         float64 `json:"score"`
+		ID            int64    `json:"id"`
+		Title         string   `json:"title"`
+		Tags          []string `json:"tags"`
+		Path          string   `json:"path"`
+		Date          string   `json:"date"`
+		CreatedAt     int64    `json:"created_at"`
+		FormattedBody string   `json:"formatted_body"`
+		Score         float64  `json:"score"`
 	}
 
 	var results []SearchEntryResponse
@@ -652,20 +654,23 @@ func (app *AppImpl) HandleApiSearch(c echo.Context) error {
 			}
 
 			// 時間減衰 (Recency Boost)
-			// 1000日でスコアが半分になる程度の緩やかな減衰: score = score / (1 + days/1000)
+			// 指数減衰から、より緩やかな減衰に変更: score = score / (1 + days/2000)
+			// 2000日（約5.5年）でスコアが半分になる。
 			if entryDate, err := time.Parse("2006-01-02", e.Date); err == nil {
 				daysOld := now.Sub(entryDate).Hours() / 24
 				if daysOld < 0 {
 					daysOld = 0
 				}
-				score *= (1.0 / (1.0 + daysOld/1000.0))
+				score *= (1.0 / (1.0 + daysOld/2000.0))
 			}
 
 			results = append(results, SearchEntryResponse{
 				ID:            e.ID,
-				Title:         e.Title,
+				Title:         e.DisplayTitle(),
+				Tags:          e.Tags(),
 				Path:          e.Path,
 				Date:          e.Date,
+				CreatedAt:     e.CreatedAt.Unix(),
 				FormattedBody: e.FormattedBody,
 				Score:         score,
 			})
@@ -677,5 +682,23 @@ func (app *AppImpl) HandleApiSearch(c echo.Context) error {
 		return results[i].Score > results[j].Score
 	})
 
-	return c.JSON(http.StatusOK, map[string]interface{}{"results": results})
+	// 検索結果の妥当性フィルタリング
+	// 1. 最高スコアの 10% 以上のものだけ残す（ノイズを切り捨てつつ、候補は広く取る）
+	// 2. 最大 20 件表示
+	maxScore := 0.0
+	if len(results) > 0 {
+		maxScore = results[0].Score
+	}
+
+	finalResults := []SearchEntryResponse{}
+	for _, r := range results {
+		if r.Score >= maxScore*0.1 {
+			finalResults = append(finalResults, r)
+		}
+		if len(finalResults) >= 20 {
+			break
+		}
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{"results": finalResults})
 }
