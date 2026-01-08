@@ -97,6 +97,12 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 
 	// 3. テキストの準備
 	title := entry.DisplayTitle()
+	title = strings.ReplaceAll(title, "✖", "×")
+	// 極端に長いタイトルの描画負荷を避ける
+	if len([]rune(title)) > 200 {
+		title = string([]rune(title)[:200])
+	}
+
 	dateStr := entry.CreatedAt.Format("2006 . 01 . 02")
 
 	pathParts := strings.Split(strings.Trim(entry.Path, "/"), "/")
@@ -113,29 +119,97 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 		tagStr += " #" + t
 	}
 	tagStr = strings.TrimSpace(tagStr)
-	
+
+	// テキストレイヤー（透明背景）
+	textLayer := image.NewRGBA(bounds)
 	d := &font.Drawer{
-		Dst: dst,
+		Dst: textLayer,
 	}
 
 	const margin = 80
-	maxWidth := bounds.Dx() - 2*margin
+	centerY := bounds.Dy() / 2
 
+	// 日付
+	d.Face = metaFace
+	d.Src = image.NewUniform(color.RGBA{R: 120, G: 130, B: 140, A: 255})
+	dateWidth := d.MeasureString(dateStr)
+	d.Dot = fixed.Point26_6{
+		X: (fixed.I(bounds.Dx()) - dateWidth) / 2,
+		Y: fixed.I(centerY - 180),
+	}
+	d.DrawString(dateStr)
+
+	// タグ
+	if tagStr != "" {
+		d.Src = image.NewUniform(color.RGBA{R: 44, G: 62, B: 80, A: 255})
+		tagWidth := d.MeasureString(tagStr)
+		tagX := (fixed.I(bounds.Dx()) - tagWidth) / 2
+		if tagX < fixed.I(margin) {
+			tagX = fixed.I(margin)
+		}
+		d.Dot = fixed.Point26_6{
+			X: tagX,
+			Y: fixed.I(centerY - 120),
+		}
+		d.DrawString(tagStr)
+	}
+
+	// タイトル
 	d.Face = titleFace
-	if d.MeasureString(title).Round() > maxWidth {
-		runes := []rune(title)
-		for i := len(runes); i >= 0; i-- {
-			truncated := string(runes[:i]) + "..."
-			if d.MeasureString(truncated).Round() <= maxWidth {
-				title = truncated
-				break
+	d.Src = image.NewUniform(color.RGBA{R: 44, G: 62, B: 80, A: 255})
+	titleWidth := d.MeasureString(title)
+	titleX := (fixed.I(bounds.Dx()) - titleWidth) / 2
+	if titleX < fixed.I(margin) {
+		titleX = fixed.I(margin)
+	}
+	d.Dot = fixed.Point26_6{
+		X: titleX,
+		Y: fixed.I(centerY - 20),
+	}
+	d.DrawString(title)
+
+	// 4. 右端フェードアウト処理
+	fadeEnd := bounds.Dx() - margin
+	fadeLen := 120
+	
+	// タイトルかタグのどちらかがフェード境界を超えている場合のみ処理
+	needsFade := false
+	if tagStr != "" && (fixed.I(bounds.Dx()) - d.MeasureString(tagStr)) / 2 < fixed.I(margin) {
+		needsFade = true
+	}
+	if (fixed.I(bounds.Dx()) - titleWidth) / 2 < fixed.I(margin) {
+		needsFade = true
+	}
+
+	if needsFade {
+		fadeStart := fadeEnd - fadeLen
+		for y := 0; y < bounds.Dy(); y++ {
+			for x := fadeStart; x < bounds.Dx(); x++ {
+				var mask float64 = 1.0
+				if x >= fadeEnd {
+					mask = 0
+				} else {
+					mask = float64(fadeEnd-x) / float64(fadeLen)
+				}
+
+				if mask < 1.0 {
+					c := textLayer.RGBAAt(x, y)
+					if c.A > 0 {
+						c.R = uint8(float64(c.R) * mask)
+						c.G = uint8(float64(c.G) * mask)
+						c.B = uint8(float64(c.B) * mask)
+						c.A = uint8(float64(c.A) * mask)
+						textLayer.SetRGBA(x, y, c)
+					}
+				}
 			}
 		}
 	}
 
-	centerY := bounds.Dy() / 2
+	// 5. 合成
+	draw.Draw(dst, bounds, textLayer, image.Point{}, draw.Over)
 
-	// 4. 中央に短い栞（しおり）タブを描画
+	// 6. 栞（しおり）タブ
 	tabColor := color.RGBA{R: 44, G: 62, B: 80, A: 255}
 	tabW := 60
 	tabH := 80
@@ -151,39 +225,7 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 		}
 	}
 
-	// 5. テキストの描画 (元の位置に戻す)
-	// 日付
-	d.Face = metaFace
-	d.Src = image.NewUniform(color.RGBA{R: 120, G: 130, B: 140, A: 255})
-	dateWidth := d.MeasureString(dateStr)
-	d.Dot = fixed.Point26_6{
-		X: (fixed.I(bounds.Dx()) - dateWidth) / 2,
-		Y: fixed.I(centerY - 180),
-	}
-	d.DrawString(dateStr)
-
-	// タグ
-	if tagStr != "" {
-		d.Src = image.NewUniform(color.RGBA{R: 44, G: 62, B: 80, A: 255})
-		tagWidth := d.MeasureString(tagStr)
-		d.Dot = fixed.Point26_6{
-			X: (fixed.I(bounds.Dx()) - tagWidth) / 2,
-			Y: fixed.I(centerY - 120),
-		}
-		d.DrawString(tagStr)
-	}
-
-	// タイトル
-	d.Face = titleFace
-	d.Src = image.NewUniform(color.RGBA{R: 44, G: 62, B: 80, A: 255})
-	titleWidth := d.MeasureString(title)
-	d.Dot = fixed.Point26_6{
-		X: (fixed.I(bounds.Dx()) - titleWidth) / 2,
-		Y: fixed.I(centerY - 20),
-	}
-	d.DrawString(title)
-
-	// 6. 下部ライン
+	// 7. 下部ライン
 	lineColor := color.RGBA{R: 44, G: 62, B: 80, A: 255}
 	for x := 0; x < bounds.Dx(); x++ {
 		for y := bounds.Dy() - 12; y < bounds.Dy(); y++ {
@@ -191,7 +233,7 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 		}
 	}
 
-	// 7. パレット変換と保存
+	// 8. パレット変換と保存
 	palette := make(color.Palette, 0, 256)
 	palette = append(palette, color.White)
 	for i := 0; i < 127; i++ {
