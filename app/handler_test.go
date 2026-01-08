@@ -1143,3 +1143,108 @@ func TestHandleApiSearch(t *testing.T) {
 		}
 	})
 }
+
+func TestHTTPErrorHandler(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	// e.HTTPErrorHandler is already set in NewServer,
+	// but setupTest might override it for other tests.
+	// We need to use the one from NewServer for this test.
+	env.server.HTTPErrorHandler = NewServer(env.app.(*AppImpl)).HTTPErrorHandler
+
+	t.Run("404 HTML", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/not-found-page", nil)
+		req.Header.Set("Accept", "text/html")
+		rec := httptest.NewRecorder()
+		env.server.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("want 404, got %d", rec.Code)
+		}
+		if !strings.Contains(rec.Header().Get("Content-Type"), "text/html") {
+			t.Errorf("want text/html, got %s", rec.Header().Get("Content-Type"))
+		}
+		if !strings.Contains(rec.Body.String(), "お探しのページは見つかりませんでした。") {
+			t.Errorf("body does not contain error message")
+		}
+	})
+
+	t.Run("404 HTML Dev Mode", func(t *testing.T) {
+		env.app.Config().Environment = "development"
+		req := httptest.NewRequest(http.MethodGet, "/not-found-page-dev", nil)
+		req.Header.Set("Accept", "text/html")
+		rec := httptest.NewRecorder()
+		env.server.ServeHTTP(rec, req)
+
+		body := rec.Body.String()
+		if !strings.Contains(body, "Error: code=404, message=Entry not found") {
+			t.Errorf("body does not contain error detail, got: %s", body)
+		}
+	})
+
+	t.Run("404 JSON", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/not-found-page", nil)
+		req.Header.Set("Accept", "application/json")
+		rec := httptest.NewRecorder()
+		env.server.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("want 404, got %d", rec.Code)
+		}
+		var resp map[string]string
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to unmarshal JSON: %v", err)
+		}
+		if resp["message"] != "Entry not found" {
+			t.Errorf("want 'Entry not found', got %s", resp["message"])
+		}
+	})
+
+	t.Run("500 JSON", func(t *testing.T) {
+		// Mock a route that returns a 500 error
+		env.server.GET("/error-500", func(c echo.Context) error {
+			return echo.NewHTTPError(http.StatusInternalServerError, "Internal Error")
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/error-500", nil)
+		req.Header.Set("Accept", "application/json")
+		rec := httptest.NewRecorder()
+		env.server.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusInternalServerError {
+			t.Errorf("want 500, got %d", rec.Code)
+		}
+		var resp map[string]string
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to unmarshal JSON: %v", err)
+		}
+		if resp["message"] != "Internal Error" {
+			t.Errorf("want 'Internal Error', got %s", resp["message"])
+		}
+	})
+
+	t.Run("500 JSON Dev Mode", func(t *testing.T) {
+		// Set development mode
+		env.app.Config().Environment = "development"
+
+		env.server.GET("/error-500-dev", func(c echo.Context) error {
+			return echo.NewHTTPError(http.StatusInternalServerError, "Dev Error").SetInternal(fmt.Errorf("root cause"))
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/error-500-dev", nil)
+		req.Header.Set("Accept", "application/json")
+		rec := httptest.NewRecorder()
+		env.server.ServeHTTP(rec, req)
+
+		var resp map[string]interface{}
+		json.Unmarshal(rec.Body.Bytes(), &resp)
+
+		if resp["error"] == nil {
+			t.Error("expected error detail in dev mode")
+		}
+		if resp["internal"] != "root cause" {
+			t.Errorf("want 'root cause', got %v", resp["internal"])
+		}
+	})
+}

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cho45/hanrangon/view"
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/pprof"
 	"github.com/labstack/echo-contrib/session"
@@ -49,38 +51,49 @@ func NewServer(app *AppImpl) *echo.Echo {
 
 	// Custom HTTP Error Handler
 	e.HTTPErrorHandler = func(err error, c echo.Context) {
-		code := http.StatusInternalServerError
-		var message interface{} = "Internal Server Error"
-
+		code, msg := http.StatusInternalServerError, "Internal Server Error"
+		var internal error
 		if he, ok := err.(*echo.HTTPError); ok {
 			code = he.Code
-			message = he.Message
-			if he.Internal != nil {
-				log.Printf("[ERROR] Internal error: %v", he.Internal)
+			internal = he.Internal
+			if s, ok := he.Message.(string); ok {
+				msg = s
+			} else {
+				msg = fmt.Sprintf("%v", he.Message)
 			}
 		}
 
-		log.Printf("[ERROR] HTTP Error: code=%d, message=%v, error=%v", code, message, err)
+		if code >= 500 {
+			log.Printf("[ERROR] HTTP %d: %v (internal: %v)", code, err, internal)
+		}
 
-		if !c.Response().Committed {
-			if c.Request().Method == http.MethodHead {
-				err = c.NoContent(code)
-			} else {
-				// In development, return detailed error
+		if !c.Response().Committed && c.Request().Method != http.MethodHead {
+			if code == http.StatusNotFound && strings.Contains(c.Request().Header.Get("Accept"), "text/html") {
+				c.Response().Header().Set(echo.HeaderContentType, echo.MIMETextHTMLCharsetUTF8)
+				c.Response().WriteHeader(code)
+				data := view.ErrorData{
+					LayoutData: app.newLayoutData(c, "Not Found"),
+					StatusCode: 404,
+					Message:    "お探しのページは見つかりませんでした。",
+				}
 				if config.IsDevelopment() {
-					err = c.JSON(code, map[string]interface{}{
-						"message": message,
-						"error":   err.Error(),
-					})
-				} else {
-					err = c.JSON(code, map[string]interface{}{
-						"message": message,
-					})
+					data.Error = err.Error()
+					if internal != nil {
+						data.Internal = internal.Error()
+					}
+				}
+				app.Templates().RenderWithLayout(c, "layout.html", "error.html", data)
+				return
+			}
+
+			res := map[string]interface{}{"message": msg}
+			if config.IsDevelopment() {
+				res["error"] = err.Error()
+				if internal != nil {
+					res["internal"] = internal.Error()
 				}
 			}
-			if err != nil {
-				log.Printf("[ERROR] Failed to send error response: %v", err)
-			}
+			c.JSON(code, res)
 		}
 	}
 

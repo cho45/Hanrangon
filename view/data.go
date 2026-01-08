@@ -144,6 +144,15 @@ type AdminIndexData struct {
 	SessionKey string
 }
 
+// ErrorData holds data for the error page
+type ErrorData struct {
+	LayoutData
+	StatusCode int
+	Message    string
+	Error      string // For development
+	Internal   string // For development
+}
+
 type AtomFeed struct {
 	XMLName xml.Name    `xml:"http://www.w3.org/2005/Atom feed"`
 	Title   string      `xml:"title"`

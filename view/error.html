@@ -1,0 +1,17 @@
+{{define "content"}}
+<article class="entry">
+	<header>
+		<h2>{{.StatusCode}} {{if eq .StatusCode 404}}Not Found{{else}}Error{{end}}</h2>
+	</header>
+	<div class="content">
+		<p>{{.Message}}</p>
+		{{if .Error}}
+			<pre><code>Error: {{.Error}}</code></pre>
+		{{end}}
+		{{if .Internal}}
+			<pre><code>Internal: {{.Internal}}</code></pre>
+		{{end}}
+		<p><a href="/">トップページへ戻る</a></p>
+	</div>
+</article>
+{{end}}
