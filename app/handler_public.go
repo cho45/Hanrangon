@@ -403,8 +403,8 @@ func (app *AppImpl) HandleApiSimilar(c echo.Context) error {
 				for _, rel := range related {
 					if e, ok := entryMap[rel.RelatedEntryID]; ok {
 						similarEntries = append(similarEntries, view.SimilarEntry{
-							Entry: e,
-							Score: rel.Score,
+							ViewEntry: view.NewViewEntry(e),
+							Score:     rel.Score,
 						})
 					}
 				}
@@ -532,11 +532,7 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 	if err != nil && err != sql.ErrNoRows {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch trackbacks").SetInternal(err)
 	}
-	trackbacks := make([]*model.ListTrackbackEntriesRow, len(rows))
-	for i, r := range rows {
-		row := r
-		trackbacks[i] = &row
-	}
+	trackbacks := view.NewViewTrackbacks(rows)
 
 	olderEntry, err := app.queries.GetOlderEntry(ctx, entry.CreatedAt)
 	if err != nil && err != sql.ErrNoRows {

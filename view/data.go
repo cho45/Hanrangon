@@ -2,6 +2,7 @@ package view
 
 import (
 	"encoding/xml"
+	"html/template"
 	"time"
 
 	"github.com/cho45/hanrangon/model"
@@ -29,6 +30,7 @@ type ViewEntry struct {
 	DisplayTime       string
 	CreatedAtRFC3339  string
 	ModifiedAtRFC3339 string
+	FormattedBodyHTML template.HTML
 }
 
 func NewViewEntry(e model.Entry) ViewEntry {
@@ -46,6 +48,7 @@ func NewViewEntry(e model.Entry) ViewEntry {
 		DisplayTime:       e.CreatedAt.Format("15:04"),
 		CreatedAtRFC3339:  e.CreatedAt.UTC().Format(time.RFC3339),
 		ModifiedAtRFC3339: e.ModifiedAt.UTC().Format(time.RFC3339),
+		FormattedBodyHTML: template.HTML(e.FormattedBody),
 	}
 }
 
@@ -57,15 +60,46 @@ func NewViewEntries(entries []model.Entry) []ViewEntry {
 	return res
 }
 
+// ViewTrackback represents pre-calculated trackback data
+type ViewTrackback struct {
+	model.ListTrackbackEntriesRow
+	DisplayTitle     string
+	Summary          string
+	CreatedAtRFC3339 string
+	DisplayTime      string
+}
+
+func NewViewTrackback(row model.ListTrackbackEntriesRow) ViewTrackback {
+	displayTitle, _ := model.ParseTitle(row.Title)
+	if displayTitle == "" {
+		displayTitle = "✖"
+	}
+	return ViewTrackback{
+		ListTrackbackEntriesRow: row,
+		DisplayTitle:            displayTitle,
+		Summary:                 Summary(row.Body, 140),
+		CreatedAtRFC3339:        row.CreatedAt.UTC().Format(time.RFC3339),
+		DisplayTime:             row.CreatedAt.Format("15:04"),
+	}
+}
+
+func NewViewTrackbacks(rows []model.ListTrackbackEntriesRow) []ViewTrackback {
+	res := make([]ViewTrackback, len(rows))
+	for i, r := range rows {
+		res[i] = NewViewTrackback(r)
+	}
+	return res
+}
+
 // IndexData holds data for both index and entry detail pages
 type IndexData struct {
 	LayoutData
-	Entries    []ViewEntry                      // For index: multiple entries, for detail: single entry
-	IsDetail   bool                             // true for entry detail page, false for list page
-	OlderPage  string                           // For index pagination
-	Trackbacks []*model.ListTrackbackEntriesRow // For entry detail
-	Older      *ViewEntry                       // For entry detail navigation (past)
-	Newer      *ViewEntry                       // For entry detail navigation (future)
+	Entries    []ViewEntry     // For index: multiple entries, for detail: single entry
+	IsDetail   bool            // true for entry detail page, false for list page
+	OlderPage  string          // For index pagination
+	Trackbacks []ViewTrackback // For entry detail
+	Older      *ViewEntry      // For entry detail navigation (past)
+	Newer      *ViewEntry      // For entry detail navigation (future)
 }
 
 // ArchiveData holds data for the archive page
@@ -141,7 +175,7 @@ type SitemapURL struct {
 
 // SimilarEntry represents an entry with similarity score
 type SimilarEntry struct {
-	model.Entry
+	ViewEntry
 	Score float64
 }
 
