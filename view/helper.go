@@ -4,6 +4,7 @@ import (
 	"io"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/cho45/hanrangon/model"
 	"golang.org/x/net/html"
@@ -29,6 +30,11 @@ func DatePath(dateStr string) string {
 	return "/" + dateStr[0:4] + "/" + dateStr[5:7] + "/" + dateStr[8:10] + "/"
 }
 
+var isBlock = map[string]bool{
+	"p": true, "div": true, "h1": true, "h2": true, "h3": true, "h4": true, "h5": true, "h6": true,
+	"li": true, "blockquote": true, "br": true, "hr": true, "table": true, "tr": true,
+}
+
 func Summary(htmlContent string, length interface{}) string {
 	var l int
 	switch v := length.(type) {
@@ -42,14 +48,11 @@ func Summary(htmlContent string, length interface{}) string {
 
 	tokenizer := html.NewTokenizer(strings.NewReader(htmlContent))
 	var textBuilder strings.Builder
-	textBuilder.Grow(len(htmlContent))
+	textBuilder.Grow(l * 2) // Approximate growth
 	skipContent := false
-
-	// Block elements that should be separated by spaces
-	isBlock := map[string]bool{
-		"p": true, "div": true, "h1": true, "h2": true, "h3": true, "h4": true, "h5": true, "h6": true,
-		"li": true, "blockquote": true, "br": true, "hr": true, "table": true, "tr": true,
-	}
+	lastWasSpace := false
+	runeCount := 0
+	truncated := false
 
 	for {
 		tokenType := tokenizer.Next()
@@ -62,8 +65,8 @@ func Summary(htmlContent string, length interface{}) string {
 
 		switch tokenType {
 		case html.StartTagToken, html.EndTagToken, html.SelfClosingTagToken:
-			name, _ := tokenizer.TagName()
-			tagName := string(name)
+			nameBytes, _ := tokenizer.TagName()
+			tagName := string(nameBytes)
 			if tokenType != html.EndTagToken {
 				if tagName == "script" || tagName == "style" {
 					skipContent = true
@@ -74,41 +77,53 @@ func Summary(htmlContent string, length interface{}) string {
 				}
 			}
 			if isBlock[tagName] {
-				textBuilder.WriteString(" ")
+				if !lastWasSpace && textBuilder.Len() > 0 {
+					textBuilder.WriteByte(' ')
+					lastWasSpace = true
+				}
 			}
 		case html.TextToken:
 			if !skipContent {
-				textBuilder.Write(tokenizer.Text())
+				data := tokenizer.Text()
+				for i := 0; i < len(data); {
+					r, size := utf8.DecodeRune(data[i:])
+					i += size
+
+					if r == ' ' || r == '\n' || r == '\t' || r == '\r' {
+						if !lastWasSpace && textBuilder.Len() > 0 {
+							textBuilder.WriteByte(' ')
+							lastWasSpace = true
+							runeCount++
+						}
+					} else {
+						textBuilder.WriteRune(r)
+						lastWasSpace = false
+						runeCount++
+					}
+
+					if runeCount >= l {
+						truncated = true
+						goto done
+					}
+				}
 			}
 		}
 	}
 
+done:
 	text := textBuilder.String()
-	text = strings.ReplaceAll(text, "\n", " ")
-	text = strings.ReplaceAll(text, "\r", "")
-
-	// Replace multiple spaces with a single space without using regexp
-	var finalBuilder strings.Builder
-	finalBuilder.Grow(len(text))
-	lastWasSpace := false
-	for _, r := range text {
-		if r == ' ' {
-			if !lastWasSpace {
-				finalBuilder.WriteRune(r)
+	if truncated {
+		count := 0
+		for i := range text {
+			if count == l {
+				return text[:i] + "..."
 			}
-			lastWasSpace = true
-		} else {
-			finalBuilder.WriteRune(r)
-			lastWasSpace = false
+			count++
 		}
+		return text + "..."
 	}
-	text = strings.TrimSpace(finalBuilder.String())
 
-	runes := []rune(text)
-	if len(runes) > l {
-		return string(runes[:l]) + "..."
-	}
-	return string(runes)
+	return strings.TrimSpace(text)
 }
 
 func ExtractFirstImage(htmlContent string) string {
@@ -119,12 +134,16 @@ func ExtractFirstImage(htmlContent string) string {
 			break
 		}
 
-		token := tokenizer.Token()
 		if tokenType == html.StartTagToken || tokenType == html.SelfClosingTagToken {
-			if token.Data == "img" {
-				for _, attr := range token.Attr {
-					if attr.Key == "src" {
-						return attr.Val
+			name, hasAttr := tokenizer.TagName()
+			if string(name) == "img" && hasAttr {
+				for {
+					key, val, more := tokenizer.TagAttr()
+					if string(key) == "src" {
+						return string(val)
+					}
+					if !more {
+						break
 					}
 				}
 			}

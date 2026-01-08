@@ -39,3 +39,4 @@ var/cache/
 
 
 tmp/
+*.prof
