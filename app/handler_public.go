@@ -358,6 +358,7 @@ func (app *AppImpl) HandleRobotsTxt(c echo.Context) error {
 	content := fmt.Sprintf(`User-agent: *
 Disallow: /admin/
 Disallow: /login
+Disallow: /search
 Sitemap: %s
 `,
 		app.JoinBaseURL("/sitemap.xml"),
