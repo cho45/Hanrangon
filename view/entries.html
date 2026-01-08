@@ -1,8 +1,8 @@
 {{define "head"}}
 {{if .IsDetail}}
 	{{$entry := index .Entries 0}}
-	<meta property="article:published_time" content="{{$entry.CreatedAt.UTC.Format "2006-01-02T15:04:05Z"}}"/>
-	<meta property="article:modified_time" content="{{$entry.ModifiedAt.UTC.Format "2006-01-02T15:04:05Z"}}"/>
+	<meta property="article:published_time" content="{{$entry.CreatedAtRFC3339}}"/>
+	<meta property="article:modified_time" content="{{$entry.ModifiedAtRFC3339}}"/>
 	{{range $entry.Tags}}<meta property="article:tag" content="{{.}}"/>{{end}}
 	{{if .Older}}<link rel="next" href="{{.BaseURL}}/{{.Older.Path}}"/>{{end}}
 	{{if .Newer}}<link rel="prev" href="{{.BaseURL}}/{{.Newer.Path}}"/>{{end}}
@@ -17,7 +17,7 @@
 <div class="entries">
 	{{range $i, $e := $entries}}
 		{{if isDateBoundary $i $entries}}
-			<div class="date"><a href="{{datePath $e.Date}}">{{formatDate $e.Date}}</a></div>
+			<div class="date"><a href="{{$e.DatePath}}">{{$e.FormattedDate}}</a></div>
 		{{end}}
 
 		{{/* Article */}}
@@ -42,8 +42,8 @@
 						{{end}}
 					</span>
 
-					<time datetime="{{$e.CreatedAt.UTC.Format "2006-01-02T15:04:05Z"}}" itemprop="datePublished">
-						<relative-time epoch="{{$e.CreatedAt.Unix}}">{{$e.CreatedAt.Format "15:04"}}</relative-time>
+					<time datetime="{{$e.CreatedAtRFC3339}}" itemprop="datePublished">
+						<relative-time epoch="{{$e.CreatedAt.Unix}}">{{$e.DisplayTime}}</relative-time>
 					</time>
 
 					{{if eq $e.Status "scheduled"}}
@@ -76,8 +76,8 @@
 							<meta itemprop="name" content="cho45">
 						</div>
 
-						<meta itemprop="datePublished" content="{{$e.CreatedAt.UTC.Format "2006-01-02T15:04:05Z"}}">
-						<meta itemprop="dateModified" content="{{$e.ModifiedAt.UTC.Format "2006-01-02T15:04:05Z"}}">
+						<meta itemprop="datePublished" content="{{$e.CreatedAtRFC3339}}">
+						<meta itemprop="dateModified" content="{{$e.ModifiedAtRFC3339}}">
 
 						<div itemprop="image" itemscope itemtype="https://schema.org/ImageObject">
 							<meta itemprop="url" content="https://www.lowreal.net/images/logo.png">

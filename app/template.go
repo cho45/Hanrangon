@@ -13,7 +13,6 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/Masterminds/sprig/v3"
-	"github.com/cho45/hanrangon/model"
 	"github.com/cho45/hanrangon/view"
 	"github.com/labstack/echo/v4"
 )
@@ -47,21 +46,6 @@ func buildFuncMap() template.FuncMap {
 	}
 	funcMap["safeURL"] = func(s string) template.URL {
 		return template.URL(s)
-	}
-	funcMap["formatDate"] = formatDate
-	funcMap["datePath"] = datePath
-	// parseTitleはエラー戻り値付きに変換
-	funcMap["parseTitle"] = func(title string) (interface{}, error) {
-		clean, tags := model.ParseTitle(title)
-		return []interface{}{clean, tags}, nil
-	}
-	funcMap["cleanTitle"] = func(title string) string {
-		clean, _ := model.ParseTitle(title)
-		return clean
-	}
-	funcMap["getTags"] = func(title string) []string {
-		_, tags := model.ParseTitle(title)
-		return tags
 	}
 	funcMap["summary"] = view.Summary
 	funcMap["isSameDay"] = view.IsSameDay
@@ -345,21 +329,4 @@ func (t *Templates) setHeaders(c echo.Context, names ...string) {
 			}
 		}
 	}
-}
-
-// formatDate formats a date string from "2006-01-02" to "2006年 01月 02日"
-func formatDate(dateStr string) string {
-	parts := strings.Split(dateStr, "-")
-	if len(parts) != 3 {
-		return dateStr
-	}
-	return parts[0] + "年 " + parts[1] + "月 " + parts[2] + "日"
-}
-
-// datePath converts a date string from "2006-01-02" to "/2006/01/02/"
-func datePath(dateStr string) string {
-	if len(dateStr) != 10 { // YYYY-MM-DD
-		return "/" + strings.ReplaceAll(dateStr, "-", "/") + "/"
-	}
-	return "/" + dateStr[0:4] + "/" + dateStr[5:7] + "/" + dateStr[8:10] + "/"
 }

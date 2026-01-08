@@ -2,6 +2,7 @@ package view
 
 import (
 	"encoding/xml"
+	"time"
 
 	"github.com/cho45/hanrangon/model"
 )
@@ -20,9 +21,14 @@ type LayoutData struct {
 // ViewEntry wraps model.Entry with pre-calculated display fields
 type ViewEntry struct {
 	model.Entry
-	DisplayTitle string
-	Tags         []string
-	Summary      string
+	DisplayTitle      string
+	Tags              []string
+	Summary           string
+	FormattedDate     string
+	DatePath          string
+	DisplayTime       string
+	CreatedAtRFC3339  string
+	ModifiedAtRFC3339 string
 }
 
 func NewViewEntry(e model.Entry) ViewEntry {
@@ -31,10 +37,15 @@ func NewViewEntry(e model.Entry) ViewEntry {
 		displayTitle = "✖"
 	}
 	return ViewEntry{
-		Entry:        e,
-		DisplayTitle: displayTitle,
-		Tags:         tags,
-		Summary:      Summary(e.FormattedBody, 100),
+		Entry:             e,
+		DisplayTitle:      displayTitle,
+		Tags:              tags,
+		Summary:           Summary(e.FormattedBody, 100),
+		FormattedDate:     FormatDate(e.Date),
+		DatePath:          DatePath(e.Date),
+		DisplayTime:       e.CreatedAt.Format("15:04"),
+		CreatedAtRFC3339:  e.CreatedAt.UTC().Format(time.RFC3339),
+		ModifiedAtRFC3339: e.ModifiedAt.UTC().Format(time.RFC3339),
 	}
 }
 

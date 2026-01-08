@@ -16,6 +16,23 @@ func IsSameDay(t1Str, t2Str string) bool {
 	return t1Str == t2Str
 }
 
+// FormatDate formats a date string from "2006-01-02" to "2006年 01月 02日"
+func FormatDate(dateStr string) string {
+	parts := strings.Split(dateStr, "-")
+	if len(parts) != 3 {
+		return dateStr
+	}
+	return parts[0] + "年 " + parts[1] + "月 " + parts[2] + "日"
+}
+
+// DatePath converts a date string from "2006-01-02" to "/2006/01/02/"
+func DatePath(dateStr string) string {
+	if len(dateStr) != 10 { // YYYY-MM-DD
+		return "/" + strings.ReplaceAll(dateStr, "-", "/") + "/"
+	}
+	return "/" + dateStr[0:4] + "/" + dateStr[5:7] + "/" + dateStr[8:10] + "/"
+}
+
 func Summary(htmlContent string, length interface{}) string {
 	var l int
 	switch v := length.(type) {
