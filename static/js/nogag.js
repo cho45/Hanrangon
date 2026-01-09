@@ -84,6 +84,35 @@ customElements.define('ip-info', class extends HTMLElement {
 	}
 });
 
+customElements.define('web-share-button', class extends HTMLElement {
+	connectedCallback() {
+		const title = this.getAttribute('title');
+		const url = this.getAttribute('url');
+
+		if (!navigator.share) {
+			// Web Share API 非対応: 要素を非表示
+			this.style.display = 'none';
+			return;
+		}
+
+		// Web Share API 対応: ボタンを表示
+		const button = document.createElement('button');
+		button.className = 'share-button';
+		button.textContent = '共有';
+		button.addEventListener('click', async () => {
+			try {
+				await navigator.share({ title, url });
+			} catch (err) {
+				// ユーザーがキャンセルした場合など
+				if (err.name !== 'AbortError') {
+					console.error('共有エラー:', err);
+				}
+			}
+		});
+		this.appendChild(button);
+	}
+});
+
 const Nogag = {
 	data(key) {
 		return document.documentElement.getAttribute(`data-${key}`);

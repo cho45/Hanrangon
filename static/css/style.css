@@ -680,6 +680,19 @@ ol[itemtype*="BreadcrumbList"] {
 	box-shadow: none !important;
 }
 
+web-share-button {
+	display: inline-block;
+}
+
+web-share-button button.share-button {
+	background: #666;
+	color: white;
+	border: none;
+	cursor: pointer;
+	font-size: 0.9rem;
+	font-weight: 500;
+}
+
 /* Pager */
 .pager {
 	margin: 6rem 0;
