@@ -45,6 +45,13 @@ describe('Integration tests', () => {
     assert.strictEqual(result, html);
   });
 
+  it('should skip processing if no tags are found', async () => {
+    const html = 'This is plain text without any tags.';
+    const { stdout: result, stderr } = await runPostprocess(html);
+    assert.strictEqual(result, html);
+    assert(stderr.includes('Skipping processHTML: no tags found'), 'Should log skip message');
+  });
+
   it('should process MathJax (inline)', async () => {
     const html = '<p>Inline math: \\(E = mc^2\\)</p>';
     const { stdout: result } = await runPostprocess(html);

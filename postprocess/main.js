@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { JSDOM } from 'jsdom';
 import { MathJaxProcessor } from './lib/mathjax.js';
 import { ABCProcessor } from './lib/abcjs.js';
 import { HighlightProcessor } from './lib/highlight.js';
@@ -8,6 +7,8 @@ import { ImageProcessor } from './lib/images.js';
 import { WidgetProcessor } from './lib/widgets.js';
 import { stdin, stdout, stderr, argv } from 'node:process';
 import readline from 'node:readline';
+
+let JSDOM;
 
 // プロセッサのインスタンス化（永続プロセスで再利用される）
 const processors = [
@@ -25,8 +26,17 @@ const processors = [
  * @returns {Promise<string>} - 処理後の HTML
  */
 async function processHTML(html, baseURL) {
+  if (!html.includes('<')) {
+    console.error(`[main] Skipping processHTML: no tags found (input: ${html.length} bytes)`);
+    return html;
+  }
+
   const startTime = Date.now();
   console.error(`[main] Starting processHTML (input: ${html.length} bytes, baseURL: ${baseURL})`);
+
+  if (!JSDOM) {
+    JSDOM = (await import('jsdom')).JSDOM;
+  }
 
   // 1. DOM 構築（一度だけ）
   let stepStart = Date.now();
