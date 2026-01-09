@@ -2,6 +2,7 @@
 
 import { JSDOM } from 'jsdom';
 import { processMathJax } from './lib/mathjax.js';
+import { processABC } from './lib/abcjs.js';
 import { processHighlight } from './lib/highlight.js';
 import { processImages } from './lib/images.js';
 import { processWidgets } from './lib/widgets.js';
@@ -20,7 +21,7 @@ async function processHTML(html, baseURL) {
 
   // 1. DOM 構築（一度だけ）
   let stepStart = Date.now();
-  console.error('[main] Step 1/5: Building DOM');
+  console.error('[main] Step 1/6: Building DOM');
   const { window } = new JSDOM(html, {
     features: {
       FetchExternalResources: false,
@@ -33,25 +34,31 @@ async function processHTML(html, baseURL) {
 
   // 2. MathJax 処理（DOM ベース）
   stepStart = Date.now();
-  console.error('[main] Step 2/5: MathJax processing');
+  console.error('[main] Step 2/6: MathJax processing');
   await processMathJax(dom);
   console.error(`[main] MathJax completed in ${Date.now() - stepStart}ms`);
 
-  // 3. シンタックスハイライト
+  // 3. ABC 記法処理
   stepStart = Date.now();
-  console.error('[main] Step 3/5: Syntax highlighting');
+  console.error('[main] Step 3/6: ABC processing');
+  await processABC(dom);
+  console.error(`[main] ABC completed in ${Date.now() - stepStart}ms`);
+
+  // 4. シンタックスハイライト
+  stepStart = Date.now();
+  console.error('[main] Step 4/6: Syntax highlighting');
   await processHighlight(dom);
   console.error(`[main] Highlighting completed in ${Date.now() - stepStart}ms`);
 
-  // 4. 画像処理
+  // 5. 画像処理
   stepStart = Date.now();
-  console.error('[main] Step 4/5: Image processing');
+  console.error('[main] Step 5/6: Image processing');
   await processImages(dom, baseURL);
   console.error(`[main] Image processing completed in ${Date.now() - stepStart}ms`);
 
-  // 5. ウィジェット処理
+  // 6. ウィジェット処理
   stepStart = Date.now();
-  console.error('[main] Step 5/5: Widget processing');
+  console.error('[main] Step 6/6: Widget processing');
   await processWidgets(dom);
   console.error(`[main] Widget processing completed in ${Date.now() - stepStart}ms`);
 
