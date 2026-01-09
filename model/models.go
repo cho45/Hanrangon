@@ -14,6 +14,8 @@ type Entry struct {
 	Title         string       `json:"title"`
 	Body          string       `json:"body"`
 	FormattedBody string       `json:"formatted_body"`
+	Summary       string       `json:"summary"`
+	ImageUrl      string       `json:"image_url"`
 	Path          string       `json:"path"`
 	Format        string       `json:"format"`
 	Date          string       `json:"date"`

@@ -14,10 +14,10 @@ func TestMetaTags(t *testing.T) {
 
 	// Insert test data
 	_, err := env.db.Exec(`
-		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
-		VALUES
-		('[test] Test Entry Title', 'Body 1', '<p>Formatted Body 1</p>', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00')
-	`)
+			INSERT INTO entries (title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at)
+			VALUES
+			('[test] Test Entry Title', 'Body 1', '<p>Formatted Body 1</p>', '', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00')
+		`)
 	if err != nil {
 		t.Fatalf("failed to insert test data: %v", err)
 	}
@@ -77,13 +77,15 @@ func TestMetaTags(t *testing.T) {
 	t.Run("Entry Page Meta Tags", func(t *testing.T) {
 		// Update entry with an image to test og:image
 		_, err := env.db.Exec(`
-			UPDATE entries SET formatted_body = '<p>This is a test entry summary.</p><img src="/images/entry/test.jpg">'
-			WHERE path = '2025/01/01/1'
-		`)
+				UPDATE entries SET 
+					formatted_body = '<p>This is a test entry summary.</p><img src="/images/entry/test.jpg">',
+					summary = 'This is a test entry summary.',
+					image_url = '/images/entry/test.jpg'
+				WHERE path = '2025/01/01/1'
+			`)
 		if err != nil {
 			t.Fatal(err)
 		}
-
 		req := httptest.NewRequest(http.MethodGet, "/2025/01/01/1", nil)
 		rec := httptest.NewRecorder()
 		env.server.ServeHTTP(rec, req)

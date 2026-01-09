@@ -3,6 +3,8 @@ CREATE TABLE entries (
     title TEXT NOT NULL,
     body TEXT NOT NULL,
     formatted_body TEXT NOT NULL,
+    summary TEXT NOT NULL DEFAULT '', -- HTMLを含まない最大70文字程度のプレーンテキスト要約
+    image_url TEXT NOT NULL DEFAULT '', -- 記事中最初の画像URL (あれば)
     path TEXT NOT NULL,
     format TEXT NOT NULL,
     date TEXT NOT NULL, -- YYYY-MM-DD (JST),

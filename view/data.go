@@ -44,13 +44,12 @@ func NewViewEntry(e model.Entry, baseURL string) ViewEntry {
 	if displayTitle == "" {
 		displayTitle = "✖"
 	}
-	summary, firstImage := ExtractSummaryAndFirstImage(e.FormattedBody, 100)
 	return ViewEntry{
 		Entry:             e,
 		DisplayTitle:      displayTitle,
 		Tags:              tags,
-		Summary:           summary,
-		FirstImageURL:     template.URL(firstImage),
+		Summary:           e.Summary,
+		FirstImageURL:     template.URL(e.ImageUrl),
 		CanonicalURL:      template.URL(strings.TrimSuffix(baseURL, "/") + "/" + e.Path),
 		FormattedDate:     FormatDate(e.Date),
 		DatePath:          DatePath(e.Date),

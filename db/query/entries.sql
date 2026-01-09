@@ -71,9 +71,9 @@ ORDER BY date DESC;
 
 -- name: CreateEntry :one
 INSERT INTO entries (
-    title, body, formatted_body, path, format, date, created_at, modified_at, publish_at, status
+    title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, publish_at, status
 ) VALUES (
-    sqlc.arg(title), sqlc.arg(body), sqlc.arg(formatted_body), sqlc.arg(path), sqlc.arg(format), sqlc.arg(date), sqlc.arg(created_at), sqlc.arg(modified_at), sqlc.arg(publish_at), sqlc.arg(status)
+    sqlc.arg(title), sqlc.arg(body), sqlc.arg(formatted_body), sqlc.arg(summary), sqlc.arg(image_url), sqlc.arg(path), sqlc.arg(format), sqlc.arg(date), sqlc.arg(created_at), sqlc.arg(modified_at), sqlc.arg(publish_at), sqlc.arg(status)
 ) RETURNING *;
 
 -- name: UpdateEntry :one
@@ -81,6 +81,8 @@ UPDATE entries SET
     title = sqlc.arg(title),
     body = sqlc.arg(body),
     formatted_body = sqlc.arg(formatted_body),
+    summary = sqlc.arg(summary),
+    image_url = sqlc.arg(image_url),
     path = sqlc.arg(path),
     format = sqlc.arg(format),
     date = sqlc.arg(date),

@@ -47,16 +47,18 @@ func (q *Queries) CountEntriesByDate(ctx context.Context, date string) (int64, e
 
 const createEntry = `-- name: CreateEntry :one
 INSERT INTO entries (
-    title, body, formatted_body, path, format, date, created_at, modified_at, publish_at, status
+    title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, publish_at, status
 ) VALUES (
-    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10
-) RETURNING id, title, body, formatted_body, path, format, date, created_at, modified_at, publish_at, status
+    ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12
+) RETURNING id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, publish_at, status
 `
 
 type CreateEntryParams struct {
 	Title         string       `json:"title"`
 	Body          string       `json:"body"`
 	FormattedBody string       `json:"formatted_body"`
+	Summary       string       `json:"summary"`
+	ImageUrl      string       `json:"image_url"`
 	Path          string       `json:"path"`
 	Format        string       `json:"format"`
 	Date          string       `json:"date"`
@@ -71,6 +73,8 @@ func (q *Queries) CreateEntry(ctx context.Context, arg CreateEntryParams) (Entry
 		arg.Title,
 		arg.Body,
 		arg.FormattedBody,
+		arg.Summary,
+		arg.ImageUrl,
 		arg.Path,
 		arg.Format,
 		arg.Date,
@@ -85,6 +89,8 @@ func (q *Queries) CreateEntry(ctx context.Context, arg CreateEntryParams) (Entry
 		&i.Title,
 		&i.Body,
 		&i.FormattedBody,
+		&i.Summary,
+		&i.ImageUrl,
 		&i.Path,
 		&i.Format,
 		&i.Date,
@@ -97,7 +103,7 @@ func (q *Queries) CreateEntry(ctx context.Context, arg CreateEntryParams) (Entry
 }
 
 const findScheduledEntriesToPublish = `-- name: FindScheduledEntriesToPublish :many
-SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at, publish_at, status FROM entries
+SELECT id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, publish_at, status FROM entries
 WHERE status = 'scheduled' AND (publish_at IS NULL OR publish_at <= ?1)
 ORDER BY publish_at ASC
 `
@@ -116,6 +122,8 @@ func (q *Queries) FindScheduledEntriesToPublish(ctx context.Context, now sql.Nul
 			&i.Title,
 			&i.Body,
 			&i.FormattedBody,
+			&i.Summary,
+			&i.ImageUrl,
 			&i.Path,
 			&i.Format,
 			&i.Date,
@@ -138,7 +146,7 @@ func (q *Queries) FindScheduledEntriesToPublish(ctx context.Context, now sql.Nul
 }
 
 const getEntryById = `-- name: GetEntryById :one
-SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at, publish_at, status FROM entries
+SELECT id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, publish_at, status FROM entries
 WHERE id = ?1 LIMIT 1
 `
 
@@ -150,6 +158,8 @@ func (q *Queries) GetEntryById(ctx context.Context, id int64) (Entry, error) {
 		&i.Title,
 		&i.Body,
 		&i.FormattedBody,
+		&i.Summary,
+		&i.ImageUrl,
 		&i.Path,
 		&i.Format,
 		&i.Date,
@@ -162,7 +172,7 @@ func (q *Queries) GetEntryById(ctx context.Context, id int64) (Entry, error) {
 }
 
 const getEntryByPath = `-- name: GetEntryByPath :one
-SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at, publish_at, status FROM entries
+SELECT id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, publish_at, status FROM entries
 WHERE path = ?1 LIMIT 1
 `
 
@@ -174,6 +184,8 @@ func (q *Queries) GetEntryByPath(ctx context.Context, path string) (Entry, error
 		&i.Title,
 		&i.Body,
 		&i.FormattedBody,
+		&i.Summary,
+		&i.ImageUrl,
 		&i.Path,
 		&i.Format,
 		&i.Date,
@@ -186,7 +198,7 @@ func (q *Queries) GetEntryByPath(ctx context.Context, path string) (Entry, error
 }
 
 const getNewerEntry = `-- name: GetNewerEntry :one
-SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at, publish_at, status FROM entries
+SELECT id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, publish_at, status FROM entries
 WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND created_at > ?1
 ORDER BY created_at ASC
 LIMIT 1
@@ -200,6 +212,8 @@ func (q *Queries) GetNewerEntry(ctx context.Context, createdAt time.Time) (Entry
 		&i.Title,
 		&i.Body,
 		&i.FormattedBody,
+		&i.Summary,
+		&i.ImageUrl,
 		&i.Path,
 		&i.Format,
 		&i.Date,
@@ -212,7 +226,7 @@ func (q *Queries) GetNewerEntry(ctx context.Context, createdAt time.Time) (Entry
 }
 
 const getOlderEntry = `-- name: GetOlderEntry :one
-SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at, publish_at, status FROM entries
+SELECT id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, publish_at, status FROM entries
 WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND created_at < ?1
 ORDER BY created_at DESC
 LIMIT 1
@@ -226,6 +240,8 @@ func (q *Queries) GetOlderEntry(ctx context.Context, createdAt time.Time) (Entry
 		&i.Title,
 		&i.Body,
 		&i.FormattedBody,
+		&i.Summary,
+		&i.ImageUrl,
 		&i.Path,
 		&i.Format,
 		&i.Date,
@@ -238,7 +254,7 @@ func (q *Queries) GetOlderEntry(ctx context.Context, createdAt time.Time) (Entry
 }
 
 const listAllEntries = `-- name: ListAllEntries :many
-SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at, publish_at, status FROM entries
+SELECT id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, publish_at, status FROM entries
 ORDER BY date DESC, created_at DESC
 `
 
@@ -256,6 +272,8 @@ func (q *Queries) ListAllEntries(ctx context.Context) ([]Entry, error) {
 			&i.Title,
 			&i.Body,
 			&i.FormattedBody,
+			&i.Summary,
+			&i.ImageUrl,
 			&i.Path,
 			&i.Format,
 			&i.Date,
@@ -353,7 +371,7 @@ func (q *Queries) ListArchiveMonths(ctx context.Context) ([]ListArchiveMonthsRow
 
 const listEntries = `-- name: ListEntries :many
 
-SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at, publish_at, status FROM entries
+SELECT id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, publish_at, status FROM entries
 WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND date <= ?1
 ORDER BY date DESC, created_at ASC
 LIMIT ?2
@@ -379,6 +397,8 @@ func (q *Queries) ListEntries(ctx context.Context, arg ListEntriesParams) ([]Ent
 			&i.Title,
 			&i.Body,
 			&i.FormattedBody,
+			&i.Summary,
+			&i.ImageUrl,
 			&i.Path,
 			&i.Format,
 			&i.Date,
@@ -401,7 +421,7 @@ func (q *Queries) ListEntries(ctx context.Context, arg ListEntriesParams) ([]Ent
 }
 
 const listEntriesAdmin = `-- name: ListEntriesAdmin :many
-SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at, publish_at, status FROM entries
+SELECT id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, publish_at, status FROM entries
 WHERE (CAST(?1 AS BIGINT) IS NULL OR id < CAST(?1 AS BIGINT))
 ORDER BY id DESC
 LIMIT ?2
@@ -426,6 +446,8 @@ func (q *Queries) ListEntriesAdmin(ctx context.Context, arg ListEntriesAdminPara
 			&i.Title,
 			&i.Body,
 			&i.FormattedBody,
+			&i.Summary,
+			&i.ImageUrl,
 			&i.Path,
 			&i.Format,
 			&i.Date,
@@ -448,7 +470,7 @@ func (q *Queries) ListEntriesAdmin(ctx context.Context, arg ListEntriesAdminPara
 }
 
 const listEntriesByCategory = `-- name: ListEntriesByCategory :many
-SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at, publish_at, status FROM entries
+SELECT id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, publish_at, status FROM entries
 WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND title LIKE ?1 AND date <= ?2
 ORDER BY date DESC, created_at ASC
 LIMIT ?3
@@ -474,6 +496,8 @@ func (q *Queries) ListEntriesByCategory(ctx context.Context, arg ListEntriesByCa
 			&i.Title,
 			&i.Body,
 			&i.FormattedBody,
+			&i.Summary,
+			&i.ImageUrl,
 			&i.Path,
 			&i.Format,
 			&i.Date,
@@ -496,7 +520,7 @@ func (q *Queries) ListEntriesByCategory(ctx context.Context, arg ListEntriesByCa
 }
 
 const listEntriesByDates = `-- name: ListEntriesByDates :many
-SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at, publish_at, status FROM entries
+SELECT id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, publish_at, status FROM entries
 WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND date IN (/*SLICE:dates*/?)
 ORDER BY date DESC, created_at ASC
 `
@@ -525,6 +549,8 @@ func (q *Queries) ListEntriesByDates(ctx context.Context, dates []string) ([]Ent
 			&i.Title,
 			&i.Body,
 			&i.FormattedBody,
+			&i.Summary,
+			&i.ImageUrl,
 			&i.Path,
 			&i.Format,
 			&i.Date,
@@ -547,7 +573,7 @@ func (q *Queries) ListEntriesByDates(ctx context.Context, dates []string) ([]Ent
 }
 
 const listEntriesByIds = `-- name: ListEntriesByIds :many
-SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at, publish_at, status FROM entries
+SELECT id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, publish_at, status FROM entries
 WHERE id IN (/*SLICE:ids*/?)
 `
 
@@ -575,6 +601,8 @@ func (q *Queries) ListEntriesByIds(ctx context.Context, ids []int64) ([]Entry, e
 			&i.Title,
 			&i.Body,
 			&i.FormattedBody,
+			&i.Summary,
+			&i.ImageUrl,
 			&i.Path,
 			&i.Format,
 			&i.Date,
@@ -597,7 +625,7 @@ func (q *Queries) ListEntriesByIds(ctx context.Context, ids []int64) ([]Entry, e
 }
 
 const listEntriesByYearMonthDay = `-- name: ListEntriesByYearMonthDay :many
-SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at, publish_at, status FROM entries
+SELECT id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, publish_at, status FROM entries
 WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND ?1 <= date AND date < ?2
 ORDER BY created_at
 `
@@ -621,6 +649,8 @@ func (q *Queries) ListEntriesByYearMonthDay(ctx context.Context, arg ListEntries
 			&i.Title,
 			&i.Body,
 			&i.FormattedBody,
+			&i.Summary,
+			&i.ImageUrl,
 			&i.Path,
 			&i.Format,
 			&i.Date,
@@ -699,7 +729,7 @@ func (q *Queries) PublishEntries(ctx context.Context, ids []int64) error {
 }
 
 const searchEntriesAdmin = `-- name: SearchEntriesAdmin :many
-SELECT id, title, body, formatted_body, path, format, date, created_at, modified_at, publish_at, status FROM entries
+SELECT id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, publish_at, status FROM entries
 WHERE (title LIKE ?1 OR body LIKE ?1)
 AND (CAST(?2 AS BIGINT) IS NULL OR id < CAST(?2 AS BIGINT))
 ORDER BY id DESC
@@ -726,6 +756,8 @@ func (q *Queries) SearchEntriesAdmin(ctx context.Context, arg SearchEntriesAdmin
 			&i.Title,
 			&i.Body,
 			&i.FormattedBody,
+			&i.Summary,
+			&i.ImageUrl,
 			&i.Path,
 			&i.Format,
 			&i.Date,
@@ -752,20 +784,24 @@ UPDATE entries SET
     title = ?1,
     body = ?2,
     formatted_body = ?3,
-    path = ?4,
-    format = ?5,
-    date = ?6,
-    modified_at = ?7,
-    publish_at = ?8,
-    status = ?9
-WHERE id = ?10
-RETURNING id, title, body, formatted_body, path, format, date, created_at, modified_at, publish_at, status
+    summary = ?4,
+    image_url = ?5,
+    path = ?6,
+    format = ?7,
+    date = ?8,
+    modified_at = ?9,
+    publish_at = ?10,
+    status = ?11
+WHERE id = ?12
+RETURNING id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, publish_at, status
 `
 
 type UpdateEntryParams struct {
 	Title         string       `json:"title"`
 	Body          string       `json:"body"`
 	FormattedBody string       `json:"formatted_body"`
+	Summary       string       `json:"summary"`
+	ImageUrl      string       `json:"image_url"`
 	Path          string       `json:"path"`
 	Format        string       `json:"format"`
 	Date          string       `json:"date"`
@@ -780,6 +816,8 @@ func (q *Queries) UpdateEntry(ctx context.Context, arg UpdateEntryParams) (Entry
 		arg.Title,
 		arg.Body,
 		arg.FormattedBody,
+		arg.Summary,
+		arg.ImageUrl,
 		arg.Path,
 		arg.Format,
 		arg.Date,
@@ -794,6 +832,8 @@ func (q *Queries) UpdateEntry(ctx context.Context, arg UpdateEntryParams) (Entry
 		&i.Title,
 		&i.Body,
 		&i.FormattedBody,
+		&i.Summary,
+		&i.ImageUrl,
 		&i.Path,
 		&i.Format,
 		&i.Date,

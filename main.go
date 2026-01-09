@@ -97,6 +97,11 @@ func main() {
 			log.Fatalf("index-images failed: %v", err)
 		}
 
+	case "recalc-metadata":
+		if err := subcommands.RecalcMetadata(ctx, application, subArgs); err != nil {
+			log.Fatalf("recalc-metadata failed: %v", err)
+		}
+
 	case "update-password":
 		if err := subcommands.UpdatePassword(ctx, application, subArgs); err != nil {
 			log.Fatalf("update-password failed: %v", err)

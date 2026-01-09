@@ -25,10 +25,10 @@ func TestHandleIndex(t *testing.T) {
 
 	// Insert test data
 	_, err := env.db.Exec(`
-		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
+		INSERT INTO entries (title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at)
 		VALUES
-		('Test Entry 1', 'Body 1', '<p>Formatted Body 1</p>', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
-		('Test Entry 2', 'Body 2', '<p>Formatted Body 2</p>', '2025/01/01/2', 'Markdown', '2025-01-01', '2025-01-01 12:00:00', '2025-01-01 12:00:00')
+		('Test Entry 1', 'Body 1', '<p>Formatted Body 1</p>', 'Summary 1', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
+		('Test Entry 2', 'Body 2', '<p>Formatted Body 2</p>', 'Summary 2', '', '2025/01/01/2', 'Markdown', '2025-01-01', '2025-01-01 12:00:00', '2025-01-01 12:00:00')
 	`)
 	if err != nil {
 		t.Fatalf("failed to insert test data: %v", err)
@@ -66,10 +66,10 @@ func TestHandleIndex_SimilarImagesBulkFallback(t *testing.T) {
 
 	// 1. Create two entries that will appear on the index page
 	_, err := env.db.Exec(`
-		INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at)
+		INSERT INTO entries (id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at)
 		VALUES
-		(100, 'Entry A', 'Body A', '', '2025/01/01/a', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
-		(101, 'Entry B', 'Body B', '', '2025/01/01/b', 'Markdown', '2025-01-01', '2025-01-01 11:00:00', '2025-01-01 11:00:00')
+		(100, 'Entry A', 'Body A', '', '', '', '2025/01/01/a', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
+		(101, 'Entry B', 'Body B', '', '', '', '2025/01/01/b', 'Markdown', '2025-01-01', '2025-01-01 11:00:00', '2025-01-01 11:00:00')
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -134,10 +134,10 @@ func TestHandleEntry(t *testing.T) {
 	defer env.close()
 
 	_, err := env.db.Exec(`
-		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
+		INSERT INTO entries (title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at)
 		VALUES
-		('Test Entry 1', 'Body 1', '<p>Formatted Body 1</p>', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
-		('Test Entry 2', 'Body 2', '<p>Formatted Body 2</p>', '2025/01/01/2', 'Markdown', '2025-01-01', '2025-01-01 12:00:00', '2025-01-01 12:00:00')
+		('Test Entry 1', 'Body 1', '<p>Formatted Body 1</p>', 'Summary 1', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
+		('Test Entry 2', 'Body 2', '<p>Formatted Body 2</p>', 'Summary 2', '', '2025/01/01/2', 'Markdown', '2025-01-01', '2025-01-01 12:00:00', '2025-01-01 12:00:00')
 	`)
 	if err != nil {
 		t.Fatalf("failed to insert test data: %v", err)
@@ -166,8 +166,8 @@ func TestHandleEntry(t *testing.T) {
 	t.Run("Entry with similar entries", func(t *testing.T) {
 		// Insert another entry and a relationship
 		_, err := env.db.Exec(`
-			INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at)
-			VALUES (3, 'Similar Entry', 'Body 3', '<p>Body 3</p>', '2025/01/01/3', 'Markdown', '2025-01-01', '2025-01-01 11:00:00', '2025-01-01 11:00:00')
+			INSERT INTO entries (id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at)
+			VALUES (3, 'Similar Entry', 'Body 3', '<p>Body 3</p>', 'Summary 3', '', '2025/01/01/3', 'Markdown', '2025-01-01', '2025-01-01 11:00:00', '2025-01-01 11:00:00')
 		`)
 		if err != nil {
 			t.Fatal(err)
@@ -203,10 +203,10 @@ func TestHandleEntry(t *testing.T) {
 	t.Run("Entry with similar images fallback", func(t *testing.T) {
 		// Entry 4 with an image, and Entry 5 which is similar via image ngram
 		_, err := env.db.Exec(`
-			INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at)
+			INSERT INTO entries (id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at)
 			VALUES 
-			(4, 'Image Entry 4', 'Body 4', '', '2025/01/01/4', 'Markdown', '2025-01-01', '2025-01-01 12:00:00', '2025-01-01 12:00:00'),
-			(5, 'Image Entry 5', 'Body 5', '', '2025/01/01/5', 'Markdown', '2025-01-01', '2025-01-01 13:00:00', '2025-01-01 13:00:00')
+			(4, 'Image Entry 4', 'Body 4', '', '', '', '2025/01/01/4', 'Markdown', '2025-01-01', '2025-01-01 12:00:00', '2025-01-01 12:00:00'),
+			(5, 'Image Entry 5', 'Body 5', '', '', '', '2025/01/01/5', 'Markdown', '2025-01-01', '2025-01-01 13:00:00', '2025-01-01 13:00:00')
 		`)
 		if err != nil {
 			t.Fatal(err)
@@ -260,11 +260,11 @@ func TestHandleArchive(t *testing.T) {
 	defer env.close()
 
 	_, err := env.db.Exec(`
-		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
+		INSERT INTO entries (title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at)
 		VALUES
-		('Entry 1', 'Body 1', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
-		('Entry 2', 'Body 2', '', '2025/01/02/1', 'Markdown', '2025-01-02', '2025-01-02 10:00:00', '2025-01-02 10:00:00'),
-		('Entry 3', 'Body 3', '', '2024/12/31/1', 'Markdown', '2024-12-31', '2024-12-31 10:00:00', '2024-12-31 10:00:00')
+		('Entry 1', 'Body 1', '', '', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
+		('Entry 2', 'Body 2', '', '', '', '2025/01/02/1', 'Markdown', '2025-01-02', '2025-01-02 10:00:00', '2025-01-02 10:00:00'),
+		('Entry 3', 'Body 3', '', '', '', '2024/12/31/1', 'Markdown', '2024-12-31', '2024-12-31 10:00:00', '2024-12-31 10:00:00')
 	`)
 	if err != nil {
 		t.Fatalf("failed to insert test data: %v", err)
@@ -297,12 +297,12 @@ func TestHandleDateArchive(t *testing.T) {
 	defer env.close()
 
 	_, err := env.db.Exec(`
-		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
+		INSERT INTO entries (title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at)
 		VALUES
-		('Entry 2025-01-01', 'Body', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
-		('Entry 2025-01-02', 'Body', '', '2025/01/02/1', 'Markdown', '2025-01-02', '2025-01-02 10:00:00', '2025-01-02 10:00:00'),
-		('Entry 2025-02-01', 'Body', '', '2025/02/01/1', 'Markdown', '2025-02-01', '2025-02-01 10:00:00', '2025-02-01 10:00:00'),
-		('Entry 2024-12-31', 'Body', '', '2024/12/31/1', 'Markdown', '2024-12-31', '2024-12-31 10:00:00', '2024-12-31 10:00:00')
+		('Entry 2025-01-01', 'Body', '', '', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
+		('Entry 2025-01-02', 'Body', '', '', '', '2025/01/02/1', 'Markdown', '2025-01-02', '2025-01-02 10:00:00', '2025-01-02 10:00:00'),
+		('Entry 2025-02-01', 'Body', '', '', '', '2025/02/01/1', 'Markdown', '2025-02-01', '2025-02-01 10:00:00', '2025-02-01 10:00:00'),
+		('Entry 2024-12-31', 'Body', '', '', '', '2024/12/31/1', 'Markdown', '2024-12-31', '2024-12-31 10:00:00', '2024-12-31 10:00:00')
 	`)
 	if err != nil {
 		t.Fatalf("failed to insert test data: %v", err)
@@ -362,10 +362,10 @@ func TestHandleCategory(t *testing.T) {
 	defer env.close()
 
 	_, err := env.db.Exec(`
-		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
+		INSERT INTO entries (title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at)
 		VALUES
-		('[test] Tagged Entry', 'Body', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
-		('Normal Entry', 'Body', '', '2025/01/02/1', 'Markdown', '2025-01-02', '2025-01-02 10:00:00', '2025-01-02 10:00:00')
+		('[test] Tagged Entry', 'Body', '', '', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
+		('Normal Entry', 'Body', '', '', '', '2025/01/02/1', 'Markdown', '2025-01-02', '2025-01-02 10:00:00', '2025-01-02 10:00:00')
 	`)
 	if err != nil {
 		t.Fatalf("failed to insert test data: %v", err)
@@ -400,9 +400,9 @@ func TestHandleFeed(t *testing.T) {
 	defer env.close()
 
 	_, err := env.db.Exec(`
-		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
+		INSERT INTO entries (title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at)
 		VALUES
-		('Feed Entry 1', 'Body', '<p>Body</p>', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00')
+		('Feed Entry 1', 'Body', '<p>Body</p>', 'Summary', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00')
 	`)
 	if err != nil {
 		t.Fatalf("failed to insert test data: %v", err)
@@ -436,9 +436,9 @@ func TestHandleSitemap(t *testing.T) {
 	defer env.close()
 
 	_, err := env.db.Exec(`
-		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
+		INSERT INTO entries (title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at)
 		VALUES
-		('Sitemap Entry 1', 'Body', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00')
+		('Sitemap Entry 1', 'Body', '', '', '', '2025/01/01/1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00')
 	`)
 	if err != nil {
 		t.Fatalf("failed to insert test data: %v", err)
@@ -730,9 +730,9 @@ func TestCaching(t *testing.T) {
 	// Insert test data with specific modified_at
 	modTimeStr := "2025-01-01 12:00:00"
 	_, err := env.db.Exec(`
-		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at)
+		INSERT INTO entries (title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at)
 		VALUES
-		('Cache Entry', 'Body', '<p>Body</p>', '2025/01/01/cache', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', ?)
+		('Cache Entry', 'Body', '<p>Body</p>', '', '', '2025/01/01/cache', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', ?)
 	`, modTimeStr)
 	if err != nil {
 		t.Fatalf("failed to insert test data: %v", err)
@@ -956,8 +956,8 @@ func TestHandleAdminApiEntries(t *testing.T) {
 	// Insert 10 test entries
 	for i := 1; i <= 10; i++ {
 		_, err := env.db.Exec(`
-			INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at, status)
-			VALUES (?, ?, ?, '', ?, 'Markdown', '2025-01-01', ?, ?, 'public')
+			INSERT INTO entries (id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, status)
+			VALUES (?, ?, ?, '', '', '', ?, 'Markdown', '2025-01-01', ?, ?, 'public')
 		`, i, fmt.Sprintf("Entry %d", i), fmt.Sprintf("Body %d", i), fmt.Sprintf("path/%d", i),
 			time.Date(2025, 1, 1, 10, i, 0, 0, time.UTC), time.Date(2025, 1, 1, 10, i, 0, 0, time.UTC))
 		if err != nil {
@@ -1083,9 +1083,9 @@ func TestSqlcDateOverride(t *testing.T) {
 
 	// 1. データを挿入
 	_, err := env.db.Exec(`
-		INSERT INTO entries (title, body, formatted_body, path, format, date, created_at, modified_at, status)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, "Test", "Body", "", "test-path", "Markdown", expectedDate, now, now, "public")
+		INSERT INTO entries (title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, status)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, "Test", "Body", "", "", "", "test-path", "Markdown", expectedDate, now, now, "public")
 	if err != nil {
 		t.Fatalf("Failed to insert test data: %v", err)
 	}
@@ -1125,13 +1125,13 @@ func TestHandleApiSearch(t *testing.T) {
 	// 1. Insert test data with various statuses
 	now := time.Now()
 	_, err := env.db.Exec(`
-		INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at, status, publish_at)
+		INSERT INTO entries (id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, status, publish_at)
 		VALUES
-		(1, 'Public Apple', 'Apple test', '<p>Apple</p>', 'p1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00', 'public', NULL),
-		(2, 'Draft Apple', 'Apple draft', '<p>Apple</p>', 'p2', 'Markdown', '2025-01-01', '2025-01-01 11:00:00', '2025-01-01 11:00:00', 'draft', NULL),
-		(3, 'Future Apple', 'Apple future', '<p>Apple</p>', 'p3', 'Markdown', '2025-01-01', '2025-01-01 12:00:00', '2025-01-01 12:00:00', 'public', ?),
-		(4, 'Public Banana', 'Banana test', '<p>Banana</p>', 'p4', 'Markdown', '2025-01-01', '2025-01-01 13:00:00', '2025-01-01 13:00:00', 'public', NULL),
-		(5, 'Apple and Banana', 'Mixed fruit', '<p>Apple Banana</p>', 'p5', 'Markdown', '2025-01-01', '2025-01-01 14:00:00', '2025-01-01 14:00:00', 'public', NULL)
+		(1, 'Public Apple', 'Apple test', '<p>Apple</p>', 'Apple', '', 'p1', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00', 'public', NULL),
+		(2, 'Draft Apple', 'Apple draft', '<p>Apple</p>', 'Apple', '', 'p2', 'Markdown', '2025-01-01', '2025-01-01 11:00:00', '2025-01-01 11:00:00', 'draft', NULL),
+		(3, 'Future Apple', 'Apple future', '<p>Apple</p>', 'Apple', '', 'p3', 'Markdown', '2025-01-01', '2025-01-01 12:00:00', '2025-01-01 12:00:00', 'public', ?),
+		(4, 'Public Banana', 'Banana test', '<p>Banana</p>', 'Banana', '', 'p4', 'Markdown', '2025-01-01', '2025-01-01 13:00:00', '2025-01-01 13:00:00', 'public', NULL),
+		(5, 'Apple and Banana', 'Mixed fruit', '<p>Apple Banana</p>', 'Apple Banana', '', 'p5', 'Markdown', '2025-01-01', '2025-01-01 14:00:00', '2025-01-01 14:00:00', 'public', NULL)
 	`, now.Add(24*time.Hour).Format(time.RFC3339))
 	if err != nil {
 		t.Fatalf("failed to insert test data: %v", err)

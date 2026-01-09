@@ -35,7 +35,7 @@ func (q *Queries) DeleteTrackbacksBySourceEntryId(ctx context.Context, trackback
 }
 
 const listTrackbackEntries = `-- name: ListTrackbackEntries :many
-SELECT entries.id, entries.title, entries.body, entries.formatted_body, entries.path, entries.format, entries.date, entries.created_at, entries.modified_at, entries.publish_at, entries.status, CAST(entries.date AS TEXT) AS date FROM entries
+SELECT entries.id, entries.title, entries.body, entries.formatted_body, entries.summary, entries.image_url, entries.path, entries.format, entries.date, entries.created_at, entries.modified_at, entries.publish_at, entries.status, CAST(entries.date AS TEXT) AS date FROM entries
 INNER JOIN trackbacks ON entries.id = trackbacks.trackback_entry_id
 WHERE trackbacks.entry_id = ?
 ORDER BY entries.date DESC, entries.created_at DESC
@@ -46,6 +46,8 @@ type ListTrackbackEntriesRow struct {
 	Title         string       `json:"title"`
 	Body          string       `json:"body"`
 	FormattedBody string       `json:"formatted_body"`
+	Summary       string       `json:"summary"`
+	ImageUrl      string       `json:"image_url"`
 	Path          string       `json:"path"`
 	Format        string       `json:"format"`
 	Date          string       `json:"date"`
@@ -70,6 +72,8 @@ func (q *Queries) ListTrackbackEntries(ctx context.Context, entryID sql.NullInt6
 			&i.Title,
 			&i.Body,
 			&i.FormattedBody,
+			&i.Summary,
+			&i.ImageUrl,
 			&i.Path,
 			&i.Format,
 			&i.Date,

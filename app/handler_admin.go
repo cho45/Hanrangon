@@ -268,6 +268,7 @@ func (app *AppImpl) HandleAdminApiEdit(c echo.Context) error {
 
 		now := time.Now()
 		date := now.Format("2006-01-02")
+		summary, imageURL := view.ExtractSummaryAndFirstImage(processedBody, 70)
 
 		if req.ID != 0 {
 			// 更新
@@ -288,6 +289,8 @@ func (app *AppImpl) HandleAdminApiEdit(c echo.Context) error {
 				Title:         req.Title,
 				Body:          req.Body,
 				FormattedBody: processedBody,
+				Summary:       summary,
+				ImageUrl:      imageURL,
 				Path:          path,
 				Format:        req.Format,
 				Date:          existing.Date,
@@ -332,6 +335,8 @@ func (app *AppImpl) HandleAdminApiEdit(c echo.Context) error {
 				Title:         req.Title,
 				Body:          req.Body,
 				FormattedBody: processedBody,
+				Summary:       summary,
+				ImageUrl:      imageURL,
 				Path:          path,
 				Format:        req.Format,
 				Date:          date,
