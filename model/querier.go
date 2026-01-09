@@ -59,10 +59,12 @@ type Querier interface {
 	ListEntriesByIds(ctx context.Context, ids []int64) ([]Entry, error)
 	ListEntriesByYearMonthDay(ctx context.Context, arg ListEntriesByYearMonthDayParams) ([]Entry, error)
 	ListImagesByEntryID(ctx context.Context, entryID int64) ([]Image, error)
+	ListImagesByEntryIDs(ctx context.Context, entryIds []int64) ([]Image, error)
 	ListJobs(ctx context.Context, arg ListJobsParams) ([]ListJobsRow, error)
 	ListRelatedEntries(ctx context.Context, entryID int64) ([]ListRelatedEntriesRow, error)
 	ListRelatedEntriesByEntryIDs(ctx context.Context, entryIds []int64) ([]ListRelatedEntriesByEntryIDsRow, error)
 	ListSimilarImages(ctx context.Context, arg ListSimilarImagesParams) ([]ListSimilarImagesRow, error)
+	ListSimilarImagesByImageIDs(ctx context.Context, imageIds []int64) ([]ListSimilarImagesByImageIDsRow, error)
 	ListTrackbackEntries(ctx context.Context, entryID sql.NullInt64) ([]ListTrackbackEntriesRow, error)
 	ListUniqueDates(ctx context.Context, arg ListUniqueDatesParams) ([]string, error)
 	MarkJobCompleted(ctx context.Context, id int64) error

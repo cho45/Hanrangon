@@ -38,3 +38,26 @@ GROUP BY
 ORDER BY 
     score DESC
 LIMIT ?;
+
+-- name: ListImagesByEntryIDs :many
+SELECT * FROM images WHERE entry_id IN (sqlc.slice('entry_ids'));
+
+-- name: ListSimilarImagesByImageIDs :many
+SELECT
+    isw_search.image_id AS search_image_id,
+    i.id,
+    i.uri,
+    i.entry_id,
+    COUNT(isw.word) as score
+FROM
+    images AS i
+JOIN 
+    ngram AS isw ON i.id = isw.image_id
+JOIN 
+    ngram AS isw_search ON isw.word = isw_search.word AND isw.image_id != isw_search.image_id
+WHERE
+    isw_search.image_id IN (sqlc.slice('image_ids'))
+GROUP BY 
+    isw_search.image_id, i.id
+ORDER BY 
+    score DESC;

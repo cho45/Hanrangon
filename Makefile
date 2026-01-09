@@ -21,6 +21,9 @@ build: fmt build-fe build-be
 run:
 	go run -tags "$(GO_TAGS)" .
 
+pprof:
+	PPROF=true HANRANGON_ENV=production go run -tags "$(GO_TAGS)" .
+
 watch:
 	trap 'kill 0' EXIT; \
 	(cd admin-frontend && npm run dev) & \

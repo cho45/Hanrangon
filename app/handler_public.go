@@ -419,63 +419,84 @@ func (app *AppImpl) populateSimilarEntries(ctx context.Context, entries []view.V
 	}
 
 	// 4. Fallback for IDs that don't have TF-IDF results yet
+	var fallbackEntryIDs []int64
 	for i := range entries {
-		e := &entries[i]
-		if len(e.SimilarEntries) > 0 {
-			continue
+		if len(entries[i].SimilarEntries) == 0 {
+			fallbackEntryIDs = append(fallbackEntryIDs, entries[i].ID)
 		}
+	}
 
-		// Similar Images fallback
-		images, err := app.imagesQueries.ListImagesByEntryID(ctx, e.ID)
-		if err != nil || len(images) == 0 {
-			continue
-		}
+	if len(fallbackEntryIDs) > 0 {
+		// Bulk fetch images for all fallback entries
+		allImages, err := app.imagesQueries.ListImagesByEntryIDs(ctx, fallbackEntryIDs)
+		if err == nil && len(allImages) > 0 {
+			imageIDs := make([]int64, len(allImages))
+			imageToEntryMap := make(map[int64]int64)
+			for i, img := range allImages {
+				imageIDs[i] = img.ID
+				imageToEntryMap[img.ID] = img.EntryID
+			}
 
-		var candidates []model.ListSimilarImagesRow
-		for _, img := range images {
-			sims, err := app.imagesQueries.ListSimilarImages(ctx, model.ListSimilarImagesParams{
-				ImageID: img.ID,
-				Limit:   3,
-			})
-			if err == nil {
-				candidates = append(candidates, sims...)
+			// Bulk fetch similar images for all images
+			similarRows, err := app.imagesQueries.ListSimilarImagesByImageIDs(ctx, imageIDs)
+			if err == nil && len(similarRows) > 0 {
+				// Group candidates by Entry ID
+				candidatesMap := make(map[int64][]model.ListSimilarImagesByImageIDsRow)
+				entryIDMap := make(map[int64]bool)
+				var entryIDsToFetch []int64
+
+				for _, row := range similarRows {
+					targetEntryID := imageToEntryMap[row.SearchImageID]
+					candidatesMap[targetEntryID] = append(candidatesMap[targetEntryID], row)
+					if !entryIDMap[row.EntryID] {
+						entryIDsToFetch = append(entryIDsToFetch, row.EntryID)
+						entryIDMap[row.EntryID] = true
+					}
+				}
+
+				// Bulk fetch entry details for all candidates
+				entryRows, err := app.queries.ListEntriesByIds(ctx, entryIDsToFetch)
+				if err == nil {
+					entryMap := make(map[int64]model.Entry)
+					for _, re := range entryRows {
+						entryMap[re.ID] = re
+					}
+
+					// Assign to entries
+					for i := range entries {
+						e := &entries[i]
+						if len(e.SimilarEntries) > 0 {
+							continue
+						}
+
+						candidates := candidatesMap[e.ID]
+						if len(candidates) == 0 {
+							continue
+						}
+
+						var viewImages []view.SimilarImage
+						seenImageURI := make(map[string]bool)
+						for _, cand := range candidates {
+							if re, ok := entryMap[cand.EntryID]; ok {
+								if seenImageURI[cand.Uri] {
+									continue
+								}
+								viewImages = append(viewImages, view.SimilarImage{
+									URI:       cand.Uri,
+									EntryPath: re.Path,
+									Score:     cand.Score,
+								})
+								seenImageURI[cand.Uri] = true
+								if len(viewImages) >= 10 { // Limit per entry
+									break
+								}
+							}
+						}
+						e.SimilarImages = viewImages
+					}
+				}
 			}
 		}
-
-		if len(candidates) == 0 {
-			continue
-		}
-
-		var entryIDs []int64
-		entryIDMap := make(map[int64]bool)
-		for _, cand := range candidates {
-			if !entryIDMap[cand.EntryID] {
-				entryIDs = append(entryIDs, cand.EntryID)
-				entryIDMap[cand.EntryID] = true
-			}
-		}
-
-		entryRows, err := app.queries.ListEntriesByIds(ctx, entryIDs)
-		if err != nil {
-			continue
-		}
-
-		entryMap := make(map[int64]model.Entry)
-		for _, re := range entryRows {
-			entryMap[re.ID] = re
-		}
-
-		var viewImages []view.SimilarImage
-		for _, cand := range candidates {
-			if re, ok := entryMap[cand.EntryID]; ok {
-				viewImages = append(viewImages, view.SimilarImage{
-					URI:       cand.Uri,
-					EntryPath: re.Path,
-					Score:     cand.Score,
-				})
-			}
-		}
-		e.SimilarImages = viewImages
 	}
 }
 

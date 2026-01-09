@@ -7,6 +7,7 @@ package model
 
 import (
 	"context"
+	"strings"
 )
 
 const createImage = `-- name: CreateImage :one
@@ -115,6 +116,48 @@ func (q *Queries) ListImagesByEntryID(ctx context.Context, entryID int64) ([]Ima
 	return items, nil
 }
 
+const listImagesByEntryIDs = `-- name: ListImagesByEntryIDs :many
+SELECT id, uri, entry_id, sig FROM images WHERE entry_id IN (/*SLICE:entry_ids*/?)
+`
+
+func (q *Queries) ListImagesByEntryIDs(ctx context.Context, entryIds []int64) ([]Image, error) {
+	query := listImagesByEntryIDs
+	var queryParams []interface{}
+	if len(entryIds) > 0 {
+		for _, v := range entryIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:entry_ids*/?", strings.Repeat(",?", len(entryIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:entry_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Image
+	for rows.Next() {
+		var i Image
+		if err := rows.Scan(
+			&i.ID,
+			&i.Uri,
+			&i.EntryID,
+			&i.Sig,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSimilarImages = `-- name: ListSimilarImages :many
 SELECT
     i.id,
@@ -158,6 +201,74 @@ func (q *Queries) ListSimilarImages(ctx context.Context, arg ListSimilarImagesPa
 	for rows.Next() {
 		var i ListSimilarImagesRow
 		if err := rows.Scan(
+			&i.ID,
+			&i.Uri,
+			&i.EntryID,
+			&i.Score,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSimilarImagesByImageIDs = `-- name: ListSimilarImagesByImageIDs :many
+SELECT
+    isw_search.image_id AS search_image_id,
+    i.id,
+    i.uri,
+    i.entry_id,
+    COUNT(isw.word) as score
+FROM
+    images AS i
+JOIN 
+    ngram AS isw ON i.id = isw.image_id
+JOIN 
+    ngram AS isw_search ON isw.word = isw_search.word AND isw.image_id != isw_search.image_id
+WHERE
+    isw_search.image_id IN (/*SLICE:image_ids*/?)
+GROUP BY 
+    isw_search.image_id, i.id
+ORDER BY 
+    score DESC
+`
+
+type ListSimilarImagesByImageIDsRow struct {
+	SearchImageID int64  `json:"search_image_id"`
+	ID            int64  `json:"id"`
+	Uri           string `json:"uri"`
+	EntryID       int64  `json:"entry_id"`
+	Score         int64  `json:"score"`
+}
+
+func (q *Queries) ListSimilarImagesByImageIDs(ctx context.Context, imageIds []int64) ([]ListSimilarImagesByImageIDsRow, error) {
+	query := listSimilarImagesByImageIDs
+	var queryParams []interface{}
+	if len(imageIds) > 0 {
+		for _, v := range imageIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:image_ids*/?", strings.Repeat(",?", len(imageIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:image_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSimilarImagesByImageIDsRow
+	for rows.Next() {
+		var i ListSimilarImagesByImageIDsRow
+		if err := rows.Scan(
+			&i.SearchImageID,
 			&i.ID,
 			&i.Uri,
 			&i.EntryID,

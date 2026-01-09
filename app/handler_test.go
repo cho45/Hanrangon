@@ -60,6 +60,68 @@ func TestHandleIndex(t *testing.T) {
 	checkCompleteHTML(t, body)
 }
 
+func TestHandleIndex_SimilarImagesBulkFallback(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	// 1. Create two entries that will appear on the index page
+	_, err := env.db.Exec(`
+		INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at)
+		VALUES
+		(100, 'Entry A', 'Body A', '', '2025/01/01/a', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
+		(101, 'Entry B', 'Body B', '', '2025/01/01/b', 'Markdown', '2025-01-01', '2025-01-01 11:00:00', '2025-01-01 11:00:00')
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Add images that are similar via ngrams
+	_, err = env.imagesDB.Exec(`
+		INSERT INTO images (id, uri, entry_id, sig) VALUES
+		(200, 'http://example.com/imgA.jpg', 100, ''),
+		(201, 'http://example.com/imgB.jpg', 101, '')
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = env.imagesDB.Exec(`
+		INSERT INTO ngram (image_id, word) VALUES
+		(200, 'shared_tag'),
+		(201, 'shared_tag')
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 3. Request index page
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	env.server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// 4. Verify that Entry A shows Entry B as similar image, and vice versa
+	// We check for the presence of the related entry titles/images near each other.
+	// In entries.html, SimilarImages are rendered within each entry block.
+	if !strings.Contains(body, "Entry A") || !strings.Contains(body, "Entry B") {
+		t.Fatal("Entries not found in index")
+	}
+
+	if !strings.Contains(body, "http://example.com/imgB.jpg") {
+		t.Error("body does not contain similar image B (linked from A)")
+	}
+	if !strings.Contains(body, "http://example.com/imgA.jpg") {
+		t.Error("body does not contain similar image A (linked from B)")
+	}
+	if !strings.Contains(body, "<h3>関連エントリー (画像)</h3>") {
+		t.Error("body does not contain '関連エントリー (画像)' header")
+	}
+}
+
 func checkCompleteHTML(t *testing.T, body string) {
 	t.Helper()
 	if !strings.Contains(body, "</html>") {
