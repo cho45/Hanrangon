@@ -58,6 +58,24 @@ func TestHandleIndex(t *testing.T) {
 	}
 
 	checkCompleteHTML(t, body)
+
+	t.Run("HEAD request", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodHead, "/", nil)
+		rec := httptest.NewRecorder()
+		env.server.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("want status 200, got %d", rec.Code)
+		}
+
+		if rec.Header().Get("ETag") == "" {
+			t.Error("ETag header missing")
+		}
+
+		if rec.Body.Len() > 0 {
+			t.Errorf("body should be empty, got %d bytes", rec.Body.Len())
+		}
+	})
 }
 
 func TestHandleIndex_SimilarImagesBulkFallback(t *testing.T) {
@@ -160,6 +178,24 @@ func TestHandleEntry(t *testing.T) {
 		// Prev/Next links
 		if !strings.Contains(body, "Test Entry 2") {
 			t.Errorf("body does not contain next entry link 'Test Entry 2'")
+		}
+	})
+
+	t.Run("HEAD request", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodHead, "/2025/01/01/1", nil)
+		rec := httptest.NewRecorder()
+		env.server.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("want status 200, got %d", rec.Code)
+		}
+
+		if rec.Header().Get("ETag") == "" {
+			t.Error("ETag header missing")
+		}
+
+		if rec.Body.Len() > 0 {
+			t.Errorf("body should be empty, got %d bytes", rec.Body.Len())
 		}
 	})
 

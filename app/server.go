@@ -24,6 +24,8 @@ func NewServer(app *AppImpl) *echo.Echo {
 	e.HideBanner = true
 	e.Debug = config.IsDevelopment()
 
+	e.Pre(app.HeadToGetMiddleware)
+
 	if os.Getenv("PPROF") == "true" {
 		pprof.Register(e)
 	}
