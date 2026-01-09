@@ -107,6 +107,11 @@ func main() {
 			log.Fatalf("update-password failed: %v", err)
 		}
 
+	case "migrate-to-r2":
+		if err := subcommands.MigrateToR2(ctx, application, subArgs); err != nil {
+			log.Fatalf("migrate-to-r2 failed: %v", err)
+		}
+
 	default:
 		log.Fatalf("unknown command: %s", cmd)
 	}
