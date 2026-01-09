@@ -7,6 +7,8 @@ import { getImageSize } from './utils.js';
  * - 画像サイズの自動取得
  */
 export class ImageProcessor extends BaseProcessor {
+  static appliesRegexp = /<img\b/;
+
   applies(dom) {
     return !!dom.querySelector('img[src]');
   }

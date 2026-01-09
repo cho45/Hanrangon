@@ -5,6 +5,8 @@ import { BaseProcessor } from './base.js';
  * LaTeX 記法 (\\(...\\) と $$...$$) を SVG に変換
  */
 export class MathJaxProcessor extends BaseProcessor {
+  static appliesRegexp = /\\\(|\$\$/;
+
   constructor() {
     super();
     this.MathJax = null;

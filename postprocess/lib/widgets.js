@@ -5,6 +5,8 @@ import { BaseProcessor } from './base.js';
  * - YouTube iframe の HTTPS 化
  */
 export class WidgetProcessor extends BaseProcessor {
+  static appliesRegexp = /<iframe\b/;
+
   applies(dom) {
     return !!dom.querySelector('iframe');
   }

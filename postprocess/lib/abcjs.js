@@ -5,6 +5,8 @@ import { BaseProcessor } from './base.js';
  * ABC 記法を楽譜 SVG に変換
  */
 export class ABCProcessor extends BaseProcessor {
+  static appliesRegexp = /lang-abc/;
+
   constructor() {
     super();
     this.abcjs = null;

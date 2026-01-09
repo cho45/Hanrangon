@@ -49,7 +49,14 @@ describe('Integration tests', () => {
     const html = 'This is plain text without any tags.';
     const { stdout: result, stderr } = await runPostprocess(html);
     assert.strictEqual(result, html);
-    assert(stderr.includes('Skipping processHTML: no tags found'), 'Should log skip message');
+    assert(stderr.includes('processHTML: skipping (no tags found'), 'Should log skip message');
+  });
+
+  it('should skip processing if no processors match', async () => {
+    const html = '<p>This has tags but no special content.</p>';
+    const { stdout: result, stderr } = await runPostprocess(html);
+    assert.strictEqual(result, html);
+    assert(stderr.includes('processHTML: skipping (no processors matched'), 'Should log skip message for no matches');
   });
 
   it('should process MathJax (inline)', async () => {

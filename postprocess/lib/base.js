@@ -2,6 +2,8 @@
  * Base class for all post-processors.
  */
 export class BaseProcessor {
+  static appliesRegexp = null;
+
   constructor() {
     this.loaded = false;
   }

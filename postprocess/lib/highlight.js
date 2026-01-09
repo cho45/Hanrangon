@@ -5,6 +5,8 @@ import { BaseProcessor } from './base.js';
  * シンタックスハイライトを適用
  */
 export class HighlightProcessor extends BaseProcessor {
+  static appliesRegexp = /\bcode\b/;
+
   constructor() {
     super();
     this.hljs = null;

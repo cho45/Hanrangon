@@ -19,6 +19,14 @@ const processors = [
   new WidgetProcessor()
 ];
 
+// 判定用の正規表現を連結して生成（名前付きキャプチャグループを使用）
+const combinedRegex = new RegExp(
+  processors
+    .map(p => `(?<${p.constructor.name}>${p.constructor.appliesRegexp.source})`)
+    .join('|'),
+  'g'
+);
+
 /**
  * HTML を postprocess する統合処理
  * @param {string} html - 処理対象の HTML
@@ -27,20 +35,35 @@ const processors = [
  */
 async function processHTML(html, baseURL) {
   if (!html.includes('<')) {
-    console.error(`[main] Skipping processHTML: no tags found (input: ${html.length} bytes)`);
+    console.error(`[main] processHTML: skipping (no tags found, input: ${html.length} bytes)`);
     return html;
   }
 
-  const startTime = Date.now();
-  console.error(`[main] Starting processHTML (input: ${html.length} bytes, baseURL: ${baseURL})`);
+  // 高速な事前判定
+  const matches = html.matchAll(combinedRegex);
+  const activeNames = new Set();
+  for (const match of matches) {
+    for (const [name, value] of Object.entries(match.groups)) {
+      if (value) activeNames.add(name);
+    }
+  }
+
+  if (activeNames.size === 0) {
+    console.error(`[main] processHTML: skipping (no processors matched, input: ${html.length} bytes)`);
+    return html;
+  }
+
+  const startTime = performance.now();
+  console.error(`[main] processHTML: start (input: ${html.length} bytes, baseURL: ${baseURL}, active: ${[...activeNames].join(', ')})`);
 
   if (!JSDOM) {
+    const importStart = performance.now();
     JSDOM = (await import('jsdom')).JSDOM;
+    console.error(`[main] processHTML: JSDOM imported in ${(performance.now() - importStart).toFixed(2)}ms`);
   }
 
   // 1. DOM 構築（一度だけ）
-  let stepStart = Date.now();
-  console.error('[main] Building DOM');
+  let stepStart = performance.now();
   const { window } = new JSDOM(html, {
     features: {
       FetchExternalResources: false,
@@ -49,15 +72,15 @@ async function processHTML(html, baseURL) {
     }
   });
   const dom = window.document.body;
-  console.error(`[main] DOM built in ${Date.now() - stepStart}ms`);
+  console.error(`[main] processHTML: DOM built in ${(performance.now() - stepStart).toFixed(2)}ms`);
 
   // 各プロセッサを順次実行
   for (const processor of processors) {
-    if (processor.applies(dom)) {
-      const stepStart = Date.now();
+    if (activeNames.has(processor.constructor.name) && processor.applies(dom)) {
+      const stepStart = performance.now();
       await processor.run(dom, baseURL);
-      const elapsed = Date.now() - stepStart;
-      console.error(`[main] Step ${processor.constructor.name} completed in ${elapsed}ms`);
+      const elapsed = performance.now() - stepStart;
+      console.error(`[main] processHTML: Step ${processor.constructor.name} completed in ${elapsed.toFixed(2)}ms`);
     }
   }
 
@@ -65,8 +88,8 @@ async function processHTML(html, baseURL) {
   const result = dom.innerHTML;
   window.close();
 
-  const totalTime = Date.now() - startTime;
-  console.error(`[main] processHTML completed in ${totalTime}ms (output: ${result.length} bytes)`);
+  const totalTime = performance.now() - startTime;
+  console.error(`[main] processHTML: completed in ${totalTime.toFixed(2)}ms (output: ${result.length} bytes)`);
 
   return result;
 }
