@@ -20,7 +20,7 @@
 
 		{{/* Article */}}
 		<article
-			id="post-{{$e.CreatedAt.Unix}}"
+			id="post-{{$e.CreatedAtUnix}}"
 			class="{{range $e.Tags}}{{.}} {{end}}{{if eq $i 0}}first {{end}}status-{{$e.Status}}"
 			data-id="{{$e.ID}}"
 			{{if not $isDetail}}
@@ -40,7 +40,7 @@
 					</span>
 
 					<time datetime="{{$e.CreatedAtRFC3339}}" itemprop="datePublished">
-						<relative-time epoch="{{$e.CreatedAt.Unix}}">{{$e.DisplayTime}}</relative-time>
+						<relative-time epoch="{{$e.CreatedAtUnix}}">{{$e.DisplayTime}}</relative-time>
 					</time>
 
 					{{if eq $e.Status "scheduled"}}
@@ -118,7 +118,7 @@
 							<span class="summary">{{.Summary}}</span>
 
 							<time datetime="{{.CreatedAtRFC3339}}" itemprop="datePublished">
-								<relative-time epoch="{{.CreatedAt.Unix}}">{{.DisplayTime}}</relative-time>
+								<relative-time epoch="{{.CreatedAtUnix}}">{{.DisplayTime}}</relative-time>
 							</time>
 						</a>
 					</li>
@@ -136,7 +136,7 @@
 							<a href="/{{.Path}}" data-score="{{printf "%f" .Score}}">
 								<em>{{.DisplayTitle}}</em>
 								<time datetime="{{.CreatedAtRFC3339}}" itemprop="datePublished">
-									<relative-time epoch="{{.CreatedAt.Unix}}">{{.DisplayTime}}</relative-time>
+									<relative-time epoch="{{.CreatedAtUnix}}">{{.DisplayTime}}</relative-time>
 								</time>
 								<span class="summary">{{.Summary}}</span>
 							</a>

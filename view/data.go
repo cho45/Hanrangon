@@ -31,6 +31,7 @@ type ViewEntry struct {
 	FormattedDate     string
 	DatePath          string
 	DisplayTime       string
+	CreatedAtUnix     int64
 	CreatedAtRFC3339  string
 	ModifiedAtRFC3339 string
 	FormattedBodyHTML template.HTML
@@ -54,6 +55,7 @@ func NewViewEntry(e model.Entry, baseURL string) ViewEntry {
 		FormattedDate:     FormatDate(e.Date),
 		DatePath:          DatePath(e.Date),
 		DisplayTime:       e.CreatedAt.Format("15:04"),
+		CreatedAtUnix:     e.CreatedAt.Unix(),
 		CreatedAtRFC3339:  e.CreatedAt.UTC().Format(time.RFC3339),
 		ModifiedAtRFC3339: e.ModifiedAt.UTC().Format(time.RFC3339),
 		FormattedBodyHTML: template.HTML(e.FormattedBody),
@@ -78,6 +80,7 @@ type ViewTrackback struct {
 	model.ListTrackbackEntriesRow
 	DisplayTitle     string
 	Summary          string
+	CreatedAtUnix    int64
 	CreatedAtRFC3339 string
 	DisplayTime      string
 }
@@ -92,6 +95,7 @@ func NewViewTrackback(row model.ListTrackbackEntriesRow) ViewTrackback {
 		ListTrackbackEntriesRow: row,
 		DisplayTitle:            displayTitle,
 		Summary:                 summary,
+		CreatedAtUnix:           row.CreatedAt.Unix(),
 		CreatedAtRFC3339:        row.CreatedAt.UTC().Format(time.RFC3339),
 		DisplayTime:             row.CreatedAt.Format("15:04"),
 	}
