@@ -104,6 +104,7 @@ make watch
 - `backup`: データベースのバックアップ
 - `index-images`: 画像のインデックス作成
 - `update-password`: 管理者パスワードの更新
+- `recalc-metadata`: メタデータの再計算
 
 実行例:
 ```bash
@@ -130,7 +131,7 @@ make
 - `app/`: アプリケーションのコアロジック（ハンドラー、サーバー構成、設定）。
 - `admin-frontend/`: `Svelte 5` による `SPA` 管理画面のソースコード。
 - `model/`: `sqlc` によって生成されたデータベースモデルとクエリ。
-- `view/`: `html/template` による HTML/XML テンプレート。
+- `view/`: `html/template` による HTML/XML テンプレート。(注: 実際には`app/template.go`で処理されています)
 - `db/`: SQL スキーマ (`schema/`) とクエリ定義 (`query/`)。
 - `formatter/`: 各種記法（Hatena, tDiary 等）のパーサ。
 - `jobqueue/`: ジョブキューの基盤実装（Worker 監視ループ等）。
