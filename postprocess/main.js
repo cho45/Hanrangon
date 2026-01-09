@@ -1,13 +1,22 @@
 #!/usr/bin/env node
 
 import { JSDOM } from 'jsdom';
-import { processMathJax } from './lib/mathjax.js';
-import { processABC } from './lib/abcjs.js';
-import { processHighlight } from './lib/highlight.js';
-import { processImages } from './lib/images.js';
-import { processWidgets } from './lib/widgets.js';
+import { MathJaxProcessor } from './lib/mathjax.js';
+import { ABCProcessor } from './lib/abcjs.js';
+import { HighlightProcessor } from './lib/highlight.js';
+import { ImageProcessor } from './lib/images.js';
+import { WidgetProcessor } from './lib/widgets.js';
 import { stdin, stdout, stderr, argv } from 'node:process';
 import readline from 'node:readline';
+
+// プロセッサのインスタンス化（永続プロセスで再利用される）
+const processors = [
+  new MathJaxProcessor(),
+  new ABCProcessor(),
+  new HighlightProcessor(),
+  new ImageProcessor(),
+  new WidgetProcessor()
+];
 
 /**
  * HTML を postprocess する統合処理
@@ -21,7 +30,7 @@ async function processHTML(html, baseURL) {
 
   // 1. DOM 構築（一度だけ）
   let stepStart = Date.now();
-  console.error('[main] Step 1/6: Building DOM');
+  console.error('[main] Building DOM');
   const { window } = new JSDOM(html, {
     features: {
       FetchExternalResources: false,
@@ -32,37 +41,17 @@ async function processHTML(html, baseURL) {
   const dom = window.document.body;
   console.error(`[main] DOM built in ${Date.now() - stepStart}ms`);
 
-  // 2. MathJax 処理（DOM ベース）
-  stepStart = Date.now();
-  console.error('[main] Step 2/6: MathJax processing');
-  await processMathJax(dom);
-  console.error(`[main] MathJax completed in ${Date.now() - stepStart}ms`);
+  // 各プロセッサを順次実行
+  for (const processor of processors) {
+    if (processor.applies(dom)) {
+      const stepStart = Date.now();
+      await processor.run(dom, baseURL);
+      const elapsed = Date.now() - stepStart;
+      console.error(`[main] Step ${processor.constructor.name} completed in ${elapsed}ms`);
+    }
+  }
 
-  // 3. ABC 記法処理
-  stepStart = Date.now();
-  console.error('[main] Step 3/6: ABC processing');
-  await processABC(dom);
-  console.error(`[main] ABC completed in ${Date.now() - stepStart}ms`);
-
-  // 4. シンタックスハイライト
-  stepStart = Date.now();
-  console.error('[main] Step 4/6: Syntax highlighting');
-  await processHighlight(dom);
-  console.error(`[main] Highlighting completed in ${Date.now() - stepStart}ms`);
-
-  // 5. 画像処理
-  stepStart = Date.now();
-  console.error('[main] Step 5/6: Image processing');
-  await processImages(dom, baseURL);
-  console.error(`[main] Image processing completed in ${Date.now() - stepStart}ms`);
-
-  // 6. ウィジェット処理
-  stepStart = Date.now();
-  console.error('[main] Step 6/6: Widget processing');
-  await processWidgets(dom);
-  console.error(`[main] Widget processing completed in ${Date.now() - stepStart}ms`);
-
-  // 6. 処理後の HTML を返す
+  // 処理後の HTML を返す
   const result = dom.innerHTML;
   window.close();
 

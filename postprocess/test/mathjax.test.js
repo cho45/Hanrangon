@@ -1,10 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { JSDOM } from 'jsdom';
-import { processMathJax } from '../lib/mathjax.js';
+import { MathJaxProcessor } from '../lib/mathjax.js';
 
 /**
- * HTML 文字列を JSDOM に変換してから processMathJax を実行し、結果の HTML を返す
+ * HTML 文字列を JSDOM に変換してから MathJaxProcessor を実行し、結果の HTML を返す
  */
 async function processMathJaxHTML(html) {
   const { window } = new JSDOM(html, {
@@ -15,13 +15,21 @@ async function processMathJaxHTML(html) {
     }
   });
   const dom = window.document.body;
-  await processMathJax(dom);
+  const processor = new MathJaxProcessor();
+  await processor.run(dom);
   const result = dom.innerHTML;
   window.close();
   return result;
 }
 
-describe('processMathJax', () => {
+describe('MathJaxProcessor', () => {
+  it('applies() should detect math notation', async () => {
+    const processor = new MathJaxProcessor();
+    assert.strictEqual(processor.applies(new JSDOM('<p>Inline \\(x\\)</p>').window.document.body), true);
+    assert.strictEqual(processor.applies(new JSDOM('<p>Display $$x$$</p>').window.document.body), true);
+    assert.strictEqual(processor.applies(new JSDOM('<p>Plain text</p>').window.document.body), false);
+  });
+
   it('should return HTML unchanged if no math notation exists', async () => {
     const html = '<p>This is plain text without math.</p>';
     const result = await processMathJaxHTML(html);

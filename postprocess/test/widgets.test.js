@@ -1,9 +1,15 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { JSDOM } from 'jsdom';
-import { processWidgets } from '../lib/widgets.js';
+import { WidgetProcessor } from '../lib/widgets.js';
 
-describe('processWidgets', () => {
+describe('WidgetProcessor', () => {
+  it('applies() should detect iframes', async () => {
+    const processor = new WidgetProcessor();
+    assert.strictEqual(processor.applies(new JSDOM('<iframe></iframe>').window.document.body), true);
+    assert.strictEqual(processor.applies(new JSDOM('<p>Plain text</p>').window.document.body), false);
+  });
+
   describe('YouTube HTTPS conversion', () => {
     it('should convert YouTube iframe to HTTPS', async () => {
       const html = `
@@ -13,7 +19,8 @@ describe('processWidgets', () => {
       const { window } = new JSDOM(html);
       const dom = window.document.body;
 
-      await processWidgets(dom);
+      const processor = new WidgetProcessor();
+      await processor.run(dom);
 
       const iframe = dom.querySelector('iframe');
       assert.strictEqual(
@@ -31,7 +38,8 @@ describe('processWidgets', () => {
       const { window } = new JSDOM(html);
       const dom = window.document.body;
 
-      await processWidgets(dom);
+      const processor = new WidgetProcessor();
+      await processor.run(dom);
 
       const iframes = dom.querySelectorAll('iframe');
       assert.strictEqual(iframes.length, 2);
@@ -55,7 +63,8 @@ describe('processWidgets', () => {
       const { window } = new JSDOM(html);
       const dom = window.document.body;
 
-      await processWidgets(dom);
+      const processor = new WidgetProcessor();
+      await processor.run(dom);
 
       const iframe = dom.querySelector('iframe');
       assert.strictEqual(iframe.width, '560');
@@ -72,7 +81,8 @@ describe('processWidgets', () => {
       const { window } = new JSDOM(html);
       const dom = window.document.body;
 
-      await processWidgets(dom);
+      const processor = new WidgetProcessor();
+      await processor.run(dom);
 
       const iframe = dom.querySelector('iframe');
       assert.strictEqual(iframe.getAttribute('loading'), 'lazy');
@@ -86,7 +96,8 @@ describe('processWidgets', () => {
       const { window } = new JSDOM(html);
       const dom = window.document.body;
 
-      await processWidgets(dom);
+      const processor = new WidgetProcessor();
+      await processor.run(dom);
 
       const iframe = dom.querySelector('iframe');
       assert.strictEqual(iframe.src, 'http://example.com/video');
@@ -103,7 +114,8 @@ describe('processWidgets', () => {
       const { window } = new JSDOM(html);
       const dom = window.document.body;
 
-      await processWidgets(dom);
+      const processor = new WidgetProcessor();
+      await processor.run(dom);
 
       const iframe = dom.querySelector('iframe');
       const script = dom.querySelector('script');

@@ -1,10 +1,16 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { JSDOM } from 'jsdom';
-import { processHighlight } from '../lib/highlight.js';
+import { HighlightProcessor } from '../lib/highlight.js';
 import { assertHTMLContains } from './helpers/html-diff.js';
 
-describe('processHighlight', () => {
+describe('HighlightProcessor', () => {
+  it('applies() should detect code blocks', async () => {
+    const processor = new HighlightProcessor();
+    assert.strictEqual(processor.applies(new JSDOM('<pre class="code"></pre>').window.document.body), true);
+    assert.strictEqual(processor.applies(new JSDOM('<p>Plain text</p>').window.document.body), false);
+  });
+
   it('should apply syntax highlighting to code blocks with lang-* class', async () => {
     const html = `
       <pre class="code lang-javascript">
@@ -17,7 +23,8 @@ function hello() {
     const { window } = new JSDOM(html);
     const dom = window.document.body;
 
-    await processHighlight(dom);
+    const processor = new HighlightProcessor();
+    await processor.run(dom);
 
     const pre = dom.querySelector('pre.code');
 
@@ -42,7 +49,8 @@ function hello() {
     const dom = window.document.body;
     const originalContent = dom.querySelector('pre').textContent;
 
-    await processHighlight(dom);
+    const processor = new HighlightProcessor();
+    await processor.run(dom);
 
     const pre = dom.querySelector('pre.code');
 
@@ -67,7 +75,8 @@ function hello() {
     const { window } = new JSDOM(html);
     const dom = window.document.body;
 
-    await processHighlight(dom);
+    const processor = new HighlightProcessor();
+    await processor.run(dom);
 
     const pres = dom.querySelectorAll('pre.code');
     assert.strictEqual(pres.length, 2, 'Should have 2 code blocks');
@@ -88,7 +97,8 @@ puts "Hello"
     const { window } = new JSDOM(html);
     const dom = window.document.body;
 
-    await processHighlight(dom);
+    const processor = new HighlightProcessor();
+    await processor.run(dom);
 
     const pre = dom.querySelector('pre');
     assert(pre.classList.contains('code'), 'Should preserve code class');

@@ -1,9 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { JSDOM } from 'jsdom';
-import { processABC } from '../lib/abcjs.js';
+import { ABCProcessor } from '../lib/abcjs.js';
 
-test('processABC converts pre.lang-abc to SVG container', async () => {
+test('ABCProcessor.applies detects ABC blocks', async () => {
+  const processor = new ABCProcessor();
+  
+  assert.strictEqual(processor.applies(new JSDOM('<pre class="lang-abc"></pre>').window.document.body), true);
+  assert.strictEqual(processor.applies(new JSDOM('<pre class="code lang-abc"></pre>').window.document.body), true);
+  assert.strictEqual(processor.applies(new JSDOM('<p>Plain text</p>').window.document.body), false);
+  assert.strictEqual(processor.applies(new JSDOM('<pre class="code lang-js"></pre>').window.document.body), false);
+});
+
+test('ABCProcessor converts pre.lang-abc to SVG container', async () => {
   const html = `
     <p>Music starts here:</p>
     <pre class="lang-abc">
@@ -17,7 +26,8 @@ C D E F | G A B c |
   const { window } = new JSDOM(html);
   const dom = window.document.body;
   
-  await processABC(dom);
+  const processor = new ABCProcessor();
+  await processor.run(dom);
   
   const container = dom.querySelector('.abc-render');
   assert.ok(container, 'Should have a container with class abc-render');
@@ -30,7 +40,7 @@ C D E F | G A B c |
   assert.strictEqual(pre, null, 'The original pre element should be replaced');
 });
 
-test('processABC handles empty or invalid ABC', async () => {
+test('ABCProcessor handles empty or invalid ABC', async () => {
   const html = `
     <pre class="lang-abc"></pre>
   `;
@@ -38,7 +48,8 @@ test('processABC handles empty or invalid ABC', async () => {
   const { window } = new JSDOM(html);
   const dom = window.document.body;
   
-  await processABC(dom);
+  const processor = new ABCProcessor();
+  await processor.run(dom);
   
   const container = dom.querySelector('.abc-render');
   // It might still create a container but without meaningful SVG, or skip it

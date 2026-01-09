@@ -1,9 +1,15 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert';
 import { JSDOM } from 'jsdom';
-import { processImages } from '../lib/images.js';
+import { ImageProcessor } from '../lib/images.js';
 
-describe('processImages', () => {
+describe('ImageProcessor', () => {
+  it('applies() should detect images', async () => {
+    const processor = new ImageProcessor();
+    assert.strictEqual(processor.applies(new JSDOM('<img src="test.jpg">').window.document.body), true);
+    assert.strictEqual(processor.applies(new JSDOM('<p>Plain text</p>').window.document.body), false);
+  });
+
   describe('URL normalization', () => {
     it('should convert Google Photos URL to HTTPS and s2048', async () => {
       const html = `
@@ -13,7 +19,8 @@ describe('processImages', () => {
       const { window } = new JSDOM(html);
       const dom = window.document.body;
 
-      await processImages(dom);
+      const processor = new ImageProcessor();
+      await processor.run(dom);
 
       const img = dom.querySelector('img');
       assert.strictEqual(
@@ -30,7 +37,8 @@ describe('processImages', () => {
       const { window } = new JSDOM(html);
       const dom = window.document.body;
 
-      await processImages(dom);
+      const processor = new ImageProcessor();
+      await processor.run(dom);
 
       const img = dom.querySelector('img');
       assert(img.src.includes('https://'), 'Should use HTTPS');
@@ -46,7 +54,8 @@ describe('processImages', () => {
       const { window } = new JSDOM(html);
       const dom = window.document.body;
 
-      await processImages(dom);
+      const processor = new ImageProcessor();
+      await processor.run(dom);
 
       const img = dom.querySelector('img');
       assert.strictEqual(
@@ -63,7 +72,8 @@ describe('processImages', () => {
       const { window } = new JSDOM(html);
       const dom = window.document.body;
 
-      await processImages(dom);
+      const processor = new ImageProcessor();
+      await processor.run(dom);
 
       const img = dom.querySelector('img');
       assert.strictEqual(
@@ -82,7 +92,8 @@ describe('processImages', () => {
       const { window } = new JSDOM(html);
       const dom = window.document.body;
 
-      await processImages(dom);
+      const processor = new ImageProcessor();
+      await processor.run(dom);
 
       const imgs = dom.querySelectorAll('img');
       assert.strictEqual(imgs.length, 3);
@@ -104,7 +115,8 @@ describe('processImages', () => {
 
       // getImageSize を通るので失敗するはずだが、URL が正しく構築されているかを確認したい
       // エラーログに出る URL を確認するか、本来は mock すべき
-      await processImages(dom, baseURL);
+      const processor = new ImageProcessor();
+      await processor.run(dom, baseURL);
 
       const img = dom.querySelector('img');
       assert.strictEqual(img.src, '/images/entry/test.png'); // DOM 上の src は変わらない
@@ -120,7 +132,8 @@ describe('processImages', () => {
       const { window } = new JSDOM(html);
       const dom = window.document.body;
 
-      await processImages(dom);
+      const processor = new ImageProcessor();
+      await processor.run(dom);
 
       const img = dom.querySelector('img');
       assert.strictEqual(img.width, 100);
@@ -136,7 +149,8 @@ describe('processImages', () => {
       const dom = window.document.body;
 
       // エラーが発生しないことを確認
-      await processImages(dom);
+      const processor = new ImageProcessor();
+      await processor.run(dom);
 
       const img = dom.querySelector('img');
       assert(!img.width);
@@ -157,7 +171,8 @@ describe('processImages', () => {
       const { window } = new JSDOM(html);
       const dom = window.document.body;
 
-      await processImages(dom);
+      const processor = new ImageProcessor();
+      await processor.run(dom);
 
       const imgs = dom.querySelectorAll('img');
       assert.strictEqual(imgs[0].getAttribute('decoding'), 'async');
@@ -174,7 +189,8 @@ describe('processImages', () => {
       const { window } = new JSDOM(html);
       const dom = window.document.body;
 
-      await processImages(dom);
+      const processor = new ImageProcessor();
+      await processor.run(dom);
 
       const imgs = dom.querySelectorAll('img');
       assert.strictEqual(imgs[0].hasAttribute('loading'), false, 'First image should NOT have loading attribute');
@@ -191,7 +207,8 @@ describe('processImages', () => {
       const { window } = new JSDOM(html);
       const dom = window.document.body;
 
-      await processImages(dom);
+      const processor = new ImageProcessor();
+      await processor.run(dom);
 
       const imgs = dom.querySelectorAll('img');
       assert.strictEqual(imgs[0].getAttribute('loading'), 'eager');
@@ -210,7 +227,8 @@ describe('processImages', () => {
       const dom = window.document.body;
 
       // エラーが発生せず、処理が完了することを確認
-      await processImages(dom);
+      const processor = new ImageProcessor();
+      await processor.run(dom);
 
       const imgs = dom.querySelectorAll('img');
       assert.strictEqual(imgs.length, 2);
