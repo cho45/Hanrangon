@@ -23,6 +23,13 @@ type Config struct {
 	Listen          string `toml:"listen"`
 	Environment     string `toml:"environment"` // "development" or "production"
 	NodePath        string `toml:"node_path"`
+
+	// R2 Configuration
+	R2EndpointURL     string `toml:"r2_endpoint_url"`
+	R2AccessKeyID     string `toml:"r2_access_key_id"`
+	R2SecretAccessKey string `toml:"r2_secret_access_key"`
+	R2BucketName      string `toml:"r2_bucket_name"`
+	R2PublicURL       string `toml:"r2_public_url"`
 }
 
 func LoadConfig() *Config {

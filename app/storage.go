@@ -1,0 +1,123 @@
+package app
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"io"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+)
+
+// StorageClient はストレージ操作の抽象化インターフェース
+type StorageClient interface {
+	// Upload uploads a file and returns the public URL
+	// key: ファイル名のみ（例: "20240101120000-image.jpg"）
+	// 実装側で適切なパス（例: "entry/{key}"）を構築する
+	Upload(ctx context.Context, key string, body io.Reader, contentType string) (string, error)
+}
+
+// LocalStorage はローカルファイルシステムへの保存
+type LocalStorage struct {
+	uploadDir       string
+	uploadURLPrefix string
+}
+
+// NewLocalStorage creates a new LocalStorage instance
+func NewLocalStorage(uploadDir, uploadURLPrefix string) *LocalStorage {
+	return &LocalStorage{
+		uploadDir:       uploadDir,
+		uploadURLPrefix: uploadURLPrefix,
+	}
+}
+
+// Upload saves the file locally and returns the relative URL
+func (s *LocalStorage) Upload(ctx context.Context, key string, body io.Reader, contentType string) (string, error) {
+	destPath := filepath.Join(s.uploadDir, key)
+
+	// Ensure directory exists
+	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+		return "", fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	dst, err := os.Create(destPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to create file: %w", err)
+	}
+	defer dst.Close()
+
+	if _, err = io.Copy(dst, body); err != nil {
+		return "", fmt.Errorf("failed to save file: %w", err)
+	}
+
+	// Return relative URL
+	return s.uploadURLPrefix + url.PathEscape(key), nil
+}
+
+// S3ClientInterface はS3クライアントの抽象化インターフェース（テスト用）
+type S3ClientInterface interface {
+	PutObject(ctx context.Context, params *s3.PutObjectInput, optFns ...func(*s3.Options)) (*s3.PutObjectOutput, error)
+}
+
+// R2Storage はCloudflare R2への保存
+type R2Storage struct {
+	client    S3ClientInterface
+	bucket    string
+	publicURL string
+}
+
+// NewR2Storage creates a new R2Storage instance
+func NewR2Storage(endpointURL, accessKeyID, secretAccessKey, bucket, publicURL string) (*R2Storage, error) {
+	if endpointURL == "" || accessKeyID == "" || secretAccessKey == "" || bucket == "" {
+		return nil, fmt.Errorf("R2 configuration incomplete")
+	}
+
+	cfg := aws.Config{
+		Region:      "auto",
+		Credentials: credentials.NewStaticCredentialsProvider(accessKeyID, secretAccessKey, ""),
+	}
+
+	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(endpointURL)
+	})
+
+	return &R2Storage{
+		client:    client,
+		bucket:    bucket,
+		publicURL: publicURL,
+	}, nil
+}
+
+// Upload uploads the file to R2 and returns the public URL
+func (s *R2Storage) Upload(ctx context.Context, key string, body io.Reader, contentType string) (string, error) {
+	// bodyをバイトスライスに読み込む（サイズ計算とシーク可能にするため）
+	data, err := io.ReadAll(body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read body: %w", err)
+	}
+
+	// R2のオブジェクトキー: entry/{key}
+	objectKey := "entry/" + key
+
+	_, err = s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:        aws.String(s.bucket),
+		Key:           aws.String(objectKey),
+		Body:          bytes.NewReader(data),
+		ContentType:   aws.String(contentType),
+		ContentLength: aws.Int64(int64(len(data))),
+		CacheControl:  aws.String("public, max-age=31536000, immutable"), // 1年間キャッシュ
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to upload to R2: %w", err)
+	}
+
+	// 公開URLを生成
+	publicURL := fmt.Sprintf("%s/entry/%s", strings.TrimSuffix(s.publicURL, "/"), url.PathEscape(key))
+	return publicURL, nil
+}

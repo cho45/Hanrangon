@@ -5,11 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
+	"mime"
 	"net/http"
-	"net/url"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -393,26 +391,24 @@ func (app *AppImpl) HandleAdminApiUploadImage(c echo.Context) error {
 	// Use filepath.Base to prevent path traversal.
 	filename := fmt.Sprintf("%s-%s", now.Format("20060102150405"), filepath.Base(norm.NFC.String(file.Filename)))
 
-	destPath := filepath.Join(app.config.UploadDir, filename)
-
-	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create upload directory").SetInternal(err)
+	// Content-Typeの判定
+	contentType := file.Header.Get("Content-Type")
+	if contentType == "" {
+		// MIMEタイプを拡張子から推測
+		contentType = mime.TypeByExtension(filepath.Ext(filename))
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
 	}
 
-	dst, err := os.Create(destPath)
+	// ストレージクライアントを使ってアップロード
+	publicURL, err := app.storage.Upload(c.Request().Context(), filename, src, contentType)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create destination file").SetInternal(err)
-	}
-	defer dst.Close()
-
-	if _, err = io.Copy(dst, src); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to save file").SetInternal(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to upload file").SetInternal(err)
 	}
 
-	// URL-escape the filename for the response
 	return c.JSON(http.StatusOK, map[string]string{
-		"uploaded": fmt.Sprintf("/images/entry/%s", url.PathEscape(filename)),
+		"uploaded": publicURL,
 	})
 }
 

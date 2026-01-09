@@ -50,6 +50,7 @@ type AppImpl struct {
 	config               *Config
 	templates            *Templates
 	progressSessions     sync.Map // map[sessionID]*ProgressSession
+	storage              StorageClient
 }
 
 // NewApp creates a new App instance
@@ -69,6 +70,29 @@ func NewApp(
 		log.Fatalf("failed to load templates: %v", err)
 	}
 
+	// ストレージクライアントの初期化
+	var storage StorageClient
+	// R2設定が完全な場合はR2を使用、そうでなければローカルストレージ
+	if config.R2EndpointURL != "" && config.R2AccessKeyID != "" &&
+		config.R2SecretAccessKey != "" && config.R2BucketName != "" {
+		storage, err = NewR2Storage(
+			config.R2EndpointURL,
+			config.R2AccessKeyID,
+			config.R2SecretAccessKey,
+			config.R2BucketName,
+			config.R2PublicURL,
+		)
+		if err != nil {
+			log.Printf("Warning: Failed to initialize R2 storage, falling back to local: %v", err)
+			storage = NewLocalStorage(config.UploadDir, "/images/entry/")
+		} else {
+			log.Printf("Using R2 storage: %s", config.R2PublicURL)
+		}
+	} else {
+		log.Printf("Using local storage: %s", config.UploadDir)
+		storage = NewLocalStorage(config.UploadDir, "/images/entry/")
+	}
+
 	return &AppImpl{
 		queries:              model.New(db),
 		db:                   db,
@@ -84,6 +108,7 @@ func NewApp(
 		jobQueue:             worker,
 		config:               config,
 		templates:            templates,
+		storage:              storage,
 	}
 }
 

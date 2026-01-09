@@ -18,3 +18,11 @@ session_secret = "your-random-secret-here"
 
 # Path to node binary (optional)
 # node_path = "/usr/local/bin/node"
+
+# R2 Configuration (optional, for Cloudflare R2 storage)
+# If all R2 settings are provided, images will be uploaded to R2 instead of local storage
+# r2_endpoint_url = "https://d52dc19d3368d36eecf4b48d5eb2dd44.r2.cloudflarestorage.com"
+# r2_access_key_id = "your-access-key-id"
+# r2_secret_access_key = "your-secret-access-key"
+# r2_bucket_name = "hanrangon-assets"
+# r2_public_url = "https://assets.lowreal.net"
