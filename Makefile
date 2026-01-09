@@ -22,12 +22,12 @@ run:
 	go run -tags "$(GO_TAGS)" .
 
 pprof:
-	PPROF=true HANRANGON_ENV=production go run -tags "$(GO_TAGS)" .
+	PPROF=true HANRANGON_ENV=production air
 
 watch:
 	trap 'kill 0' EXIT; \
 	(cd admin-frontend && npm run dev) & \
-	air || go run github.com/air-verse/air@latest
+	HANRANGON_FE_DEV=true air
 
 test:
 	go test -tags "$(GO_TAGS)" ./...

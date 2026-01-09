@@ -11,7 +11,7 @@ exclude_file = []
 exclude_regex = ["_test.go"]
 exclude_unchanged = false
 follow_symlink = false
-  full_bin = "HANRANGON_FE_DEV=true ./hanrangon"
+  full_bin = "./hanrangon"
 
 include_dir = []
 include_ext = ["go", "tpl", "tmpl", "html", "toml"]
