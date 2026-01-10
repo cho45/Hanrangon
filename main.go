@@ -112,6 +112,11 @@ func main() {
 			log.Fatalf("migrate-to-r2 failed: %v", err)
 		}
 
+	case "convert-to-avif":
+		if err := subcommands.ConvertToAVIF(ctx, application, subArgs); err != nil {
+			log.Fatalf("convert-to-avif failed: %v", err)
+		}
+
 	default:
 		log.Fatalf("unknown command: %s", cmd)
 	}
