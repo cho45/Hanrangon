@@ -4,25 +4,26 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
 
 type Config struct {
-	DataDBPath      string `toml:"data_db_path"`
-	ImagesDBPath    string `toml:"images_db_path"`
-	TFIDFDBPath     string `toml:"tfidf_db_path"`
-	WorkerDBPath    string `toml:"worker_db_path"`
-	StaticDir       string `toml:"static_dir"`
-	Username        string `toml:"username"`
-	Password        string `toml:"password"`
-	SessionSecret   string `toml:"session_secret"`
-	UploadDir       string `toml:"upload_dir"`
-	UploadURLPrefix string `toml:"upload_url_prefix"`
-	BaseURL         string `toml:"base_url"`
-	Listen          string `toml:"listen"`
-	Environment     string `toml:"environment"` // "development" or "production"
-	NodePath        string `toml:"node_path"`
+	DataDBPath      string   `toml:"data_db_path"`
+	ImagesDBPath    string   `toml:"images_db_path"`
+	TFIDFDBPath     string   `toml:"tfidf_db_path"`
+	WorkerDBPath    string   `toml:"worker_db_path"`
+	StaticDir       string   `toml:"static_dir"`
+	Username        string   `toml:"username"`
+	Password        string   `toml:"password"`
+	SessionSecret   string   `toml:"session_secret"`
+	UploadDir       string   `toml:"upload_dir"`
+	UploadURLPrefix string   `toml:"upload_url_prefix"`
+	BaseURL         string   `toml:"base_url"`
+	Listen          []string `toml:"listen"`
+	Environment     string   `toml:"environment"` // "development" or "production"
+	NodePath        string   `toml:"node_path"`
 
 	// Image Optimization Tools (PNG: oxipng > optipng)
 	OxipngPath  string `toml:"oxipng_path"`
@@ -57,7 +58,7 @@ func LoadConfig() *Config {
 		UploadDir:       filepath.Join(staticDir, "images", "entry"),
 		UploadURLPrefix: "/images/entry/",
 		BaseURL:         "http://localhost:5555",
-		Listen:          ":5555",
+		Listen:          []string{":5555"},
 		SessionSecret:   "change-me-please", // Default secret
 	}
 	// 1. Load from TOML (mandatory)
@@ -96,7 +97,7 @@ func LoadConfig() *Config {
 		cfg.BaseURL = env
 	}
 	if env := os.Getenv("HANRANGON_LISTEN"); env != "" {
-		cfg.Listen = env
+		cfg.Listen = strings.Split(env, ",")
 	}
 	if env := os.Getenv("HANRANGON_ENV"); env != "" {
 		cfg.Environment = env

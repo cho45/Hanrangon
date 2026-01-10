@@ -8,7 +8,8 @@ static_dir = "static"
 upload_dir = "static/images/entry"
 
 # Network
-listen = ":5555"
+listen = [":5555"]
+# listen = [":5555", "unix:/var/run/hanrangon.sock"]
 base_url = "http://localhost:5555"
 
 # Authentication

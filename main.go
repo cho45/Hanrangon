@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -151,21 +152,26 @@ func mustOpenDB(driver, path string) *sql.DB {
 	return db
 }
 
+// RunServe は HTTP サーバーを起動し、バックグラウンドワーカーとともに
+// コンテキストがキャンセルされるまで（または SIGTERM 等を受けるまで）実行を維持します。
 func RunServe(ctx context.Context, application *app.AppImpl) error {
 	config := application.Config()
 	worker := application.JobQueue()
 	registry := worker.Registry()
 
-	// ジョブ登録
+	// 1. ジョブの登録
+	// 各種非同期処理（TF-IDF再計算、トラックバック送信、画像インデックス作成など）を登録します。
 	registry.Register(jobs.NewSimpleJob())
 	registry.Register(jobs.NewRecalculateTFIDFJob(application))
 	registry.Register(jobs.NewUpdateTrackbacksJob(application))
 	registry.Register(jobs.NewIndexImagesJob(application))
 
-	// Worker.Start
+	// 2. ジョブワーカーの開始
+	// SQLite を使用したジョブキューのポーリングを開始します。
 	worker.Start(ctx)
 
-	// Periodic tasks
+	// 3. 定期実行タスクの開始
+	// 予約投稿の公開チェック（1分ごと）などを実行する goroutine を起動します。
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -185,31 +191,106 @@ func RunServe(ctx context.Context, application *app.AppImpl) error {
 		}
 	}()
 
-	// Server起動
+	// 4. Echo サーバーとリスナーの準備
+	// 複数のアドレス (TCP ポートや Unix Domain Socket) で listen できるようにします。
 	e := app.NewServer(application)
-	go func() {
-		if err := e.Start(config.Listen); err != nil && err != http.ErrServerClosed {
-			log.Printf("Server start error: %v", err)
-		}
-	}()
+	var servers []*http.Server
+	var listeners []net.Listener
 
-	// シグナルを待機
+	// 初期化失敗時に既に開いたリスナーを閉じるためのクリーンアップ関数
+	cleanupListeners := func() {
+		for _, l := range listeners {
+			l.Close()
+		}
+	}
+
+	// 5. 各リスナーの作成と起動
+	for _, addr := range config.Listen {
+		var l net.Listener
+		var err error
+
+		if strings.HasPrefix(addr, "unix:") {
+			// Unix Domain Socket の場合
+			path := strings.TrimPrefix(addr, "unix:")
+
+			// 既存のソケットファイルがあれば削除（異常終了後の再起動対策）
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				cleanupListeners()
+				return fmt.Errorf("failed to remove existing socket: %w", err)
+			}
+
+			l, err = net.Listen("unix", path)
+			if err != nil {
+				cleanupListeners()
+				return fmt.Errorf("failed to listen on unix socket %s: %w", path, err)
+			}
+
+			// Web サーバー (Nginx等) からアクセスできるようパーミッションを調整
+			if err := os.Chmod(path, 0666); err != nil {
+				l.Close()
+				cleanupListeners()
+				return fmt.Errorf("failed to chmod unix socket %s: %w", path, err)
+			}
+
+			// 正常終了時、または RunServe 終了時にソケットファイルを削除
+			defer os.Remove(path)
+		} else {
+			// 通常の TCP の場合
+			l, err = net.Listen("tcp", addr)
+			if err != nil {
+				cleanupListeners()
+				return fmt.Errorf("failed to listen on tcp address %s: %w", addr, err)
+			}
+		}
+
+		listeners = append(listeners, l)
+
+		// http.Server をリスナーごとに作成
+		srv := &http.Server{
+			Addr:    addr,
+			Handler: e,
+		}
+		servers = append(servers, srv)
+
+		// サーバーを並列に開始
+		go func(ln net.Listener, srv *http.Server) {
+			log.Printf("Server starting on %s", ln.Addr())
+			if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
+				log.Printf("Server error on %s: %v", ln.Addr(), err)
+			}
+		}(l, srv)
+	}
+
+	// 6. 停止シグナルの待機
+	// signal.NotifyContext により、SIGINT/SIGTERM を受信すると ctx.Done() が閉じられます。
 	<-ctx.Done()
 	log.Printf("Shutting down gracefully...")
 
-	// 定期タスクとジョブワーカーの停止待ちを先に行う
+	// 7. バックグラウンドワーカーの停止待ち
+	// サーバーを止める前に、実行中のジョブや定期タスクが安全に終了するのを待ちます。
 	log.Printf("Waiting for background workers to finish...")
-	wg.Wait()     // Periodic tasks
-	worker.Wait() // Job queue
+	wg.Wait()     // 定期タスクの終了待ち
+	worker.Wait() // ジョブキューの終了待ち
 	log.Printf("All background workers finished.")
 
-	// 最後にServerの停止
+	// 8. 全 HTTP サーバーのシャットダウン
+	// 10秒のタイムアウト付きで、アクティブなコネクションの終了を待ちます。
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := e.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("server shutdown failed: %w", err)
+
+	var shutdownWg sync.WaitGroup
+	for _, s := range servers {
+		shutdownWg.Add(1)
+		go func(srv *http.Server) {
+			defer shutdownWg.Done()
+			// Shutdown は内部でリスナーも Close します。
+			if err := srv.Shutdown(shutdownCtx); err != nil {
+				log.Printf("Server shutdown error: %v", err)
+			}
+		}(s)
 	}
-	log.Printf("Server stopped.")
+	shutdownWg.Wait()
+	log.Printf("All servers stopped.")
 
 	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -43,7 +44,7 @@ func TestRunServe_GracefulShutdownOrder(t *testing.T) {
 	}
 
 	config := &app.Config{
-		Listen:        "127.0.0.1:0", // Random free port
+		Listen:        []string{"127.0.0.1:0"}, // Random free port
 		SessionSecret: "test",
 		StaticDir:     "static",
 	}
@@ -97,7 +98,7 @@ func TestRunServe_GracefulShutdownOrder(t *testing.T) {
 	idxGraceful := strings.Index(logs, "Shutting down gracefully...")
 	idxWaiting := strings.Index(logs, "Waiting for background workers to finish...")
 	idxFinished := strings.Index(logs, "All background workers finished.")
-	idxStopped := strings.Index(logs, "Server stopped.")
+	idxStopped := strings.Index(logs, "All servers stopped.")
 
 	if idxGraceful == -1 || idxWaiting == -1 || idxFinished == -1 || idxStopped == -1 {
 		t.Fatalf("one or more log messages not found: graceful=%d, waiting=%d, finished=%d, stopped=%d",
@@ -111,6 +112,66 @@ func TestRunServe_GracefulShutdownOrder(t *testing.T) {
 		t.Errorf("'All background workers finished.' appeared before 'Waiting for background workers to finish...'")
 	}
 	if idxStopped < idxFinished {
-		t.Errorf("'Server stopped.' appeared before 'All background workers finished.'")
+		t.Errorf("'All servers stopped.' appeared before 'All background workers finished.'")
+	}
+}
+
+func TestRunServe_MultipleListeners(t *testing.T) {
+	// Setup minimal app dependencies
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// Apply necessary schemas
+	workerSchema, _ := os.ReadFile("db/schema/worker.sql")
+	db.Exec(string(workerSchema))
+	entrySchema, _ := os.ReadFile("db/schema/schema.sql")
+	db.Exec(string(entrySchema))
+
+	// Prepare UDS path
+	tmpSock := filepath.Join(t.TempDir(), "test.sock")
+
+	config := &app.Config{
+		Listen:        []string{"127.0.0.1:0", "unix:" + tmpSock},
+		SessionSecret: "test",
+		StaticDir:     "static",
+	}
+
+	registry := jobqueue.NewRegistry()
+	workerQueries := model.New(db)
+	worker := jobqueue.NewWorker(db, workerQueries, registry)
+	application := app.NewApp(config, db, db, db, db, &tfidf.Calculator{}, &tfidf.SimilarityCalculator{}, &tfidf.Searcher{}, worker)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- RunServe(ctx, application)
+	}()
+
+	// Wait for startup
+	time.Sleep(500 * time.Millisecond)
+
+	// Check if UDS file exists
+	if _, err := os.Stat(tmpSock); os.IsNotExist(err) {
+		t.Errorf("Unix socket file %s was not created", tmpSock)
+	}
+
+	// Trigger shutdown
+	cancel()
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Errorf("RunServe returned error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("RunServe did not stop in time")
+	}
+
+	// Check if UDS file is cleaned up
+	if _, err := os.Stat(tmpSock); err == nil {
+		t.Errorf("Unix socket file %s still exists after shutdown", tmpSock)
 	}
 }
