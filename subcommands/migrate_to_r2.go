@@ -134,7 +134,7 @@ type Migrator struct {
 	opts        *MigrateToR2Options
 }
 
-// RewriteImageURLs はHTML内の画像URLを書き換える
+// RewriteImageURLs はHTML内の画像URLを書き換える（formatted_body用）
 func RewriteImageURLs(htmlContent, newBaseURL string) (string, error) {
 	// HTMLフラグメントをパース
 	nodes, err := html.ParseFragment(strings.NewReader(htmlContent), &html.Node{
@@ -181,6 +181,25 @@ func RewriteImageURLs(htmlContent, newBaseURL string) (string, error) {
 	}
 
 	return buf.String(), nil
+}
+
+// RewriteBodyImageURLs はbodyフィールドの画像URLを正規表現で書き換える
+// Hatena記法などのフォーマット済みテキスト内のHTML断片を対象とする
+func RewriteBodyImageURLs(body, newBaseURL string) string {
+	newBaseURL = strings.TrimSuffix(newBaseURL, "/")
+
+	// <img src="/images/entry/..." の書き換え
+	// 引用符あり・なし両方に対応
+	body = strings.ReplaceAll(body, `src="/images/entry/`, `src="`+newBaseURL+`/entry/`)
+	body = strings.ReplaceAll(body, `src='/images/entry/`, `src='`+newBaseURL+`/entry/`)
+	body = strings.ReplaceAll(body, `src=/images/entry/`, `src=`+newBaseURL+`/entry/`)
+
+	// <a href="/images/entry/..." の書き換え
+	body = strings.ReplaceAll(body, `href="/images/entry/`, `href="`+newBaseURL+`/entry/`)
+	body = strings.ReplaceAll(body, `href='/images/entry/`, `href='`+newBaseURL+`/entry/`)
+	body = strings.ReplaceAll(body, `href=/images/entry/`, `href=`+newBaseURL+`/entry/`)
+
+	return body
 }
 
 // UploadFiles はローカルファイルをR2にアップロードする
@@ -321,13 +340,13 @@ func (m *Migrator) uploadFile(ctx context.Context, filename string) error {
 	return nil
 }
 
-// RewriteEntries はエントリのformatted_bodyを書き換える
+// RewriteEntries はエントリのbodyとformatted_bodyを書き換える
 func (m *Migrator) RewriteEntries(ctx context.Context) error {
-	// /images/entry/を含むエントリをクエリ
+	// /images/entry/を含むエントリをクエリ（bodyまたはformatted_bodyに含まれる）
 	rows, err := m.app.DB().QueryContext(ctx, `
-		SELECT id, path, formatted_body
+		SELECT id, path, body, formatted_body
 		FROM entries
-		WHERE formatted_body LIKE '%/images/entry/%'
+		WHERE body LIKE '%/images/entry/%' OR formatted_body LIKE '%/images/entry/%'
 		ORDER BY id
 	`)
 	if err != nil {
@@ -338,13 +357,14 @@ func (m *Migrator) RewriteEntries(ctx context.Context) error {
 	type entry struct {
 		id            int64
 		path          string
+		body          string
 		formattedBody string
 	}
 
 	var entries []entry
 	for rows.Next() {
 		var e entry
-		if err := rows.Scan(&e.id, &e.path, &e.formattedBody); err != nil {
+		if err := rows.Scan(&e.id, &e.path, &e.body, &e.formattedBody); err != nil {
 			return fmt.Errorf("failed to scan entry: %w", err)
 		}
 		entries = append(entries, e)
@@ -369,26 +389,36 @@ func (m *Migrator) RewriteEntries(ctx context.Context) error {
 		log.Printf("[%d/%d] 処理中 エントリID:%d %s", i+1, len(entries), e.id, e.path)
 
 		// 既に移行済みかチェック
-		if !strings.Contains(e.formattedBody, "/images/entry/") {
+		if !strings.Contains(e.body, "/images/entry/") && !strings.Contains(e.formattedBody, "/images/entry/") {
 			log.Printf("  スキップ: 既に移行済み")
 			skippedCount++
 			continue
 		}
 
-		// HTMLを書き換え
-		newHTML, err := RewriteImageURLs(e.formattedBody, m.r2PublicURL)
-		if err != nil {
-			log.Printf("  エラー: %v", err)
-			errorCount++
-			continue
+		// bodyを書き換え（正規表現ベース）
+		newBody := e.body
+		if strings.Contains(e.body, "/images/entry/") {
+			newBody = RewriteBodyImageURLs(e.body, m.r2PublicURL)
 		}
 
-		// データベースを更新
+		// formatted_bodyを書き換え（HTMLパーサーベース）
+		newHTML := e.formattedBody
+		if strings.Contains(e.formattedBody, "/images/entry/") {
+			var err error
+			newHTML, err = RewriteImageURLs(e.formattedBody, m.r2PublicURL)
+			if err != nil {
+				log.Printf("  エラー: %v", err)
+				errorCount++
+				continue
+			}
+		}
+
+		// データベースを更新（bodyとformatted_bodyの両方）
 		_, err = m.app.DB().ExecContext(ctx, `
 			UPDATE entries
-			SET formatted_body = ?
+			SET body = ?, formatted_body = ?
 			WHERE id = ?
-		`, newHTML, e.id)
+		`, newBody, newHTML, e.id)
 		if err != nil {
 			log.Printf("  データベース更新エラー: %v", err)
 			errorCount++

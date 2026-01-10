@@ -365,6 +365,148 @@ func TestMigrator_RewriteEntries(t *testing.T) {
 	}
 }
 
+func TestRewriteBodyImageURLs(t *testing.T) {
+	tests := []struct {
+		name     string
+		body     string
+		expected string
+	}{
+		{
+			name: "Hatena記法でHTMLブロック内のimg",
+			body: `>|html|
+<img src="/images/entry/test.jpg" alt="test">
+||<`,
+			expected: `>|html|
+<img src="https://assets.lowreal.net/entry/test.jpg" alt="test">
+||<`,
+		},
+		{
+			name: "引用符なしのsrc属性",
+			body: `>|html|
+<img src=/images/entry/test.jpg>
+||<`,
+			expected: `>|html|
+<img src=https://assets.lowreal.net/entry/test.jpg>
+||<`,
+		},
+		{
+			name: "aタグとimgタグの組み合わせ",
+			body: `>|html|
+<a href="/images/entry/test.jpg"><img src="/images/entry/test.jpg"></a>
+||<`,
+			expected: `>|html|
+<a href="https://assets.lowreal.net/entry/test.jpg"><img src="https://assets.lowreal.net/entry/test.jpg"></a>
+||<`,
+		},
+		{
+			name:     "シングルクォート",
+			body:     `<img src='/images/entry/test.jpg'>`,
+			expected: `<img src='https://assets.lowreal.net/entry/test.jpg'>`,
+		},
+		{
+			name:     "既に移行済み",
+			body:     `<img src="https://assets.lowreal.net/entry/test.jpg">`,
+			expected: `<img src="https://assets.lowreal.net/entry/test.jpg">`,
+		},
+		{
+			name:     "外部URLは変更しない",
+			body:     `<img src="https://example.com/images/entry/test.jpg">`,
+			expected: `<img src="https://example.com/images/entry/test.jpg">`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := RewriteBodyImageURLs(tt.body, "https://assets.lowreal.net")
+			if result != tt.expected {
+				t.Errorf("\nExpected: %q\nGot:      %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestMigrator_RewriteEntries_BodyField(t *testing.T) {
+	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
+	defer db.Close()
+	defer tfidfDB.Close()
+	defer workerDB.Close()
+	defer imagesDB.Close()
+
+	// Setup test app
+	config := &app.Config{
+		R2PublicURL: "https://assets.lowreal.net",
+	}
+
+	registry := jobqueue.NewRegistry()
+	workerQueries := model.New(workerDB)
+	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+
+	tfidfQueries := model.New(tfidfDB)
+	dataQueries := model.New(db)
+	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+
+	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+
+	// Insert test entry with Hatena notation body
+	hatenaBody := `>|html|
+<img src="/images/entry/test.jpg" alt="test">
+||<`
+
+	_, err := db.Exec(`
+		INSERT INTO entries (id, path, title, body, formatted_body, format, status, date, created_at, modified_at, publish_at)
+		VALUES (1, '/2024/01/test', 'Test', ?, '<p><img src="/images/entry/test.jpg" alt="test"></p>', 'hatena', 'public', '2024-01-01', datetime('now'), datetime('now'), datetime('now'))
+	`, hatenaBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create migrator
+	migrator := &Migrator{
+		app:         application,
+		r2Storage:   nil,
+		r2PublicURL: "https://assets.lowreal.net",
+		uploadDir:   "",
+		opts: &MigrateToR2Options{
+			DryRun: false,
+		},
+	}
+
+	// Execute RewriteEntries
+	ctx := context.Background()
+	if err := migrator.RewriteEntries(ctx); err != nil {
+		t.Fatalf("RewriteEntries failed: %v", err)
+	}
+
+	// Verify body field was updated
+	var body, formattedBody string
+	err = db.QueryRow(`SELECT body, formatted_body FROM entries WHERE id = 1`).Scan(&body, &formattedBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectedBody := `>|html|
+<img src="https://assets.lowreal.net/entry/test.jpg" alt="test">
+||<`
+
+	if body != expectedBody {
+		t.Errorf("body field was not rewritten correctly:\nExpected: %q\nGot:      %q", expectedBody, body)
+	}
+
+	if !strings.Contains(formattedBody, "https://assets.lowreal.net/entry/test.jpg") {
+		t.Errorf("formatted_body was not rewritten correctly: %s", formattedBody)
+	}
+
+	// Verify no /images/entry/ remains in either field
+	if strings.Contains(body, "/images/entry/") {
+		t.Errorf("body still contains /images/entry/: %s", body)
+	}
+	if strings.Contains(formattedBody, "/images/entry/") {
+		t.Errorf("formatted_body still contains /images/entry/: %s", formattedBody)
+	}
+}
+
 func TestMigrator_UpdateImageURIs(t *testing.T) {
 	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
 	defer db.Close()
