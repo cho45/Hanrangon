@@ -73,7 +73,7 @@ func (p *ImageProcessor) processPNG(ctx context.Context, srcPath string, filenam
 		originalSize = info.Size()
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
 	if p.oxipngPath != "" {
@@ -111,13 +111,28 @@ func (p *ImageProcessor) processJPEG(ctx context.Context, srcPath string, filena
 		originalSize = info.Size()
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
+
+	if p.avifencPath != "" {
+		dstPath := srcPath + ".avif"
+		var stderr strings.Builder
+		cmd := exec.CommandContext(ctx, p.avifencPath, "--jobs", "3", "--speed", "8", "--yuv", "420", "-q", "60", srcPath, dstPath)
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err == nil {
+			newFilename := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".avif"
+			p.logResult("avifenc", dstPath, originalSize)
+			return dstPath, newFilename, "image/avif", nil
+		} else {
+			log.Printf("[WARN] avifenc failed: %v, stderr: %s", err, stderr.String())
+			// fallthrough to next avif tool
+		}
+	}
 
 	if p.cavifPath != "" {
 		dstPath := srcPath + ".avif"
 		var stderr strings.Builder
-		cmd := exec.CommandContext(ctx, p.cavifPath, "--quiet", "--speed", "6", "--quality", "80", "-o", dstPath, srcPath)
+		cmd := exec.CommandContext(ctx, p.cavifPath, "--quiet", "--speed", "7", "--quality", "80", "-o", dstPath, srcPath)
 		cmd.Stderr = &stderr
 		if err := cmd.Run(); err == nil {
 			newFilename := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".avif"
@@ -126,23 +141,6 @@ func (p *ImageProcessor) processJPEG(ctx context.Context, srcPath string, filena
 		} else {
 			log.Printf("[WARN] cavif failed: %v, stderr: %s", err, stderr.String())
 			// fallthrough to next avif tool
-		}
-	}
-
-	if p.avifencPath != "" {
-		dstPath := srcPath + ".avif"
-		var stderr strings.Builder
-		cmd := exec.CommandContext(ctx, p.avifencPath, "--jobs", "all", srcPath, dstPath)
-		cmd.Stderr = &stderr
-		if err := cmd.Run(); err == nil {
-			newFilename := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".avif"
-			p.logResult("avifenc", dstPath, originalSize)
-			// srcPath is no longer needed, caller should handle it, but for simplicity
-			// we return the new path.
-			return dstPath, newFilename, "image/avif", nil
-		} else {
-			log.Printf("[WARN] avifenc failed: %v, stderr: %s", err, stderr.String())
-			// fallthrough to fallbackJPEG
 		}
 	}
 

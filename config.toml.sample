@@ -26,9 +26,9 @@ session_secret = "your-random-secret-here"
 # oxipng_path = "/usr/local/bin/oxipng"
 # optipng_path = "/usr/local/bin/optipng"
 
-# JPEG tools (Priority: cavif > avifenc > jpegoptim > jpegtran)
-# cavif_path = "/usr/local/bin/cavif"
+# JPEG tools (Priority: avifenc > cavif > jpegoptim > jpegtran)
 # avifenc_path = "/usr/local/bin/avifenc"
+# cavif_path = "/usr/local/bin/cavif"
 # jpegoptim_path = "/usr/local/bin/jpegoptim"
 # jpegtran_path = "/usr/local/bin/jpegtran"
 

@@ -28,7 +28,7 @@ type Config struct {
 	OxipngPath  string `toml:"oxipng_path"`
 	OptipngPath string `toml:"optipng_path"`
 
-	// Image Optimization Tools (JPEG: cavif > avifenc > jpegoptim > jpegtran)
+	// Image Optimization Tools (JPEG: avifenc > cavif > jpegoptim > jpegtran)
 	CavifPath     string `toml:"cavif_path"`
 	AvifencPath   string `toml:"avifenc_path"`
 	JpegoptimPath string `toml:"jpegoptim_path"`
