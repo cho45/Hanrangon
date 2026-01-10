@@ -378,3 +378,65 @@ func TestR2Storage_Upload_VariousContentTypes(t *testing.T) {
 		})
 	}
 }
+
+func TestR2Storage_Upload_Efficiency(t *testing.T) {
+	t.Run("with *os.File", func(t *testing.T) {
+		mock := &mockS3Client{}
+		storage := &R2Storage{
+			client:    mock,
+			bucket:    "test-bucket",
+			publicURL: "https://assets.example.com",
+		}
+
+		// 一時ファイルを作成
+		tmpFile, err := os.CreateTemp("", "storage-test-*")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(tmpFile.Name())
+		content := "file content"
+		tmpFile.WriteString(content)
+		tmpFile.Seek(0, 0) // 先頭に戻す
+		defer tmpFile.Close()
+
+		ctx := context.Background()
+		_, err = storage.Upload(ctx, "file.jpg", tmpFile, "image/jpeg")
+		if err != nil {
+			t.Fatalf("Upload failed: %v", err)
+		}
+
+		call := mock.putObjectCalls[0]
+		if call.contentLength != int64(len(content)) {
+			t.Errorf("expected length %d, got %d", len(content), call.contentLength)
+		}
+		if string(call.body) != content {
+			t.Errorf("expected body %q, got %q", content, string(call.body))
+		}
+	})
+
+	t.Run("with io.ReadSeeker (strings.Reader)", func(t *testing.T) {
+		mock := &mockS3Client{}
+		storage := &R2Storage{
+			client:    mock,
+			bucket:    "test-bucket",
+			publicURL: "https://assets.example.com",
+		}
+
+		content := "seeker content"
+		reader := strings.NewReader(content)
+
+		ctx := context.Background()
+		_, err := storage.Upload(ctx, "seeker.jpg", reader, "image/jpeg")
+		if err != nil {
+			t.Fatalf("Upload failed: %v", err)
+		}
+
+		call := mock.putObjectCalls[0]
+		if call.contentLength != int64(len(content)) {
+			t.Errorf("expected length %d, got %d", len(content), call.contentLength)
+		}
+		if string(call.body) != content {
+			t.Errorf("expected body %q, got %q", content, string(call.body))
+		}
+	})
+}

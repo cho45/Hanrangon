@@ -24,6 +24,16 @@ type Config struct {
 	Environment     string `toml:"environment"` // "development" or "production"
 	NodePath        string `toml:"node_path"`
 
+	// Image Optimization Tools (PNG: oxipng > optipng)
+	OxipngPath  string `toml:"oxipng_path"`
+	OptipngPath string `toml:"optipng_path"`
+
+	// Image Optimization Tools (JPEG: cavif > avifenc > jpegoptim > jpegtran)
+	CavifPath     string `toml:"cavif_path"`
+	AvifencPath   string `toml:"avifenc_path"`
+	JpegoptimPath string `toml:"jpegoptim_path"`
+	JpegtranPath  string `toml:"jpegtran_path"`
+
 	// R2 Configuration
 	R2EndpointURL     string `toml:"r2_endpoint_url"`
 	R2AccessKeyID     string `toml:"r2_access_key_id"`
@@ -93,6 +103,26 @@ func LoadConfig() *Config {
 	}
 	if env := os.Getenv("HANRANGON_NODE_PATH"); env != "" {
 		cfg.NodePath = env
+	}
+
+	// Image Tools Environment Overrides
+	if env := os.Getenv("HANRANGON_OXIPNG_PATH"); env != "" {
+		cfg.OxipngPath = env
+	}
+	if env := os.Getenv("HANRANGON_OPTIPNG_PATH"); env != "" {
+		cfg.OptipngPath = env
+	}
+	if env := os.Getenv("HANRANGON_CAVIF_PATH"); env != "" {
+		cfg.CavifPath = env
+	}
+	if env := os.Getenv("HANRANGON_AVIFENC_PATH"); env != "" {
+		cfg.AvifencPath = env
+	}
+	if env := os.Getenv("HANRANGON_JPEGOPTIM_PATH"); env != "" {
+		cfg.JpegoptimPath = env
+	}
+	if env := os.Getenv("HANRANGON_JPEGTRAN_PATH"); env != "" {
+		cfg.JpegtranPath = env
 	}
 
 	// デフォルトは development (開発効率優先)

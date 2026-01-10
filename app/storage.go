@@ -96,21 +96,48 @@ func NewR2Storage(endpointURL, accessKeyID, secretAccessKey, bucket, publicURL s
 
 // Upload uploads the file to R2 and returns the public URL
 func (s *R2Storage) Upload(ctx context.Context, key string, body io.Reader, contentType string) (string, error) {
-	// bodyをバイトスライスに読み込む（サイズ計算とシーク可能にするため）
-	data, err := io.ReadAll(body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read body: %w", err)
+	var contentLength int64
+	var bodyReader io.Reader
+
+	// 型アサーションでファイル（os.File）かどうかを確認
+	if f, ok := body.(*os.File); ok {
+		stat, err := f.Stat()
+		if err != nil {
+			return "", fmt.Errorf("failed to stat file: %w", err)
+		}
+		contentLength = stat.Size()
+		bodyReader = f
+	} else if rs, ok := body.(io.ReadSeeker); ok {
+		// Seek可能であれば末尾に移動してサイズを確認
+		size, err := rs.Seek(0, io.SeekEnd)
+		if err != nil {
+			return "", fmt.Errorf("failed to seek: %w", err)
+		}
+		_, err = rs.Seek(0, io.SeekStart)
+		if err != nil {
+			return "", fmt.Errorf("failed to seek start: %w", err)
+		}
+		contentLength = size
+		bodyReader = rs
+	} else {
+		// どうしてもサイズが分からないReaderの場合のみ、メモリに読み込む（フォールバック）
+		data, err := io.ReadAll(body)
+		if err != nil {
+			return "", fmt.Errorf("failed to read body: %w", err)
+		}
+		contentLength = int64(len(data))
+		bodyReader = bytes.NewReader(data)
 	}
 
 	// R2のオブジェクトキー: entry/{key}
 	objectKey := "entry/" + key
 
-	_, err = s.client.PutObject(ctx, &s3.PutObjectInput{
+	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:        aws.String(s.bucket),
 		Key:           aws.String(objectKey),
-		Body:          bytes.NewReader(data),
+		Body:          bodyReader,
 		ContentType:   aws.String(contentType),
-		ContentLength: aws.Int64(int64(len(data))),
+		ContentLength: aws.Int64(contentLength),
 		CacheControl:  aws.String("public, max-age=31536000, immutable"), // 1年間キャッシュ
 	})
 	if err != nil {

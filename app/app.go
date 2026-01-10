@@ -51,6 +51,7 @@ type AppImpl struct {
 	templates            *Templates
 	progressSessions     sync.Map // map[sessionID]*ProgressSession
 	storage              StorageClient
+	imageProcessor       *ImageProcessor
 }
 
 // NewApp creates a new App instance
@@ -109,6 +110,7 @@ func NewApp(
 		config:               config,
 		templates:            templates,
 		storage:              storage,
+		imageProcessor:       NewImageProcessor(config),
 	}
 }
 

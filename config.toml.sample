@@ -19,6 +19,19 @@ session_secret = "your-random-secret-here"
 # Path to node binary (optional)
 # node_path = "/usr/local/bin/node"
 
+# Image Optimization Tools (optional)
+# If not specified, the system will look for them in the PATH.
+
+# PNG tools (Priority: oxipng > optipng)
+# oxipng_path = "/usr/local/bin/oxipng"
+# optipng_path = "/usr/local/bin/optipng"
+
+# JPEG tools (Priority: cavif > avifenc > jpegoptim > jpegtran)
+# cavif_path = "/usr/local/bin/cavif"
+# avifenc_path = "/usr/local/bin/avifenc"
+# jpegoptim_path = "/usr/local/bin/jpegoptim"
+# jpegtran_path = "/usr/local/bin/jpegtran"
+
 # R2 Configuration (optional, for Cloudflare R2 storage)
 # If all R2 settings are provided, images will be uploaded to R2 instead of local storage
 # r2_endpoint_url = "https://d52dc19d3368d36eecf4b48d5eb2dd44.r2.cloudflarestorage.com"

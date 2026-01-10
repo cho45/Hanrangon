@@ -5,9 +5,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"mime"
 	"net/http"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -401,8 +403,43 @@ func (app *AppImpl) HandleAdminApiUploadImage(c echo.Context) error {
 		}
 	}
 
+	// 一時ファイルに保存
+	tmpFile, err := os.CreateTemp("", "upload-*"+filepath.Ext(filename))
+	if err != nil {
+		return err
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+
+	if _, err := io.Copy(tmpFile, src); err != nil {
+		tmpFile.Close()
+		return err
+	}
+	tmpFile.Close()
+
+	// 画像の最適化処理（ファイルベース）
+	processedPath, processedFilename, processedContentType, err := app.imageProcessor.ProcessFile(c.Request().Context(), tmpPath, filename, contentType)
+	if err != nil {
+		// 致命的なエラーでない限り、オリジナルデータ（tmpPath）で続行する
+		log.Printf("[WARN] image processing failed, using original: %v", err)
+		processedPath = tmpPath
+		processedFilename = filename
+		processedContentType = contentType
+	}
+	if processedPath != tmpPath {
+		// AVIF変換などで別ファイルになった場合は、新しいファイルも削除するように設定
+		defer os.Remove(processedPath)
+	}
+
+	// 最適化済みのファイルを読み直してアップロード
+	finalFile, err := os.Open(processedPath)
+	if err != nil {
+		return err
+	}
+	defer finalFile.Close()
+
 	// ストレージクライアントを使ってアップロード
-	publicURL, err := app.storage.Upload(c.Request().Context(), filename, src, contentType)
+	publicURL, err := app.storage.Upload(c.Request().Context(), processedFilename, finalFile, processedContentType)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to upload file").SetInternal(err)
 	}
