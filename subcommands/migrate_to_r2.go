@@ -10,8 +10,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
-	"sync"
 
 	"github.com/cho45/hanrangon/app"
 	"golang.org/x/net/html"
@@ -94,28 +94,20 @@ func MigrateToR2(ctx context.Context, application app.App, args []string) error 
 		log.Printf("ドライランモード - 実際の変更は行われません")
 	}
 
-	// Step 1: ファイルをR2にアップロード
-	// 理由: 先にファイルをアップロードしておくことで、データベース更新後すぐに画像が表示可能になる
-	//       また、アップロード中に失敗した場合でもデータベースは変更されていないため安全
-	if err := migrator.UploadFiles(ctx); err != nil {
-		return fmt.Errorf("file upload failed: %w", err)
+	// エントリ単位でアトミックに処理
+	// 各エントリごとに: 画像抽出 → R2アップロード → DB更新を完結させる
+	if err := migrator.ProcessEntries(ctx); err != nil {
+		return fmt.Errorf("entry processing failed: %w", err)
 	}
 
-	// Step 2: エントリのformatted_bodyを書き換え
-	// 理由: Step1でファイルがアップロード済みなので、書き換え直後から新URLで画像が表示される
-	//       先にimages.uriを更新するとStep3との整合性が崩れる可能性がある
-	if err := migrator.RewriteEntries(ctx); err != nil {
-		return fmt.Errorf("entry rewrite failed: %w", err)
-	}
-
-	// Step 3: images.uriを一括更新
+	// images.uriを一括更新
 	// 理由: エントリ本文の書き換えが完了した後に、画像DBも同期する
 	//       REPLACEによる一括更新なので高速
 	if err := migrator.UpdateImageURIs(ctx); err != nil {
 		return fmt.Errorf("image URI update failed: %w", err)
 	}
 
-	// Step 4: 検証
+	// 検証
 	// 理由: すべての移行が完了した後に、残っている未移行データがないか確認
 	if err := migrator.Verify(ctx); err != nil {
 		log.Printf("警告: 検証に失敗しました: %v", err)
@@ -132,6 +124,189 @@ type Migrator struct {
 	r2PublicURL string
 	uploadDir   string
 	opts        *MigrateToR2Options
+}
+
+// ProcessEntries はエントリ単位で画像移行を処理する
+// 各エントリごとに: 画像抽出 → R2アップロード → DB更新を完結させる
+func (m *Migrator) ProcessEntries(ctx context.Context) error {
+	// /images/entry/を含むエントリをクエリ
+	rows, err := m.app.DB().QueryContext(ctx, `
+		SELECT id, path, body, formatted_body
+		FROM entries
+		WHERE body LIKE '%/images/entry/%' OR formatted_body LIKE '%/images/entry/%'
+		ORDER BY id
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to query entries: %w", err)
+	}
+	defer rows.Close()
+
+	type entry struct {
+		id            int64
+		path          string
+		body          string
+		formattedBody string
+	}
+
+	var entries []entry
+	for rows.Next() {
+		var e entry
+		if err := rows.Scan(&e.id, &e.path, &e.body, &e.formattedBody); err != nil {
+			return fmt.Errorf("failed to scan entry: %w", err)
+		}
+		entries = append(entries, e)
+	}
+
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("failed to iterate entries: %w", err)
+	}
+
+	log.Printf("%d個の処理対象エントリを発見しました", len(entries))
+
+	if m.opts.DryRun {
+		log.Printf("ドライラン: %d個のエントリを処理します（実際には変更しません）", len(entries))
+		return nil
+	}
+
+	successCount := 0
+	errorCount := 0
+	skippedCount := 0
+
+	for i, e := range entries {
+		log.Printf("[%d/%d] 処理中 エントリID:%d %s", i+1, len(entries), e.id, e.path)
+
+		// 既に移行済みかチェック
+		if !strings.Contains(e.body, "/images/entry/") && !strings.Contains(e.formattedBody, "/images/entry/") {
+			log.Printf("  スキップ: 既に移行済み")
+			skippedCount++
+			continue
+		}
+
+		// このエントリで参照されている画像ファイルを抽出
+		imageFiles := m.extractImageFiles(e.body, e.formattedBody)
+		if len(imageFiles) == 0 {
+			log.Printf("  スキップ: 画像ファイルが見つかりませんでした")
+			skippedCount++
+			continue
+		}
+
+		log.Printf("  %d個の画像ファイルをアップロードします", len(imageFiles))
+
+		// ステップ1: 画像をR2にアップロード
+		uploadSuccess := true
+		for _, imgFile := range imageFiles {
+			// R2に既に存在するかチェック
+			exists, err := m.existsOnR2(ctx, imgFile)
+			if err != nil {
+				log.Printf("    %s: 存在確認エラー: %v", imgFile, err)
+			} else if exists {
+				log.Printf("    %s: 既に存在します", imgFile)
+				continue
+			}
+
+			// R2にアップロード
+			if err := m.uploadFile(ctx, imgFile); err != nil {
+				log.Printf("    %s: アップロードエラー: %v", imgFile, err)
+				uploadSuccess = false
+				break
+			}
+			log.Printf("    %s → R2", imgFile)
+		}
+
+		if !uploadSuccess {
+			log.Printf("  エラー: 画像アップロードに失敗しました")
+			errorCount++
+			continue
+		}
+
+		// ステップ2: エントリのbodyとformatted_bodyを更新
+		newBody := e.body
+		if strings.Contains(e.body, "/images/entry/") {
+			newBody = RewriteBodyImageURLs(e.body, m.r2PublicURL)
+		}
+
+		newHTML := e.formattedBody
+		if strings.Contains(e.formattedBody, "/images/entry/") {
+			var err error
+			newHTML, err = RewriteImageURLs(e.formattedBody, m.r2PublicURL)
+			if err != nil {
+				log.Printf("  HTMLパースエラー: %v", err)
+				errorCount++
+				continue
+			}
+		}
+
+		_, err = m.app.DB().ExecContext(ctx, `
+			UPDATE entries
+			SET body = ?, formatted_body = ?
+			WHERE id = ?
+		`, newBody, newHTML, e.id)
+		if err != nil {
+			log.Printf("  データベース更新エラー: %v", err)
+			errorCount++
+			continue
+		}
+
+		log.Printf("  完了")
+		successCount++
+	}
+
+	log.Printf("エントリ処理完了: %d成功, %d失敗, %dスキップ", successCount, errorCount, skippedCount)
+
+	if errorCount > 0 {
+		return fmt.Errorf("%d entry processing errors occurred", errorCount)
+	}
+
+	return nil
+}
+
+// extractImageFiles はbodyとformatted_bodyから/images/entry/配下の画像ファイル名を抽出する
+func (m *Migrator) extractImageFiles(body, formattedBody string) []string {
+	fileSet := make(map[string]bool)
+
+	// 正規表現: src= または href= に続く /images/entry/... のファイルパス
+	// HTMLパーサーを使うのが理想だが、bodyには生のHatena記法も含まれるため正規表現で抽出
+	// 3つのパターンをサポート:
+	// 1. ダブルクォート: src="/images/entry/xxx" (引用符まで、スペース可)
+	// 2. シングルクォート: src='/images/entry/xxx' (引用符まで、スペース可)
+	// 3. クォートなし: src=/images/entry/xxx (スペース・>まで、スペース不可)
+	// Hatena記法: [f:id:user:timestamp:image /images/entry/xxx ] も考慮
+	re := regexp.MustCompile(`(?:(?:src|href)=(?:"(/images/entry/[^"]*)"|'(/images/entry/[^']*)'|(/images/entry/[^>\s]+))|(?:\s)(/images/entry/[^\s\]]+))`)
+
+	// bodyから抽出
+	matches := re.FindAllStringSubmatch(body, -1)
+	for _, match := range matches {
+		// match[1]: double quoted, match[2]: single quoted, match[3]: unquoted (HTML), match[4]: space-delimited (Hatena)
+		// いずれか1つだけがマッチする
+		for i := 1; i < len(match); i++ {
+			if match[i] != "" {
+				// /images/entry/ プレフィックスを削除してファイル名を抽出
+				filename := strings.TrimPrefix(match[i], "/images/entry/")
+				fileSet[filename] = true
+				break
+			}
+		}
+	}
+
+	// formatted_bodyから抽出
+	matches = re.FindAllStringSubmatch(formattedBody, -1)
+	for _, match := range matches {
+		for i := 1; i < len(match); i++ {
+			if match[i] != "" {
+				filename := strings.TrimPrefix(match[i], "/images/entry/")
+				fileSet[filename] = true
+				break
+			}
+		}
+	}
+
+	// マップからスライスに変換
+	files := make([]string, 0, len(fileSet))
+	for file := range fileSet {
+		files = append(files, file)
+	}
+
+	return files
 }
 
 // RewriteImageURLs はHTML内の画像URLを書き換える（formatted_body用）
@@ -202,103 +377,6 @@ func RewriteBodyImageURLs(body, newBaseURL string) string {
 	return body
 }
 
-// UploadFiles はローカルファイルをR2にアップロードする
-func (m *Migrator) UploadFiles(ctx context.Context) error {
-	// ローカルファイル一覧を取得
-	files, err := m.listLocalFiles()
-	if err != nil {
-		return fmt.Errorf("failed to list local files: %w", err)
-	}
-
-	if len(files) == 0 {
-		log.Printf("アップロードするローカルファイルがありません")
-		return nil
-	}
-
-	log.Printf("%d個のローカルファイルを発見しました", len(files))
-
-	if m.opts.DryRun {
-		log.Printf("ドライラン: %d個のファイルをアップロードします（実際にはアップロードしません）", len(files))
-		return nil
-	}
-
-	// 並列アップロード
-	var wg sync.WaitGroup
-	semaphore := make(chan struct{}, m.opts.Parallel)
-	errorsCh := make(chan error, len(files))
-	successCount := 0
-	skipCount := 0
-	var mu sync.Mutex
-
-	for i, filename := range files {
-		wg.Add(1)
-		go func(idx int, fname string) {
-			defer wg.Done()
-			semaphore <- struct{}{}
-			defer func() { <-semaphore }()
-
-			log.Printf("[%d/%d] アップロード中 %s...", idx+1, len(files), fname)
-
-			// R2に既に存在するかチェック
-			exists, err := m.existsOnR2(ctx, fname)
-			if err != nil {
-				log.Printf("  警告: 存在確認に失敗: %v", err)
-			} else if exists {
-				log.Printf("  スキップ: 既に存在します")
-				mu.Lock()
-				skipCount++
-				mu.Unlock()
-				return
-			}
-
-			// ファイルをアップロード
-			if err := m.uploadFile(ctx, fname); err != nil {
-				log.Printf("  エラー: %v", err)
-				errorsCh <- err
-			} else {
-				log.Printf("  完了")
-				mu.Lock()
-				successCount++
-				mu.Unlock()
-			}
-		}(i, filename)
-	}
-
-	wg.Wait()
-	close(errorsCh)
-
-	errorCount := len(errorsCh)
-	log.Printf("アップロード完了: %d成功, %dスキップ, %d失敗", successCount, skipCount, errorCount)
-
-	if errorCount > 0 {
-		return fmt.Errorf("%d upload errors occurred", errorCount)
-	}
-
-	return nil
-}
-
-// listLocalFiles はアップロードディレクトリ内のすべてのファイルをリストする
-func (m *Migrator) listLocalFiles() ([]string, error) {
-	var files []string
-	err := filepath.Walk(m.uploadDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			relPath, err := filepath.Rel(m.uploadDir, path)
-			if err != nil {
-				return err
-			}
-			files = append(files, relPath)
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return files, nil
-}
-
 // existsOnR2 はファイルがR2に存在するかチェックする
 func (m *Migrator) existsOnR2(ctx context.Context, filename string) (bool, error) {
 	url := fmt.Sprintf("%s/entry/%s", strings.TrimSuffix(m.r2PublicURL, "/"), filename)
@@ -335,103 +413,6 @@ func (m *Migrator) uploadFile(ctx context.Context, filename string) error {
 	_, err = m.r2Storage.Upload(ctx, filename, file, contentType)
 	if err != nil {
 		return fmt.Errorf("failed to upload: %w", err)
-	}
-
-	return nil
-}
-
-// RewriteEntries はエントリのbodyとformatted_bodyを書き換える
-func (m *Migrator) RewriteEntries(ctx context.Context) error {
-	// /images/entry/を含むエントリをクエリ（bodyまたはformatted_bodyに含まれる）
-	rows, err := m.app.DB().QueryContext(ctx, `
-		SELECT id, path, body, formatted_body
-		FROM entries
-		WHERE body LIKE '%/images/entry/%' OR formatted_body LIKE '%/images/entry/%'
-		ORDER BY id
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to query entries: %w", err)
-	}
-	defer rows.Close()
-
-	type entry struct {
-		id            int64
-		path          string
-		body          string
-		formattedBody string
-	}
-
-	var entries []entry
-	for rows.Next() {
-		var e entry
-		if err := rows.Scan(&e.id, &e.path, &e.body, &e.formattedBody); err != nil {
-			return fmt.Errorf("failed to scan entry: %w", err)
-		}
-		entries = append(entries, e)
-	}
-
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("failed to iterate entries: %w", err)
-	}
-
-	log.Printf("%d個の書き換え対象エントリを発見しました", len(entries))
-
-	if m.opts.DryRun {
-		log.Printf("ドライラン: %d個のエントリを書き換えます（実際には書き換えません）", len(entries))
-		return nil
-	}
-
-	successCount := 0
-	errorCount := 0
-	skippedCount := 0
-
-	for i, e := range entries {
-		log.Printf("[%d/%d] 処理中 エントリID:%d %s", i+1, len(entries), e.id, e.path)
-
-		// 既に移行済みかチェック
-		if !strings.Contains(e.body, "/images/entry/") && !strings.Contains(e.formattedBody, "/images/entry/") {
-			log.Printf("  スキップ: 既に移行済み")
-			skippedCount++
-			continue
-		}
-
-		// bodyを書き換え（正規表現ベース）
-		newBody := e.body
-		if strings.Contains(e.body, "/images/entry/") {
-			newBody = RewriteBodyImageURLs(e.body, m.r2PublicURL)
-		}
-
-		// formatted_bodyを書き換え（HTMLパーサーベース）
-		newHTML := e.formattedBody
-		if strings.Contains(e.formattedBody, "/images/entry/") {
-			var err error
-			newHTML, err = RewriteImageURLs(e.formattedBody, m.r2PublicURL)
-			if err != nil {
-				log.Printf("  エラー: %v", err)
-				errorCount++
-				continue
-			}
-		}
-
-		// データベースを更新（bodyとformatted_bodyの両方）
-		_, err = m.app.DB().ExecContext(ctx, `
-			UPDATE entries
-			SET body = ?, formatted_body = ?
-			WHERE id = ?
-		`, newBody, newHTML, e.id)
-		if err != nil {
-			log.Printf("  データベース更新エラー: %v", err)
-			errorCount++
-			continue
-		}
-
-		successCount++
-	}
-
-	log.Printf("書き換え完了: %d成功, %d失敗, %dスキップ", successCount, errorCount, skippedCount)
-
-	if errorCount > 0 {
-		return fmt.Errorf("%d rewrite errors occurred", errorCount)
 	}
 
 	return nil

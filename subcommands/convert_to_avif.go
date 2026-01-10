@@ -241,22 +241,38 @@ func (c *AVIFConverter) ProcessEntries(ctx context.Context) error {
 func (c *AVIFConverter) extractImageFiles(body, formattedBody string) []string {
 	fileSet := make(map[string]bool)
 
-	// 正規表現: /images/entry/...jpg または .jpeg (case-insensitive)
-	re := regexp.MustCompile(`(?i)/images/entry/([^"'> ]*\.jpe?g)`)
+	// 正規表現: src= または href= に続く /images/entry/...jpg または .jpeg (case-insensitive)
+	// 3つのパターンをサポート:
+	// 1. ダブルクォート: src="/images/entry/xxx.jpg" (引用符まで、スペース可)
+	// 2. シングルクォート: src='/images/entry/xxx.jpg' (引用符まで、スペース可)
+	// 3. クォートなし: src=/images/entry/xxx.jpg (スペース・>まで、スペース不可)
+	// Hatena記法: [f:id:user:timestamp:image /images/entry/xxx.jpg ] も考慮
+	re := regexp.MustCompile(`(?i)(?:(?:src|href)=(?:"(/images/entry/[^"]*\.jpe?g)"|'(/images/entry/[^']*\.jpe?g)'|(/images/entry/[^>\s]*\.jpe?g))|(?:\s)(/images/entry/[^\s\]]*\.jpe?g))`)
 
 	// bodyから抽出
 	matches := re.FindAllStringSubmatch(body, -1)
 	for _, match := range matches {
-		if len(match) > 1 {
-			fileSet[match[1]] = true
+		// match[1]: double quoted, match[2]: single quoted, match[3]: unquoted (HTML), match[4]: space-delimited (Hatena)
+		// いずれか1つだけがマッチする
+		for i := 1; i < len(match); i++ {
+			if match[i] != "" {
+				// /images/entry/ プレフィックスを削除してファイル名を抽出
+				filename := strings.TrimPrefix(match[i], "/images/entry/")
+				fileSet[filename] = true
+				break
+			}
 		}
 	}
 
 	// formatted_bodyから抽出
 	matches = re.FindAllStringSubmatch(formattedBody, -1)
 	for _, match := range matches {
-		if len(match) > 1 {
-			fileSet[match[1]] = true
+		for i := 1; i < len(match); i++ {
+			if match[i] != "" {
+				filename := strings.TrimPrefix(match[i], "/images/entry/")
+				fileSet[filename] = true
+				break
+			}
 		}
 	}
 
