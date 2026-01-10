@@ -2,6 +2,7 @@ import sharp from 'sharp';
 import pngToIco from 'png-to-ico';
 import fs from 'fs/promises';
 import path from 'path';
+import { execSync } from 'child_process';
 
 const SRC_SVG = '../docs/hanrangen.svg';
 const STATIC_DIR = '../static';
@@ -13,7 +14,7 @@ const IMAGE_DIR = path.join(STATIC_DIR, 'images');
  */
 async function resizeToSquare(buffer, targetSize, isOpaque, noPadding = false) {
   const metadata = await sharp(buffer).metadata();
-  const padding = noPadding ? 0 : Math.round(targetSize * 0.15);
+  const padding = noPadding ? 0 : Math.round(targetSize * 0.15); // 15% のセーフゾーン
   const maxInnerSize = targetSize - padding * 2;
 
   // 元画像が縦長か横長かに応じて、収まるようにリサイズ
@@ -23,7 +24,7 @@ async function resizeToSquare(buffer, targetSize, isOpaque, noPadding = false) {
 
   const bgColor = isOpaque 
     ? { r: 255, g: 255, b: 255, alpha: 1 } 
-    : { r: 255, g: 255, b: 255, alpha: 0 };
+    : { r: 255, g: 255, b: 255, alpha: 0 }; // 透過時も白ベースの透明に
 
   let image = sharp(buffer)
     .resize(width, height)
@@ -46,6 +47,8 @@ async function generate() {
   await fs.mkdir(IMAGE_DIR, { recursive: true });
   const svgBuffer = await fs.readFile(SRC_SVG);
 
+  const generatedPngs = [];
+
   // 1. icon.svg
   const svgText = svgBuffer.toString();
   const modernSvg = svgText
@@ -55,22 +58,35 @@ async function generate() {
   console.log('Generated: icon.svg');
 
   // 2. apple-touch-icon.png (不透明・白背景)
+  const applePath = path.join(IMAGE_DIR, 'apple-touch-icon.png');
   const appleIcon = await resizeToSquare(svgBuffer, 180, true);
-  await appleIcon.toFile(path.join(IMAGE_DIR, 'apple-touch-icon.png'));
+  await appleIcon.toFile(applePath);
+  generatedPngs.push(applePath);
   console.log('Generated: apple-touch-icon.png');
 
   // 3. Android / Manifest用 PNG (透過)
   for (const size of [192, 512]) {
+    const pngPath = path.join(IMAGE_DIR, `web-app-manifest-${size}.png`);
     const png = await resizeToSquare(svgBuffer, size, false);
-    await png.toFile(path.join(IMAGE_DIR, `web-app-manifest-${size}.png`));
+    await png.toFile(pngPath);
+    generatedPngs.push(pngPath);
     console.log(`Generated: web-app-manifest-${size}.png`);
   }
 
-  // 4. favicon.ico (パディングなし)
+  // 4. favicon.ico
   const icoPngs = await Promise.all([16, 32, 48].map(size => resizeToSquare(svgBuffer, size, false, true).then(s => s.toBuffer())));
   const icoBuffer = await pngToIco(icoPngs);
   await fs.writeFile(path.join(IMAGE_DIR, 'favicon.ico'), icoBuffer);
   console.log('Generated: favicon.ico (no padding)');
+
+  // Optimize PNGs
+  console.log('Optimizing generated PNGs with oxipng...');
+  try {
+    execSync(`oxipng -o 4 --strip safe ${generatedPngs.join(' ')}`);
+    console.log('Optimization complete.');
+  } catch (err) {
+    console.warn('oxipng failed, skipping optimization');
+  }
 }
 
 generate().catch(err => {
