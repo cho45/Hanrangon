@@ -40,3 +40,4 @@ var/cache/
 
 tmp/
 *.prof
+scripts/node_modules

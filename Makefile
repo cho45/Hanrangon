@@ -1,7 +1,7 @@
 BINARY_NAME=hanrangon
 GO_TAGS=sqlite_math_functions
 
-.PHONY: all build test generate fmt clean postprocess-test setup watch run
+.PHONY: all build test generate generate-icons fmt clean postprocess-test setup watch run
 
 all: build
 
@@ -34,6 +34,9 @@ test:
 
 generate:
 	sqlc generate
+
+generate-icons:
+	cd scripts && npm install && npm run generate-icons
 
 fmt:
 	goimports -w .
