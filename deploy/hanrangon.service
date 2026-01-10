@@ -11,6 +11,9 @@ WorkingDirectory=/srv/www/lowreal.net/Hanrangon
 ExecStart=/srv/www/lowreal.net/Hanrangon/hanrangon
 Environment=HANRANGON_ENV=production
 
+RuntimeDirectory=hanrangon
+RuntimeDirectoryMode=0755
+
 Restart=always
 RestartSec=5
 
