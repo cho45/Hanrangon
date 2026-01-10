@@ -6,6 +6,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -591,7 +592,16 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 	data.Description = viewEntries[0].Summary
 	data.OGType = "article"
 	firstImage := string(viewEntry.FirstImageURL)
+	isSupportedOGPFormat := false
 	if firstImage != "" {
+		ext := strings.ToLower(filepath.Ext(firstImage))
+		switch ext {
+		case ".jpg", ".jpeg", ".png", ".gif":
+			isSupportedOGPFormat = true
+		}
+	}
+
+	if isSupportedOGPFormat {
 		if strings.HasPrefix(firstImage, "http") {
 			data.ImageURL = firstImage
 		} else {
