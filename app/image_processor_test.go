@@ -123,4 +123,27 @@ func TestImageProcessor_Process(t *testing.T) {
 			t.Errorf("PNG fallback failed")
 		}
 	})
+
+	t.Run("Timeout during processing (Fallback to original)", func(t *testing.T) {
+		if p.oxipngPath == "" && p.optipngPath == "" {
+			t.Skip("No PNG tools found to test timeout")
+		}
+		path := createTempFile(pngData, "test.png")
+		defer os.Remove(path)
+
+		// すでにキャンセルされたコンテキストを渡す
+		timeoutCtx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		resPath, resName, resType, err := p.ProcessFile(timeoutCtx, path, "test.png", "image/png")
+		if err != nil {
+			t.Fatalf("Process should not return error on timeout: %v", err)
+		}
+		if resPath != path {
+			t.Errorf("Expected original path %s, got %s", path, resPath)
+		}
+		if resName != "test.png" || resType != "image/png" {
+			t.Errorf("Expected original metadata, got %s, %s", resName, resType)
+		}
+	})
 }
