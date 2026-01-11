@@ -25,6 +25,7 @@ type MigrateToR2Options struct {
 	Verify   bool // 検証のみ（マイグレーションなし）
 	Parallel int  // 並列アップロード数
 	Backup   bool // マイグレーション前にバックアップを作成
+	Limit    int  // 処理するエントリ数の上限（0=無制限、ID昇順で古いものから処理）
 }
 
 // MigrateToR2 はローカル画像をR2に移行し、データベースのエントリを書き換える
@@ -36,6 +37,7 @@ func MigrateToR2(ctx context.Context, application app.App, args []string) error 
 	fs.BoolVar(&opts.Verify, "verify-only", false, "Verify only (no migration)")
 	fs.IntVar(&opts.Parallel, "parallel", 4, "Number of parallel uploads")
 	fs.BoolVar(&opts.Backup, "backup", false, "Create database backup before migration")
+	fs.IntVar(&opts.Limit, "limit", 0, "Limit number of entries to process (0=unlimited, processes oldest entries first by ID)")
 	fs.Parse(args)
 
 	config := application.Config()
@@ -130,12 +132,18 @@ type Migrator struct {
 // 各エントリごとに: 画像抽出 → R2アップロード → DB更新を完結させる
 func (m *Migrator) ProcessEntries(ctx context.Context) error {
 	// /images/entry/を含むエントリをクエリ
-	rows, err := m.app.DB().QueryContext(ctx, `
+	// ID昇順（古いものから）処理し、オプションでLIMITを適用
+	query := `
 		SELECT id, path, body, formatted_body
 		FROM entries
 		WHERE body LIKE '%/images/entry/%' OR formatted_body LIKE '%/images/entry/%'
 		ORDER BY id
-	`)
+	`
+	if m.opts.Limit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", m.opts.Limit)
+	}
+
+	rows, err := m.app.DB().QueryContext(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to query entries: %w", err)
 	}
@@ -247,7 +255,10 @@ func (m *Migrator) ProcessEntries(ctx context.Context) error {
 			continue
 		}
 
-		log.Printf("  完了")
+		// BaseURL + entries.path でURLを出力（確認しやすいように）
+		baseURL := m.app.Config().BaseURL
+		entryURL := fmt.Sprintf("%s%s", strings.TrimSuffix(baseURL, "/"), e.path)
+		log.Printf("  完了: %s", entryURL)
 		successCount++
 	}
 
@@ -273,8 +284,9 @@ func (m *Migrator) extractImageFiles(body, formattedBody string) []string {
 	// Hatena記法: [f:id:user:timestamp:image /images/entry/xxx ] も考慮
 	re := regexp.MustCompile(`(?:(?:src|href)=(?:"(/images/entry/[^"]*)"|'(/images/entry/[^']*)'|(/images/entry/[^>\s]+))|(?:\s)(/images/entry/[^\s\]]+))`)
 
-	// bodyから抽出
-	matches := re.FindAllStringSubmatch(body, -1)
+	// bodyから抽出（HTMLコメントとCDATAセクションを除去してから処理）
+	cleanBody := m.removeCommentsAndCDATA(body)
+	matches := re.FindAllStringSubmatch(cleanBody, -1)
 	for _, match := range matches {
 		// match[1]: double quoted, match[2]: single quoted, match[3]: unquoted (HTML), match[4]: space-delimited (Hatena)
 		// いずれか1つだけがマッチする
@@ -288,8 +300,9 @@ func (m *Migrator) extractImageFiles(body, formattedBody string) []string {
 		}
 	}
 
-	// formatted_bodyから抽出
-	matches = re.FindAllStringSubmatch(formattedBody, -1)
+	// formatted_bodyから抽出（HTMLコメントとCDATAセクションを除去してから処理）
+	cleanFormattedBody := m.removeCommentsAndCDATA(formattedBody)
+	matches = re.FindAllStringSubmatch(cleanFormattedBody, -1)
 	for _, match := range matches {
 		for i := 1; i < len(match); i++ {
 			if match[i] != "" {
@@ -307,6 +320,19 @@ func (m *Migrator) extractImageFiles(body, formattedBody string) []string {
 	}
 
 	return files
+}
+
+// removeCommentsAndCDATA はHTMLコメントとCDATAセクションを空文字列に置換する
+func (m *Migrator) removeCommentsAndCDATA(html string) string {
+	// HTMLコメント <!-- ... --> を削除
+	commentRe := regexp.MustCompile(`<!--[\s\S]*?-->`)
+	html = commentRe.ReplaceAllString(html, "")
+
+	// CDATAセクション <![CDATA[ ... ]]> を削除
+	cdataRe := regexp.MustCompile(`<!\[CDATA\[[\s\S]*?\]\]>`)
+	html = cdataRe.ReplaceAllString(html, "")
+
+	return html
 }
 
 // RewriteImageURLs はHTML内の画像URLを書き換える（formatted_body用）

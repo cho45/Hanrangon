@@ -970,13 +970,13 @@ func TestMigrator_ExtractImageFiles(t *testing.T) {
 			name:          "HTML comment should not be extracted",
 			body:          `<!-- <img src="/images/entry/commented.jpg"> -->`,
 			formattedBody: ``,
-			expected:      []string{"commented.jpg"}, // FIXME: 現在の実装ではコメント内も抽出してしまう
+			expected:      []string{}, // HTMLコメント内の画像は抽出しない
 		},
 		{
 			name:          "CDATA section",
 			body:          `<![CDATA[<img src="/images/entry/cdata.jpg">]]>`,
 			formattedBody: ``,
-			expected:      []string{"cdata.jpg"}, // FIXME: 現在の実装ではCDATA内も抽出してしまう
+			expected:      []string{}, // CDATAセクション内の画像は抽出しない
 		},
 		{
 			name:          "Image with space in path",
@@ -1045,5 +1045,415 @@ func TestMigrator_ExtractImageFiles(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestMigrator_RemoveCommentsAndCDATA tests the removeCommentsAndCDATA helper method
+func TestMigrator_RemoveCommentsAndCDATA(t *testing.T) {
+	migrator := &Migrator{}
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "Simple HTML comment",
+			input:    `<div><!-- comment --></div>`,
+			expected: `<div></div>`,
+		},
+		{
+			name:     "Multi-line HTML comment",
+			input:    `<div><!-- multi\nline\ncomment --></div>`,
+			expected: `<div></div>`,
+		},
+		{
+			name:     "Multiple HTML comments",
+			input:    `<!-- first --><div><!-- second --></div><!-- third -->`,
+			expected: `<div></div>`,
+		},
+		{
+			name:     "HTML comment with special chars",
+			input:    `<!-- <img src="/images/entry/test.jpg"> & < > " -->`,
+			expected: ``,
+		},
+		{
+			name:     "Simple CDATA section",
+			input:    `<![CDATA[data]]>`,
+			expected: ``,
+		},
+		{
+			name:     "Multi-line CDATA section",
+			input:    `<![CDATA[multi\nline\ndata]]>`,
+			expected: ``,
+		},
+		{
+			name:     "CDATA with HTML-like content",
+			input:    `<![CDATA[<img src="/images/entry/test.jpg">]]>`,
+			expected: ``,
+		},
+		{
+			name:     "Multiple CDATA sections",
+			input:    `<![CDATA[first]]><div><![CDATA[second]]></div>`,
+			expected: `<div></div>`,
+		},
+		{
+			name:     "Mixed comments and CDATA",
+			input:    `<!-- comment --><![CDATA[data]]><div>content</div>`,
+			expected: `<div>content</div>`,
+		},
+		{
+			name:     "Nested-like structures",
+			input:    `<!-- <!-- nested? --> -->`,
+			expected: ` -->`,
+		},
+		{
+			name:     "Empty input",
+			input:    ``,
+			expected: ``,
+		},
+		{
+			name:     "No comments or CDATA",
+			input:    `<div><img src="/images/entry/test.jpg"></div>`,
+			expected: `<div><img src="/images/entry/test.jpg"></div>`,
+		},
+		{
+			name:     "Comment at the end",
+			input:    `<div>text</div><!-- end comment -->`,
+			expected: `<div>text</div>`,
+		},
+		{
+			name:     "CDATA at the beginning",
+			input:    `<![CDATA[start]]><div>text</div>`,
+			expected: `<div>text</div>`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := migrator.removeCommentsAndCDATA(tt.input)
+			if result != tt.expected {
+				t.Errorf("removeCommentsAndCDATA() = %q, expected %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestMigrator_ProcessEntriesWithLimit tests that the --limit flag correctly limits the number of entries processed
+func TestMigrator_ProcessEntriesWithLimit(t *testing.T) {
+	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
+	defer db.Close()
+	defer tfidfDB.Close()
+	defer workerDB.Close()
+	defer imagesDB.Close()
+
+	// Setup test app
+	tmpDir := t.TempDir()
+	config := &app.Config{
+		R2PublicURL: "https://assets.lowreal.net",
+		UploadDir:   tmpDir,
+		BaseURL:     "http://localhost:5555",
+	}
+
+	registry := jobqueue.NewRegistry()
+	workerQueries := model.New(workerDB)
+	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+
+	tfidfQueries := model.New(tfidfDB)
+	dataQueries := model.New(db)
+	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+
+	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+
+	// Insert 20 test entries with images
+	for i := 1; i <= 20; i++ {
+		// Create dummy image files for first 10 entries
+		if i <= 10 {
+			if err := os.WriteFile(filepath.Join(tmpDir, fmt.Sprintf("test-%d.jpg", i)), []byte("test"), 0644); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		_, err := db.Exec(`
+			INSERT INTO entries (id, path, title, body, formatted_body, format, status, date, created_at, modified_at, publish_at)
+			VALUES (?, ?, ?, ?, ?, 'html', 'public', '2024-01-01', datetime('now'), datetime('now'), datetime('now'))
+		`, i, fmt.Sprintf("/2024/01/entry-%d", i), fmt.Sprintf("Entry %d", i), "", fmt.Sprintf(`<p><img src="/images/entry/test-%d.jpg"></p>`, i))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Create mock storage
+	mockStorage := &mockR2Storage{
+		uploadedFiles: make(map[string]bool),
+		uploadedData:  make(map[string][]byte),
+	}
+
+	// Create migrator with limit=5
+	migrator := &Migrator{
+		app:         application,
+		r2Storage:   mockStorage,
+		r2PublicURL: "https://assets.lowreal.net",
+		uploadDir:   tmpDir,
+		opts: &MigrateToR2Options{
+			DryRun: false,
+			Limit:  5, // Only process first 5 entries
+		},
+	}
+
+	// Execute ProcessEntries with limit
+	ctx := context.Background()
+	if err := migrator.ProcessEntries(ctx); err != nil {
+		t.Fatalf("ProcessEntries failed: %v", err)
+	}
+
+	// Verify that exactly 5 entries were processed (IDs 1-5)
+	for i := 1; i <= 5; i++ {
+		var formattedBody string
+		err := db.QueryRow(`SELECT formatted_body FROM entries WHERE id = ?`, i).Scan(&formattedBody)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Should be migrated (contains assets.lowreal.net)
+		if !strings.Contains(formattedBody, "assets.lowreal.net") {
+			t.Errorf("Entry %d should have been migrated, got: %s", i, formattedBody)
+		}
+		// Should NOT contain /images/entry/ anymore
+		if strings.Contains(formattedBody, "/images/entry/") {
+			t.Errorf("Entry %d should not contain /images/entry/, got: %s", i, formattedBody)
+		}
+	}
+
+	// Verify that entries 6-20 were NOT processed (still contain /images/entry/)
+	for i := 6; i <= 20; i++ {
+		var formattedBody string
+		err := db.QueryRow(`SELECT formatted_body FROM entries WHERE id = ?`, i).Scan(&formattedBody)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Should NOT be migrated (still contains /images/entry/)
+		if !strings.Contains(formattedBody, "/images/entry/") {
+			t.Errorf("Entry %d should NOT have been migrated, got: %s", i, formattedBody)
+		}
+		// Should NOT contain assets.lowreal.net
+		if strings.Contains(formattedBody, "assets.lowreal.net") {
+			t.Errorf("Entry %d should not be migrated yet, got: %s", i, formattedBody)
+		}
+	}
+
+	// Verify exactly 5 files were uploaded
+	if len(mockStorage.uploadedFiles) != 5 {
+		t.Errorf("Expected 5 files to be uploaded, got %d: %v", len(mockStorage.uploadedFiles), mockStorage.uploadedFiles)
+	}
+
+	// Verify the correct files were uploaded (test-1.jpg through test-5.jpg)
+	for i := 1; i <= 5; i++ {
+		filename := fmt.Sprintf("test-%d.jpg", i)
+		if !mockStorage.uploadedFiles[filename] {
+			t.Errorf("Expected %s to be uploaded", filename)
+		}
+	}
+
+	// Verify files 6-10 were NOT uploaded
+	for i := 6; i <= 10; i++ {
+		filename := fmt.Sprintf("test-%d.jpg", i)
+		if mockStorage.uploadedFiles[filename] {
+			t.Errorf("File %s should NOT have been uploaded (beyond limit)", filename)
+		}
+	}
+}
+
+// TestMigrator_ProcessEntries_DryRun tests that dry-run mode doesn't make any actual changes
+func TestMigrator_ProcessEntries_DryRun(t *testing.T) {
+	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
+	defer db.Close()
+	defer tfidfDB.Close()
+	defer workerDB.Close()
+	defer imagesDB.Close()
+
+	// Setup test app
+	tmpDir := t.TempDir()
+	config := &app.Config{
+		BaseURL:      "http://localhost:5555",
+		UploadDir:    tmpDir,
+		R2PublicURL:  "https://assets.lowreal.net",
+		R2BucketName: "test-bucket",
+	}
+
+	registry := jobqueue.NewRegistry()
+	workerQueries := model.New(workerDB)
+	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+
+	tfidfQueries := model.New(tfidfDB)
+	dataQueries := model.New(db)
+	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+
+	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+
+	// Create test files
+	for i := 1; i <= 3; i++ {
+		filename := fmt.Sprintf("test-%d.jpg", i)
+		filepath := filepath.Join(tmpDir, filename)
+		if err := os.WriteFile(filepath, []byte("test image data"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Insert test entry
+		_, err := db.Exec(`
+			INSERT INTO entries (id, path, title, body, formatted_body, format, status, date, created_at, modified_at, publish_at)
+			VALUES (?, ?, ?, ?, ?, 'html', 'public', '2024-01-01', datetime('now'), datetime('now'), datetime('now'))
+		`, i, fmt.Sprintf("/2024/01/entry-%d", i), fmt.Sprintf("Entry %d", i), "", fmt.Sprintf(`<p><img src="/images/entry/test-%d.jpg"></p>`, i))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Store original formatted_body values
+	originalBodies := make(map[int]string)
+	for i := 1; i <= 3; i++ {
+		var body string
+		err := db.QueryRow(`SELECT formatted_body FROM entries WHERE id = ?`, i).Scan(&body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		originalBodies[i] = body
+	}
+
+	// Create mock storage
+	mockStorage := &mockR2Storage{
+		uploadedFiles: make(map[string]bool),
+	}
+
+	// Create migrator with DryRun=true
+	migrator := &Migrator{
+		app:         application,
+		uploadDir:   tmpDir,
+		r2PublicURL: config.R2PublicURL,
+		r2Storage:   mockStorage,
+		opts: &MigrateToR2Options{
+			DryRun: true, // DRY RUN MODE
+			Limit:  0,
+		},
+	}
+
+	// Process entries in dry-run mode
+	ctx := context.Background()
+	err := migrator.ProcessEntries(ctx)
+	if err != nil {
+		t.Fatalf("ProcessEntries failed: %v", err)
+	}
+
+	// Verify NO files were uploaded
+	if len(mockStorage.uploadedFiles) != 0 {
+		t.Errorf("Expected 0 files to be uploaded in dry-run mode, got %d: %v", len(mockStorage.uploadedFiles), mockStorage.uploadedFiles)
+	}
+
+	// Verify database was NOT modified
+	for i := 1; i <= 3; i++ {
+		var body string
+		err := db.QueryRow(`SELECT formatted_body FROM entries WHERE id = ?`, i).Scan(&body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if body != originalBodies[i] {
+			t.Errorf("Entry %d formatted_body should not be modified in dry-run mode.\nExpected: %s\nGot: %s", i, originalBodies[i], body)
+		}
+		// Should still contain /images/entry/
+		if !strings.Contains(body, "/images/entry/") {
+			t.Errorf("Entry %d should still contain /images/entry/ in dry-run mode, got: %s", i, body)
+		}
+	}
+
+	// Verify local files still exist
+	for i := 1; i <= 3; i++ {
+		filename := fmt.Sprintf("test-%d.jpg", i)
+		filepath := filepath.Join(tmpDir, filename)
+		if _, err := os.Stat(filepath); os.IsNotExist(err) {
+			t.Errorf("File %s should still exist in dry-run mode", filename)
+		}
+	}
+}
+
+// TestMigrator_UpdateImageURIs_DryRun tests that UpdateImageURIs dry-run mode doesn't modify the database
+func TestMigrator_UpdateImageURIs_DryRun(t *testing.T) {
+	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
+	defer db.Close()
+	defer tfidfDB.Close()
+	defer workerDB.Close()
+	defer imagesDB.Close()
+
+	// Setup test app
+	config := &app.Config{
+		R2PublicURL:  "https://assets.lowreal.net",
+		R2BucketName: "test-bucket",
+	}
+
+	registry := jobqueue.NewRegistry()
+	workerQueries := model.New(workerDB)
+	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+
+	tfidfQueries := model.New(tfidfDB)
+	dataQueries := model.New(db)
+	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+
+	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+
+	// Insert test entries with local image references
+	_, err := db.Exec(`
+		INSERT INTO entries (id, path, title, body, formatted_body, format, status, date, created_at, modified_at, publish_at)
+		VALUES (1, '/2024/01/test1', 'Test 1', '', '<p><img src="/images/entry/test1.jpg"></p>', 'html', 'public', '2024-01-01', datetime('now'), datetime('now'), datetime('now'))
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Store original formatted_body
+	var originalBody string
+	err = db.QueryRow(`SELECT formatted_body FROM entries WHERE id = 1`).Scan(&originalBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create migrator with DryRun=true
+	migrator := &Migrator{
+		app:         application,
+		r2PublicURL: config.R2PublicURL,
+		opts: &MigrateToR2Options{
+			DryRun: true, // DRY RUN MODE
+		},
+	}
+
+	// Run UpdateImageURIs in dry-run mode
+	ctx := context.Background()
+	err = migrator.UpdateImageURIs(ctx)
+	if err != nil {
+		t.Fatalf("UpdateImageURIs failed: %v", err)
+	}
+
+	// Verify database was NOT modified
+	var currentBody string
+	err = db.QueryRow(`SELECT formatted_body FROM entries WHERE id = 1`).Scan(&currentBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if currentBody != originalBody {
+		t.Errorf("formatted_body should not be modified in dry-run mode.\nExpected: %s\nGot: %s", originalBody, currentBody)
+	}
+
+	// Should still contain local path
+	if !strings.Contains(currentBody, "/images/entry/") {
+		t.Errorf("Entry should still contain /images/entry/ in dry-run mode, got: %s", currentBody)
+	}
+
+	// Should NOT contain R2 URL
+	if strings.Contains(currentBody, "assets.lowreal.net") {
+		t.Errorf("Entry should not contain R2 URL in dry-run mode, got: %s", currentBody)
 	}
 }

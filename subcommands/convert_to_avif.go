@@ -20,6 +20,7 @@ type ConvertToAVIFOptions struct {
 	Force    bool // 確認なしで実行
 	Parallel int  // 並列変換数（常に1、avifencが--jobs 3を使用）
 	Backup   bool // マイグレーション前にバックアップを作成
+	Limit    int  // 処理するエントリ数の上限（0=無制限、ID昇順で古いものから処理）
 }
 
 // ConvertToAVIF はJPG/JPEG画像をAVIFに変換し、データベースのエントリを書き換える
@@ -29,6 +30,7 @@ func ConvertToAVIF(ctx context.Context, application app.App, args []string) erro
 	fs.BoolVar(&opts.DryRun, "dry-run", false, "Dry run mode (no actual changes)")
 	fs.BoolVar(&opts.Force, "force", false, "Force execution without confirmation")
 	fs.BoolVar(&opts.Backup, "backup", false, "Create database backup before conversion")
+	fs.IntVar(&opts.Limit, "limit", 0, "Limit number of entries to process (0=unlimited, processes oldest entries first by ID)")
 	opts.Parallel = 1 // 固定値（avifencが--jobs 3を使用するため）
 	fs.Parse(args)
 
@@ -97,7 +99,8 @@ type AVIFConverter struct {
 // 各エントリごとに: 画像抽出 → AVIF変換 → DB更新 → JPG削除を完結させる
 func (c *AVIFConverter) ProcessEntries(ctx context.Context) error {
 	// .jpg または .jpeg を含むエントリをクエリ
-	rows, err := c.app.DB().QueryContext(ctx, `
+	// ID昇順（古いものから）処理し、オプションでLIMITを適用
+	query := `
 		SELECT id, path, body, formatted_body
 		FROM entries
 		WHERE body LIKE '%/images/entry/%.jpg%'
@@ -105,7 +108,12 @@ func (c *AVIFConverter) ProcessEntries(ctx context.Context) error {
 		   OR formatted_body LIKE '%/images/entry/%.jpg%'
 		   OR formatted_body LIKE '%/images/entry/%.jpeg%'
 		ORDER BY id
-	`)
+	`
+	if c.opts.Limit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", c.opts.Limit)
+	}
+
+	rows, err := c.app.DB().QueryContext(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to query entries: %w", err)
 	}
@@ -224,7 +232,10 @@ func (c *AVIFConverter) ProcessEntries(ctx context.Context) error {
 			}
 		}
 
-		log.Printf("  完了")
+		// BaseURL + entries.path でURLを出力（確認しやすいように）
+		baseURL := c.app.Config().BaseURL
+		entryURL := fmt.Sprintf("%s%s", strings.TrimSuffix(baseURL, "/"), e.path)
+		log.Printf("  完了: %s", entryURL)
 		successCount++
 	}
 
@@ -249,8 +260,9 @@ func (c *AVIFConverter) extractImageFiles(body, formattedBody string) []string {
 	// Hatena記法: [f:id:user:timestamp:image /images/entry/xxx.jpg ] も考慮
 	re := regexp.MustCompile(`(?i)(?:(?:src|href)=(?:"(/images/entry/[^"]*\.jpe?g)"|'(/images/entry/[^']*\.jpe?g)'|(/images/entry/[^>\s]*\.jpe?g))|(?:\s)(/images/entry/[^\s\]]*\.jpe?g))`)
 
-	// bodyから抽出
-	matches := re.FindAllStringSubmatch(body, -1)
+	// bodyから抽出（HTMLコメントとCDATAセクションを除去してから処理）
+	cleanBody := c.removeCommentsAndCDATA(body)
+	matches := re.FindAllStringSubmatch(cleanBody, -1)
 	for _, match := range matches {
 		// match[1]: double quoted, match[2]: single quoted, match[3]: unquoted (HTML), match[4]: space-delimited (Hatena)
 		// いずれか1つだけがマッチする
@@ -264,8 +276,9 @@ func (c *AVIFConverter) extractImageFiles(body, formattedBody string) []string {
 		}
 	}
 
-	// formatted_bodyから抽出
-	matches = re.FindAllStringSubmatch(formattedBody, -1)
+	// formatted_bodyから抽出（HTMLコメントとCDATAセクションを除去してから処理）
+	cleanFormattedBody := c.removeCommentsAndCDATA(formattedBody)
+	matches = re.FindAllStringSubmatch(cleanFormattedBody, -1)
 	for _, match := range matches {
 		for i := 1; i < len(match); i++ {
 			if match[i] != "" {
@@ -283,6 +296,19 @@ func (c *AVIFConverter) extractImageFiles(body, formattedBody string) []string {
 	}
 
 	return files
+}
+
+// removeCommentsAndCDATA はHTMLコメントとCDATAセクションを空文字列に置換する
+func (c *AVIFConverter) removeCommentsAndCDATA(html string) string {
+	// HTMLコメント <!-- ... --> を削除
+	commentRe := regexp.MustCompile(`<!--[\s\S]*?-->`)
+	html = commentRe.ReplaceAllString(html, "")
+
+	// CDATAセクション <![CDATA[ ... ]]> を削除
+	cdataRe := regexp.MustCompile(`<!\[CDATA\[[\s\S]*?\]\]>`)
+	html = cdataRe.ReplaceAllString(html, "")
+
+	return html
 }
 
 // ConvertFiles はJPG/JPEGファイルをAVIFに変換する（未使用、後方互換性のため残す）

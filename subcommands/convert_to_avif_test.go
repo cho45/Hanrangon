@@ -2,6 +2,11 @@ package subcommands
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/cho45/hanrangon/app"
@@ -307,18 +312,217 @@ func TestExtractImageFiles(t *testing.T) {
 	}
 }
 
+// TestAVIFConverter_RemoveCommentsAndCDATA tests the removeCommentsAndCDATA helper method
+func TestAVIFConverter_RemoveCommentsAndCDATA(t *testing.T) {
+	converter := &AVIFConverter{}
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "Simple HTML comment",
+			input:    `<div><!-- comment --></div>`,
+			expected: `<div></div>`,
+		},
+		{
+			name:     "Multi-line HTML comment",
+			input:    `<div><!-- multi\nline\ncomment --></div>`,
+			expected: `<div></div>`,
+		},
+		{
+			name:     "Multiple HTML comments",
+			input:    `<!-- first --><div><!-- second --></div><!-- third -->`,
+			expected: `<div></div>`,
+		},
+		{
+			name:     "HTML comment with JPEG image",
+			input:    `<!-- <img src="/images/entry/test.jpg"> -->`,
+			expected: ``,
+		},
+		{
+			name:     "Simple CDATA section",
+			input:    `<![CDATA[data]]>`,
+			expected: ``,
+		},
+		{
+			name:     "Multi-line CDATA section",
+			input:    `<![CDATA[multi\nline\ndata]]>`,
+			expected: ``,
+		},
+		{
+			name:     "CDATA with JPEG image",
+			input:    `<![CDATA[<img src="/images/entry/test.jpeg">]]>`,
+			expected: ``,
+		},
+		{
+			name:     "Multiple CDATA sections",
+			input:    `<![CDATA[first]]><div><![CDATA[second]]></div>`,
+			expected: `<div></div>`,
+		},
+		{
+			name:     "Mixed comments and CDATA",
+			input:    `<!-- comment --><![CDATA[data]]><div>content</div>`,
+			expected: `<div>content</div>`,
+		},
+		{
+			name:     "Nested-like structures",
+			input:    `<!-- <!-- nested? --> -->`,
+			expected: ` -->`,
+		},
+		{
+			name:     "Empty input",
+			input:    ``,
+			expected: ``,
+		},
+		{
+			name:     "No comments or CDATA",
+			input:    `<div><img src="/images/entry/test.jpg"></div>`,
+			expected: `<div><img src="/images/entry/test.jpg"></div>`,
+		},
+		{
+			name:     "Comment at the end",
+			input:    `<div>text</div><!-- end comment -->`,
+			expected: `<div>text</div>`,
+		},
+		{
+			name:     "CDATA at the beginning",
+			input:    `<![CDATA[start]]><div>text</div>`,
+			expected: `<div>text</div>`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := converter.removeCommentsAndCDATA(tt.input)
+			if result != tt.expected {
+				t.Errorf("removeCommentsAndCDATA() = %q, expected %q", result, tt.expected)
+			}
+		})
+	}
+}
+
 // TestAVIFConverter_ProcessEntries is an integration test for the full ProcessEntries workflow
+// This test performs actual JPEG to AVIF conversion using avifenc
 func TestAVIFConverter_ProcessEntries(t *testing.T) {
+	// Check if avifenc is available
+	if _, err := exec.LookPath("avifenc"); err != nil {
+		t.Skip("avifenc not found - skipping actual conversion test")
+	}
+
 	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
 	defer db.Close()
 	defer tfidfDB.Close()
 	defer workerDB.Close()
 	defer imagesDB.Close()
 
-	// Note: このテストは実際のAVIF変換を必要とするため、
-	// avifencがインストールされていない環境ではスキップする
-	// 代わりにrewriteExtensionsとextractImageFilesを個別にテストしている
-	t.Skip("Integration test requires avifenc - testing rewriteExtensions and extractImageFiles separately")
+	// Setup test app
+	tmpDir := t.TempDir()
+	config := &app.Config{
+		BaseURL:   "http://localhost:5555",
+		UploadDir: tmpDir,
+	}
+
+	registry := jobqueue.NewRegistry()
+	workerQueries := model.New(workerDB)
+	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+
+	tfidfQueries := model.New(tfidfDB)
+	dataQueries := model.New(db)
+	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+
+	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+
+	// Create a valid 1x1 pixel JPEG image for testing
+	// This is a minimal valid JPEG file (red pixel)
+	jpegData := []byte{
+		0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01,
+		0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xFF, 0xDB, 0x00, 0x43,
+		0x00, 0x08, 0x06, 0x06, 0x07, 0x06, 0x05, 0x08, 0x07, 0x07, 0x07, 0x09,
+		0x09, 0x08, 0x0A, 0x0C, 0x14, 0x0D, 0x0C, 0x0B, 0x0B, 0x0C, 0x19, 0x12,
+		0x13, 0x0F, 0x14, 0x1D, 0x1A, 0x1F, 0x1E, 0x1D, 0x1A, 0x1C, 0x1C, 0x20,
+		0x24, 0x2E, 0x27, 0x20, 0x22, 0x2C, 0x23, 0x1C, 0x1C, 0x28, 0x37, 0x29,
+		0x2C, 0x30, 0x31, 0x34, 0x34, 0x34, 0x1F, 0x27, 0x39, 0x3D, 0x38, 0x32,
+		0x3C, 0x2E, 0x33, 0x34, 0x32, 0xFF, 0xC0, 0x00, 0x0B, 0x08, 0x00, 0x01,
+		0x00, 0x01, 0x01, 0x01, 0x11, 0x00, 0xFF, 0xC4, 0x00, 0x14, 0x00, 0x01,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x03, 0xFF, 0xC4, 0x00, 0x14, 0x10, 0x01, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3F, 0x00,
+		0x37, 0xFF, 0xD9,
+	}
+
+	jpgPath := filepath.Join(tmpDir, "test-conversion.jpg")
+	if err := os.WriteFile(jpgPath, jpegData, 0644); err != nil {
+		t.Fatalf("Failed to create test JPEG: %v", err)
+	}
+
+	// Insert a test entry with the JPEG image
+	_, err := db.Exec(`
+		INSERT INTO entries (id, path, title, body, formatted_body, format, status, date, created_at, modified_at, publish_at)
+		VALUES (1, '/2024/01/test-conversion', 'Test Conversion', '',
+		        '<p><img src="/images/entry/test-conversion.jpg"></p>',
+		        'html', 'public', '2024-01-01', datetime('now'), datetime('now'), datetime('now'))
+	`)
+	if err != nil {
+		t.Fatalf("Failed to insert test entry: %v", err)
+	}
+
+	// Create converter
+	converter := &AVIFConverter{
+		app:       application,
+		uploadDir: tmpDir,
+		config:    config,
+		opts: &ConvertToAVIFOptions{
+			DryRun: false,
+			Limit:  0,
+		},
+	}
+
+	// Process entries - should perform actual AVIF conversion
+	ctx := context.Background()
+	err = converter.ProcessEntries(ctx)
+	if err != nil {
+		t.Fatalf("ProcessEntries failed: %v", err)
+	}
+
+	// Verify AVIF file was created
+	avifPath := filepath.Join(tmpDir, "test-conversion.avif")
+	if _, err := os.Stat(avifPath); os.IsNotExist(err) {
+		t.Error("AVIF file was not created")
+	}
+
+	// Verify AVIF file has valid content (should be larger than empty)
+	avifInfo, err := os.Stat(avifPath)
+	if err != nil {
+		t.Fatalf("Failed to stat AVIF file: %v", err)
+	}
+	if avifInfo.Size() == 0 {
+		t.Error("AVIF file is empty")
+	}
+
+	// Verify original JPEG was deleted
+	if _, err := os.Stat(jpgPath); !os.IsNotExist(err) {
+		t.Error("Original JPEG file should have been deleted")
+	}
+
+	// Verify database was updated with .avif extension
+	var formattedBody string
+	err = db.QueryRow(`SELECT formatted_body FROM entries WHERE id = 1`).Scan(&formattedBody)
+	if err != nil {
+		t.Fatalf("Failed to query entry: %v", err)
+	}
+
+	if !strings.Contains(formattedBody, "test-conversion.avif") {
+		t.Errorf("Entry should contain .avif reference, got: %s", formattedBody)
+	}
+
+	if strings.Contains(formattedBody, "test-conversion.jpg") {
+		t.Errorf("Entry should not contain .jpg reference after conversion, got: %s", formattedBody)
+	}
 }
 
 // TestAVIFConverter_UpdateImageURIs is an integration test for UpdateImageURIs
@@ -407,4 +611,234 @@ func TestAVIFConverter_Idempotency(t *testing.T) {
 	// avifencがインストールされていない環境ではスキップする
 	// 代わりにrewriteExtensionsとextractImageFilesを個別にテストしている
 	t.Skip("Integration test requires avifenc - testing rewriteExtensions and extractImageFiles separately")
+}
+
+// TestAVIFConverter_ProcessEntriesWithLimit tests that the --limit flag correctly limits the number of entries processed
+func TestAVIFConverter_ProcessEntriesWithLimit(t *testing.T) {
+	// Note: このテストはrewriteExtensionsのロジックのみを検証する
+	// 実際のAVIF変換は行わないため、avifencは不要
+	// 代わりにDB更新とlimit機能を検証する
+
+	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
+	defer db.Close()
+	defer tfidfDB.Close()
+	defer workerDB.Close()
+	defer imagesDB.Close()
+
+	// Setup test app
+	tmpDir := t.TempDir()
+	config := &app.Config{
+		BaseURL:   "http://localhost:5555",
+		UploadDir: tmpDir,
+	}
+
+	registry := jobqueue.NewRegistry()
+	workerQueries := model.New(workerDB)
+	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+
+	tfidfQueries := model.New(tfidfDB)
+	dataQueries := model.New(db)
+	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+
+	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+
+	// Insert 20 test entries with JPEG images
+	// Create dummy AVIF files for first 10 entries (as if conversion already happened)
+	for i := 1; i <= 20; i++ {
+		// Create dummy .jpg and .avif files for first 10 entries
+		if i <= 10 {
+			jpgPath := fmt.Sprintf("%s/test-%d.jpg", tmpDir, i)
+			avifPath := fmt.Sprintf("%s/test-%d.avif", tmpDir, i)
+			if err := os.WriteFile(jpgPath, []byte("test"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			// Pre-create AVIF files so conversion step is skipped (we're testing limit, not conversion)
+			if err := os.WriteFile(avifPath, []byte("test"), 0644); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		_, err := db.Exec(`
+			INSERT INTO entries (id, path, title, body, formatted_body, format, status, date, created_at, modified_at, publish_at)
+			VALUES (?, ?, ?, ?, ?, 'html', 'public', '2024-01-01', datetime('now'), datetime('now'), datetime('now'))
+		`, i, fmt.Sprintf("/2024/01/entry-%d", i), fmt.Sprintf("Entry %d", i), "", fmt.Sprintf(`<p><img src="/images/entry/test-%d.jpg"></p>`, i))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Create converter with limit=5
+	converter := &AVIFConverter{
+		app:       application,
+		uploadDir: tmpDir,
+		config:    config,
+		opts: &ConvertToAVIFOptions{
+			DryRun: false, // Actually process (but AVIF files already exist, so no actual conversion)
+			Limit:  5,     // Only process first 5 entries
+		},
+	}
+
+	// Process entries with limit
+	ctx := context.Background()
+	err := converter.ProcessEntries(ctx)
+	if err != nil {
+		t.Fatalf("ProcessEntries failed: %v", err)
+	}
+
+	// Verify that exactly 5 entries were processed (IDs 1-5)
+	// These should have .jpg replaced with .avif
+	for i := 1; i <= 5; i++ {
+		var formattedBody string
+		err := db.QueryRow(`SELECT formatted_body FROM entries WHERE id = ?`, i).Scan(&formattedBody)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Should be converted (contains .avif)
+		if !strings.Contains(formattedBody, ".avif") {
+			t.Errorf("Entry %d should have been converted to .avif, got: %s", i, formattedBody)
+		}
+		// Should NOT contain .jpg anymore
+		if strings.Contains(formattedBody, ".jpg") {
+			t.Errorf("Entry %d should not contain .jpg after conversion, got: %s", i, formattedBody)
+		}
+	}
+
+	// Verify that entries 6-20 were NOT processed (still contain .jpg)
+	for i := 6; i <= 20; i++ {
+		var formattedBody string
+		err := db.QueryRow(`SELECT formatted_body FROM entries WHERE id = ?`, i).Scan(&formattedBody)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Should NOT be converted (still contains .jpg)
+		if !strings.Contains(formattedBody, ".jpg") {
+			t.Errorf("Entry %d should NOT have been converted yet, got: %s", i, formattedBody)
+		}
+		// Should NOT contain .avif
+		if strings.Contains(formattedBody, ".avif") {
+			t.Errorf("Entry %d should not contain .avif yet, got: %s", i, formattedBody)
+		}
+	}
+
+	// Verify that only JPG files 1-5 were deleted (if deletion happened)
+	// Files 6-10 should still exist as .jpg
+	for i := 6; i <= 10; i++ {
+		jpgPath := fmt.Sprintf("%s/test-%d.jpg", tmpDir, i)
+		if _, err := os.Stat(jpgPath); os.IsNotExist(err) {
+			t.Errorf("JPG file test-%d.jpg should still exist (not processed due to limit)", i)
+		}
+	}
+}
+
+// TestAVIFConverter_ProcessEntries_DryRun tests that dry-run mode doesn't make any actual changes
+func TestAVIFConverter_ProcessEntries_DryRun(t *testing.T) {
+	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
+	defer db.Close()
+	defer tfidfDB.Close()
+	defer workerDB.Close()
+	defer imagesDB.Close()
+
+	// Setup test app
+	tmpDir := t.TempDir()
+	config := &app.Config{
+		BaseURL:   "http://localhost:5555",
+		UploadDir: tmpDir,
+	}
+
+	registry := jobqueue.NewRegistry()
+	workerQueries := model.New(workerDB)
+	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+
+	tfidfQueries := model.New(tfidfDB)
+	dataQueries := model.New(db)
+	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+
+	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+
+	// Create test JPEG files and entries
+	for i := 1; i <= 3; i++ {
+		// Create dummy JPEG file
+		jpgPath := fmt.Sprintf("%s/test-%d.jpg", tmpDir, i)
+		if err := os.WriteFile(jpgPath, []byte("test jpeg data"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Insert test entry
+		_, err := db.Exec(`
+			INSERT INTO entries (id, path, title, body, formatted_body, format, status, date, created_at, modified_at, publish_at)
+			VALUES (?, ?, ?, ?, ?, 'html', 'public', '2024-01-01', datetime('now'), datetime('now'), datetime('now'))
+		`, i, fmt.Sprintf("/2024/01/entry-%d", i), fmt.Sprintf("Entry %d", i), "", fmt.Sprintf(`<p><img src="/images/entry/test-%d.jpg"></p>`, i))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Store original formatted_body values
+	originalBodies := make(map[int]string)
+	for i := 1; i <= 3; i++ {
+		var body string
+		err := db.QueryRow(`SELECT formatted_body FROM entries WHERE id = ?`, i).Scan(&body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		originalBodies[i] = body
+	}
+
+	// Create converter with DryRun=true
+	converter := &AVIFConverter{
+		app:       application,
+		uploadDir: tmpDir,
+		config:    config,
+		opts: &ConvertToAVIFOptions{
+			DryRun: true, // DRY RUN MODE
+			Limit:  0,
+		},
+	}
+
+	// Process entries in dry-run mode
+	ctx := context.Background()
+	err := converter.ProcessEntries(ctx)
+	if err != nil {
+		t.Fatalf("ProcessEntries failed: %v", err)
+	}
+
+	// Verify NO AVIF files were created
+	for i := 1; i <= 3; i++ {
+		avifPath := fmt.Sprintf("%s/test-%d.avif", tmpDir, i)
+		if _, err := os.Stat(avifPath); !os.IsNotExist(err) {
+			t.Errorf("AVIF file test-%d.avif should NOT be created in dry-run mode", i)
+		}
+	}
+
+	// Verify database was NOT modified
+	for i := 1; i <= 3; i++ {
+		var body string
+		err := db.QueryRow(`SELECT formatted_body FROM entries WHERE id = ?`, i).Scan(&body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if body != originalBodies[i] {
+			t.Errorf("Entry %d formatted_body should not be modified in dry-run mode.\nExpected: %s\nGot: %s", i, originalBodies[i], body)
+		}
+		// Should still contain .jpg
+		if !strings.Contains(body, ".jpg") {
+			t.Errorf("Entry %d should still contain .jpg in dry-run mode, got: %s", i, body)
+		}
+		// Should NOT contain .avif
+		if strings.Contains(body, ".avif") {
+			t.Errorf("Entry %d should not contain .avif in dry-run mode, got: %s", i, body)
+		}
+	}
+
+	// Verify original JPEG files still exist and were NOT deleted
+	for i := 1; i <= 3; i++ {
+		jpgPath := fmt.Sprintf("%s/test-%d.jpg", tmpDir, i)
+		if _, err := os.Stat(jpgPath); os.IsNotExist(err) {
+			t.Errorf("JPEG file test-%d.jpg should still exist in dry-run mode", i)
+		}
+	}
 }
