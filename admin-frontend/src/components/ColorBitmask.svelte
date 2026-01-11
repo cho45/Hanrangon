@@ -31,14 +31,20 @@
     }
   });
 
-  // Calculate RGB for a given bit index (0-63)
-  // Index: [R(2bit) | G(2bit) | B(2bit)]
-  function getRGB(index: number) {
-    const r = (index >> 4) & 0x3;
-    const g = (index >> 2) & 0x3;
-    const b = index & 0x3;
-    // 2-bit (0-3) to 8-bit (0-255)
-    return `rgb(${r * 85}, ${g * 85}, ${b * 85})`;
+  // Calculate OKLCH CSS color for a given bit index (0-63)
+  // Index: [ L(2bit) | H(3bit) | C(1bit) ]
+  function getOKLCH(index: number) {
+    const l_idx = (index >> 4) & 0x3;
+    const h_idx = (index >> 1) & 0x7;
+    const c_idx = index & 0x1;
+
+    // Map quantized indices to OKLCH values
+    // L: 20% to 90%, C: 0.01 or 0.15, H: 0 to 315
+    const L = [25, 45, 65, 85][l_idx];
+    const C = c_idx === 0 ? 0.01 : 0.15;
+    const H = h_idx * 45;
+
+    return `oklch(${L}% ${C} ${H})`;
   }
 </script>
 
@@ -46,52 +52,54 @@
   {#if !sig}
     <div class="empty">No Signature</div>
   {:else}
-    {#each [3, 2, 1, 0] as r}
-      <div class="slice" title="Red level {r}">
-        {#each [3, 2, 1, 0] as g}
-          <div class="row">
-            {#each [0, 1, 2, 3] as b}
-              {@const index = (r << 4) | (g << 2) | b}
-              <div 
-                class="bit" 
-                class:active={bits[index]}
-                style="background-color: {getRGB(index)}"
-                title="R={r} G={g} B={b} (index={index})"
-              ></div>
-            {/each}
-          </div>
-        {/each}
-      </div>
-    {/each}
+    <div class="chroma-sections">
+      {#each [1, 0] as c}
+        <div class="chroma-section" title={c === 1 ? 'Vivid Colors' : 'Muted Colors'}>
+          {#each [3, 2, 1, 0] as l}
+            <div class="row">
+              {#each [0, 1, 2, 3, 4, 5, 6, 7] as h}
+                {@const index = (l << 4) | (h << 1) | c}
+                <div 
+                  class="bit" 
+                  class:active={bits[index]}
+                  style="background-color: {getOKLCH(index)}"
+                  title="L={l} H={h*45} C={c}"
+                ></div>
+              {/each}
+            </div>
+          {/each}
+        </div>
+      {/each}
+    </div>
   {/if}
 </div>
 
 <style>
   .color-bitmask {
-    display: flex;
-    gap: 4px;
     padding: 4px;
     background: #f0f0f0;
     border-radius: 4px;
     width: 140px;
     min-height: 34px;
+    box-sizing: border-box;
+    display: flex;
     align-items: center;
     justify-content: center;
-    box-sizing: border-box;
   }
 
-  .empty {
-    font-size: 10px;
-    color: #999;
-    padding: 0 8px;
-    font-style: italic;
+  .chroma-sections {
+    display: flex;
+    flex-direction: row;
+    gap: 4px;
+    width: 100%;
+    justify-content: center;
   }
 
-  .slice {
+  .chroma-section {
     display: flex;
     flex-direction: column;
     gap: 1px;
-    border: 1px solid #ccc;
+    border: 1px solid #ddd;
     padding: 1px;
     background: #fff;
   }
@@ -111,5 +119,12 @@
   .bit.active {
     opacity: 1;
     box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);
+  }
+
+  .empty {
+    font-size: 10px;
+    color: #999;
+    padding: 0 8px;
+    font-style: italic;
   }
 </style>

@@ -646,27 +646,27 @@ func TestCalculateColorSignature(t *testing.T) {
 		{
 			name:     "Pure Red",
 			color:    color.RGBA{255, 0, 0, 255},
-			expected: (3 << 4) | (0 << 2) | 0, // R=3, G=0, B=0 -> 110000 (48)
+			expected: (2 << 4) | (0 << 1) | 1, // L=2, H=0, C=1 (33)
 		},
 		{
 			name:     "Pure Green",
 			color:    color.RGBA{0, 255, 0, 255},
-			expected: (0 << 4) | (3 << 2) | 0, // R=0, G=3, B=0 -> 001100 (12)
+			expected: (3 << 4) | (3 << 1) | 1, // L=3, H=3, C=1 (55)
 		},
 		{
 			name:     "Pure Blue",
 			color:    color.RGBA{0, 0, 255, 255},
-			expected: (0 << 4) | (0 << 2) | 3, // R=0, G=0, B=3 -> 000011 (3)
+			expected: (1 << 4) | (5 << 1) | 1, // L=1, H=5, C=1 (27)
 		},
 		{
 			name:     "White",
 			color:    color.RGBA{255, 255, 255, 255},
-			expected: (3 << 4) | (3 << 2) | 3, // R=3, G=3, B=3 -> 111111 (63)
+			expected: (3 << 4) | (0 << 1) | 0, // L=3, H=0, C=0 (48)
 		},
 		{
 			name:     "Black",
 			color:    color.RGBA{0, 0, 0, 255},
-			expected: 0, // R=0, G=0, B=0 -> 000000 (0)
+			expected: 0, // L=0, H=0, C=0 (0)
 		},
 	}
 

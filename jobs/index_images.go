@@ -10,6 +10,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"log"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -295,61 +296,106 @@ func (j *IndexImagesJob) CalculateColorSignatureFromImage(img image.Image) uint6
 	// 処理速度の向上と、ノイズ除去（平滑化）のために 64x64 に縮小します。
 	resized := resize.Resize(64, 64, img, resize.NearestNeighbor)
 
-	// 2. カラーヒストグラムの集計
-	// RGB空間を 4x4x4 = 64分割し、各ピクセルがどの色領域（ビン）に属するかカウントします。
+	// 2. 知覚的カラーヒストグラムの集計 (OKLCH 空間)
+	// 人間の知覚に基づいた OKLCH 空間で、色空間を 4x2x8 = 64分割して集計します。
+	// RGBでの単純な分割とは異なり、人間の目が感じる明るさや色味の差を均等に扱えます。
 	//
-	// 64bit整数のビット配置（0-63）と色の対応:
-	//   ビットインデックス (6bit) = [ R(2bit) | G(2bit) | B(2bit) ]
-	//   - 0-1bit: Blue  (0-3)
-	//   - 2-3bit: Green (0-3)
-	//   - 4-5bit: Red   (0-3)
+	// 64bit整数のビット配置（0-63）と OKLCH の対応:
+	//   ビットインデックス (6bit) = [ L(2bit) | H(3bit) | C(1bit) ]
+	//   - 0 bit: Chroma (0=低彩度/無彩色に近い, 1=高彩度/鮮やか)
+	//   - 1-3 bit: Hue (0-7, 45度刻みの色相: 赤, 黄, 緑, 青, 紫...)
+	//   - 4-5 bit: Lightness (0-3, 知覚的な明るさ: 黒〜白)
 	//
-	// 例:
-	//   - 000000 (0)  -> R=0, G=0, B=0 (黒)
-	//   - 110000 (48) -> R=3, G=0, B=0 (鮮やかな赤)
-	//   - 111111 (63) -> R=3, G=3, B=3 (白)
+	// この配置により、似た知覚的特徴（例：明るい青、暗い緑）を持つ色がビット列上で近くに並び、
+	// スライディングウィンドウによる ngram インデックスが効果的に機能します。
 	counts := make([]int, 64)
 	bounds := resized.Bounds()
 	totalPixels := 0
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
 			r, g, b, _ := resized.At(x, y).RGBA()
-			// 16-bit (0-65535) から上位2-bit (0-3) を抽出
-			ri := (r >> 14) & 0x3
-			gi := (g >> 14) & 0x3
-			bi := (b >> 14) & 0x3
+
+			// 16-bit (0-65535) から 0.0-1.0 に変換して OKLCH へ
+			l, c, h := rgbToOKLCH(float64(r)/65535.0, float64(g)/65535.0, float64(b)/65535.0)
+
+			// 量子化 (4x2x8 = 64 ビン)
+			li := int(l * 3.99) // 明度: 4段階
+			ci := 0
+			if c > 0.05 {
+				ci = 1
+			} // 彩度: 2段階 (0.05以上を鮮やかとみなす)
+			hi := int((h / 360.0) * 7.99) // 色相: 8段階
+
 			// ビット位置を計算 (0-63)
-			bitPos := (ri << 4) | (gi << 2) | bi
+			bitPos := (li << 4) | (hi << 1) | ci
 			counts[bitPos]++
 			totalPixels++
 		}
 	}
 
 	// 3. 64bit シグネチャ（主要色ビットマスク）の生成
-	// 集計結果から「その画像を象徴する主要な色」を抽出し、64bit整数の対応するビットを立てます。
-	// これにより、画像のパレット情報を 1つの整数に凝縮（指紋化）します。
+	// 画像内で面積の 3% 以上を占める色のビットを立て、画像の「色の指紋」を作成します。
+	// これにより、画像の「構造」ではなく「雰囲気（パレット）」に基づいた検索が可能になります。
 
 	maxCount := 0
 	maxBitPos := 0
-	threshold := totalPixels * 3 / 100 // 面積の 3% 以上を占める色を「主要な色」とみなす
+	threshold := totalPixels * 3 / 100
 	var sig uint64
 
 	for bitPos, count := range counts {
-		// 最も支配的な色を記録しておく（sigが空になるのを防ぐため）
+		// 最も支配的な1色は必ず含める（sigが空になるのを防ぐ）
 		if count > maxCount {
 			maxCount = count
 			maxBitPos = bitPos
 		}
-		// 閾値を超えた色のビットを 1 にする
 		if count > threshold {
 			sig |= (1 << uint(bitPos))
 		}
 	}
-
-	// 最低でも最も多い1色は必ず含める
 	sig |= (1 << uint(maxBitPos))
 
 	return sig
+}
+
+// rgbToOKLCH converts sRGB to OKLCH color space.
+// Based on https://bottosson.github.io/posts/oklab/
+func rgbToOKLCH(r, g, b float64) (l, c, h float64) {
+	// 1. sRGB to Linear RGB
+	lin := func(v float64) float64 {
+		if v <= 0.04045 {
+			return v / 12.92
+		}
+		return math.Pow((v+0.055)/1.055, 2.4)
+	}
+	r, g, b = lin(r), lin(g), lin(b)
+
+	// 2. Linear RGB to LMS
+	l_ := 0.4122214708*r + 0.5363325363*g + 0.0514459929*b
+	m_ := 0.2119034982*r + 0.6806995451*g + 0.1073969566*b
+	s_ := 0.0883024619*r + 0.2817188376*g + 0.6299787005*b
+
+	// 3. LMS to OKLab
+	l_root := math.Cbrt(l_)
+	m_root := math.Cbrt(m_)
+	s_root := math.Cbrt(s_)
+
+	L := 0.2104542553*l_root + 0.7936177850*m_root - 0.0040720468*s_root
+	a := 1.9779984951*l_root - 2.4285922050*m_root + 0.4505937099*s_root
+	b_ := 0.0259040371*l_root + 0.7827717662*m_root - 0.8086757660*s_root
+
+	// 4. OKLab to OKLCH
+	C := math.Sqrt(a*a + b_*b_)
+	var H float64
+	if C < 1e-6 {
+		H = 0
+	} else {
+		H = math.Atan2(b_, a) * 180.0 / math.Pi
+		if H < 0 {
+			H += 360.0
+		}
+	}
+
+	return L, C, H
 }
 
 func (j *IndexImagesJob) loadImage(rawURL string) (image.Image, error) {
