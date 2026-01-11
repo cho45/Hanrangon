@@ -544,6 +544,29 @@ func (app *AppImpl) HandleAdminApiJobs(c echo.Context) error {
 	})
 }
 
+func (app *AppImpl) HandleAdminApiImages(c echo.Context) error {
+	limit, _ := strconv.Atoi(c.QueryParam("limit"))
+	if limit <= 0 {
+		limit = 50
+	}
+	offset, _ := strconv.Atoi(c.QueryParam("offset"))
+
+	images, err := app.imagesQueries.ListImages(c.Request().Context(), model.ListImagesParams{
+		Limit:  int64(limit),
+		Offset: int64(offset),
+	})
+	if err != nil {
+		return err
+	}
+
+	total, _ := app.imagesQueries.CountImages(c.Request().Context())
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"images": images,
+		"total":  total,
+	})
+}
+
 var startTime = time.Now()
 
 func (app *AppImpl) HandleAdminApiInfo(c echo.Context) error {

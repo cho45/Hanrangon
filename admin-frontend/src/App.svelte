@@ -3,6 +3,7 @@
   import EntryList from './components/EntryList.svelte';
   import AppEditor from './components/AppEditor.svelte';
   import JobList from './components/JobList.svelte';
+  import ImageList from './components/ImageList.svelte';
   import InfoPage from './components/InfoPage.svelte';
 
   let currentPath = $state(window.location.pathname);
@@ -37,6 +38,11 @@
       page: 'jobs',
       getProps: () => ({})
     },
+    '/admin/images': { 
+      component: ImageList, 
+      page: 'images',
+      getProps: () => ({})
+    },
     '/admin/info': { 
       component: InfoPage, 
       page: 'info',
@@ -52,6 +58,7 @@
   const navItems = [
     { label: 'エントリ一覧', path: '/admin/',      page: 'list' },
     { label: '新規作成',     path: '/admin/edit',  page: 'edit', exact: true },
+    { label: '画像一覧',     path: '/admin/images',page: 'images' },
     { label: 'ジョブ一覧',   path: '/admin/jobs',  page: 'jobs' },
     { label: '情報',         path: '/admin/info',  page: 'info' },
   ];

@@ -13,6 +13,14 @@ DELETE FROM ngram WHERE image_id = ?;
 -- name: CreateNgram :exec
 INSERT OR REPLACE INTO ngram (image_id, word) VALUES (?, ?);
 
+-- name: ListImages :many
+SELECT * FROM images
+ORDER BY id DESC
+LIMIT ? OFFSET ?;
+
+-- name: CountImages :one
+SELECT COUNT(*) FROM images;
+
 -- name: ListImagesByEntryID :many
 SELECT * FROM images WHERE entry_id = ?;
 

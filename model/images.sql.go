@@ -10,6 +10,17 @@ import (
 	"strings"
 )
 
+const countImages = `-- name: CountImages :one
+SELECT COUNT(*) FROM images
+`
+
+func (q *Queries) CountImages(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countImages)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createImage = `-- name: CreateImage :one
 INSERT INTO images (uri, entry_id, sig) VALUES (?, ?, ?) RETURNING id
 `
@@ -82,6 +93,45 @@ func (q *Queries) GetImageByURI(ctx context.Context, uri string) (Image, error) 
 		&i.Sig,
 	)
 	return i, err
+}
+
+const listImages = `-- name: ListImages :many
+SELECT id, uri, entry_id, sig FROM images
+ORDER BY id DESC
+LIMIT ? OFFSET ?
+`
+
+type ListImagesParams struct {
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+func (q *Queries) ListImages(ctx context.Context, arg ListImagesParams) ([]Image, error) {
+	rows, err := q.db.QueryContext(ctx, listImages, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Image
+	for rows.Next() {
+		var i Image
+		if err := rows.Scan(
+			&i.ID,
+			&i.Uri,
+			&i.EntryID,
+			&i.Sig,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listImagesByEntryID = `-- name: ListImagesByEntryID :many
