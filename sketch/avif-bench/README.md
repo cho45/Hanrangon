@@ -14,12 +14,19 @@ Go で AVIF をデコードするための 2 つの主要なライブラリの�
    - デメリット: CGo が必要（ただし主要プラットフォームのバイナリは同梱されている）。
 
 ## ベンチマーク結果 (Apple M1)
-`go test -bench .` による実行結果。
+`static/fixtures/sample.avif` (1.9MP, 411KB) を使用。
 
+| ライブラリ | 実行時間/枚 | 1秒あたりの処理数 | 方式 |
+| :--- | :--- | :--- | :--- |
+| **vegidio/avif-go** | **約 47 ms** | **約 21 枚** | **CGo (高速)** |
+| **gen2brain/avif** | **約 475 ms** | **約 2 枚** | **WASM (低速)** |
+
+### 実際の計測データ
 ```text
-BenchmarkGen2brain-8           3         475802931 ns/op (~475ms)
-BenchmarkVegidio-8            22          47112913 ns/op (~47ms)
+BenchmarkVegidio-8            22          47112913 ns/op
+BenchmarkGen2brain-8           3         475802931 ns/op
 ```
+※ `ns/op` は1操作あたりのナノ秒。数値が小さいほど高速。
 
 ## 使い方 (Side-effect import)
 どちらもインポートするだけで `image.Decode` で AVIF が扱えるようになります。
