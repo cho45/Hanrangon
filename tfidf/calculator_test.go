@@ -7,21 +7,13 @@ import (
 	"testing"
 
 	"github.com/cho45/hanrangon/internal/testutil"
-	"github.com/cho45/hanrangon/model"
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// setupTestDBs creates in-memory databases for testing (Data and TF-IDF)
-func setupTestDBs(t *testing.T) (*sql.DB, *model.Queries, *sql.DB, *model.Queries) {
-	t.Helper()
-	dbs := testutil.SetupAllDBs(t)
-	return dbs.Main, dbs.MainQueries, dbs.TFIDF, dbs.TFIDFQueries
-}
-
 func TestExtractTerms(t *testing.T) {
-	dataDB, dataQueries, tfidfDB, tfidfQueries := setupTestDBs(t)
-	defer dataDB.Close()
-	defer tfidfDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.Main, dbs.MainQueries, dbs.TFIDF, dbs.TFIDFQueries
 
 	calc, err := NewCalculator(tfidfDB, tfidfQueries, dataDB, dataQueries)
 	if err != nil {
@@ -82,9 +74,9 @@ func TestExtractTerms(t *testing.T) {
 }
 
 func TestUpdateTFIDF(t *testing.T) {
-	dataDB, dataQueries, tfidfDB, tfidfQueries := setupTestDBs(t)
-	defer dataDB.Close()
-	defer tfidfDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.Main, dbs.MainQueries, dbs.TFIDF, dbs.TFIDFQueries
 
 	calc, err := NewCalculator(tfidfDB, tfidfQueries, dataDB, dataQueries)
 	if err != nil {
@@ -145,9 +137,9 @@ func TestUpdateTFIDF(t *testing.T) {
 }
 
 func TestRecalculateTFIDFValues(t *testing.T) {
-	dataDB, dataQueries, tfidfDB, tfidfQueries := setupTestDBs(t)
-	defer dataDB.Close()
-	defer tfidfDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.Main, dbs.MainQueries, dbs.TFIDF, dbs.TFIDFQueries
 
 	calc, _ := NewCalculator(tfidfDB, tfidfQueries, dataDB, dataQueries)
 	calc.DFMaxThresholdRate = 0.8
@@ -215,9 +207,9 @@ func TestRecalculateTFIDFValues(t *testing.T) {
 }
 
 func TestTFIDFThresholding(t *testing.T) {
-	dataDB, dataQueries, tfidfDB, tfidfQueries := setupTestDBs(t)
-	defer dataDB.Close()
-	defer tfidfDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.Main, dbs.MainQueries, dbs.TFIDF, dbs.TFIDFQueries
 
 	calc, _ := NewCalculator(tfidfDB, tfidfQueries, dataDB, dataQueries)
 	calc.DFMaxThresholdRate = 0.8
@@ -281,9 +273,9 @@ func TestTFIDFThresholding(t *testing.T) {
 }
 
 func TestExtractTermsEdgeCases(t *testing.T) {
-	dataDB, dataQueries, tfidfDB, tfidfQueries := setupTestDBs(t)
-	defer dataDB.Close()
-	defer tfidfDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.Main, dbs.MainQueries, dbs.TFIDF, dbs.TFIDFQueries
 
 	calc, _ := NewCalculator(tfidfDB, tfidfQueries, dataDB, dataQueries)
 
@@ -346,9 +338,9 @@ func TestExtractTermsEdgeCases(t *testing.T) {
 }
 
 func TestPromotionEdgeCases(t *testing.T) {
-	dataDB, dataQueries, tfidfDB, tfidfQueries := setupTestDBs(t)
-	defer dataDB.Close()
-	defer tfidfDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.Main, dbs.MainQueries, dbs.TFIDF, dbs.TFIDFQueries
 
 	calc, _ := NewCalculator(tfidfDB, tfidfQueries, dataDB, dataQueries)
 	ctx := context.Background()
@@ -383,9 +375,9 @@ func TestPromotionEdgeCases(t *testing.T) {
 }
 
 func TestUpdateDecrementsDF(t *testing.T) {
-	dataDB, dataQueries, tfidfDB, tfidfQueries := setupTestDBs(t)
-	defer dataDB.Close()
-	defer tfidfDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.Main, dbs.MainQueries, dbs.TFIDF, dbs.TFIDFQueries
 
 	calc, _ := NewCalculator(tfidfDB, tfidfQueries, dataDB, dataQueries)
 	ctx := context.Background()
@@ -421,9 +413,9 @@ func TestUpdateDecrementsDF(t *testing.T) {
 }
 
 func TestPromotionAfterDemotion(t *testing.T) {
-	dataDB, dataQueries, tfidfDB, tfidfQueries := setupTestDBs(t)
-	defer dataDB.Close()
-	defer tfidfDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.Main, dbs.MainQueries, dbs.TFIDF, dbs.TFIDFQueries
 
 	calc, _ := NewCalculator(tfidfDB, tfidfQueries, dataDB, dataQueries)
 	ctx := context.Background()

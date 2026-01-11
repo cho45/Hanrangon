@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/cho45/hanrangon/app"
+	"github.com/cho45/hanrangon/internal/testutil"
 	"github.com/cho45/hanrangon/jobqueue"
 	"github.com/cho45/hanrangon/model"
 	"github.com/cho45/hanrangon/tfidf"
@@ -411,11 +412,9 @@ func TestAVIFConverter_ProcessEntries(t *testing.T) {
 		t.Skip("avifenc not found - skipping actual conversion test")
 	}
 
-	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
-	defer workerDB.Close()
-	defer imagesDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	// Setup test app
 	tmpDir := t.TempDir()
@@ -527,11 +526,9 @@ func TestAVIFConverter_ProcessEntries(t *testing.T) {
 
 // TestAVIFConverter_UpdateImageURIs is an integration test for UpdateImageURIs
 func TestAVIFConverter_UpdateImageURIs(t *testing.T) {
-	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
-	defer workerDB.Close()
-	defer imagesDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	// Setup test app
 	config := &app.Config{}
@@ -620,11 +617,9 @@ func TestAVIFConverter_ProcessEntriesWithLimit(t *testing.T) {
 		t.Skip("avifenc not found - skipping conversion test")
 	}
 
-	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
-	defer workerDB.Close()
-	defer imagesDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	// Setup test app
 	tmpDir := t.TempDir()
@@ -735,11 +730,9 @@ func TestAVIFConverter_ProcessEntriesWithLimit(t *testing.T) {
 
 // TestAVIFConverter_ProcessEntries_DryRun tests that dry-run mode doesn't make any actual changes
 func TestAVIFConverter_ProcessEntries_DryRun(t *testing.T) {
-	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
-	defer workerDB.Close()
-	defer imagesDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	// Setup test app
 	tmpDir := t.TempDir()

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/cho45/hanrangon/app"
+	"github.com/cho45/hanrangon/internal/testutil"
 	"github.com/cho45/hanrangon/jobqueue"
 	"github.com/cho45/hanrangon/model"
 	"github.com/cho45/hanrangon/tfidf"
@@ -17,11 +18,9 @@ import (
 )
 
 func TestIndexImages_Missing(t *testing.T) {
-	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
-	defer workerDB.Close()
-	defer imagesDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	tmpDir := t.TempDir()
 	config := &app.Config{

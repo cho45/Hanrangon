@@ -14,15 +14,10 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func setupTestDB(t *testing.T) (*sql.DB, *sql.DB, *sql.DB, *sql.DB) {
-	t.Helper()
-	dbs := testutil.SetupAllDBs(t)
-	return dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
-}
-
 func setupTestApp(t *testing.T) (app.App, *sql.DB) {
 	t.Helper()
-	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
+	dbs := testutil.SetupAllDBs(t)
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	config := &app.Config{
 		BaseURL: "https://example.com",

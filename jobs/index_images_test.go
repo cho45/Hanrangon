@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/cho45/hanrangon/app"
+	"github.com/cho45/hanrangon/internal/testutil"
 	"github.com/cho45/hanrangon/jobqueue"
 	"github.com/cho45/hanrangon/model"
 	"github.com/cho45/hanrangon/tfidf"
@@ -47,11 +48,9 @@ func createTestImage(t *testing.T, path string, seed int) {
 
 func TestIndexImagesJob_Execute(t *testing.T) {
 	// Setup databases
-	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
-	defer workerDB.Close()
-	defer imagesDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	tmpDir, _ := os.MkdirTemp("", "hanrangon-index-test")
 	defer os.RemoveAll(tmpDir)
@@ -132,11 +131,9 @@ func TestIndexImagesJob_Execute(t *testing.T) {
 
 func TestIndexImagesJob_HandleLoadFailure(t *testing.T) {
 	// Setup databases
-	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
-	defer workerDB.Close()
-	defer imagesDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	tmpDir, _ := os.MkdirTemp("", "hanrangon-index-test")
 	defer os.RemoveAll(tmpDir)
@@ -193,11 +190,9 @@ func TestIndexImagesJob_HandleLoadFailure(t *testing.T) {
 }
 
 func TestIndexImagesJob_TwoPhase(t *testing.T) {
-	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
-	defer workerDB.Close()
-	defer imagesDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	tmpDir := t.TempDir()
 	config := &app.Config{
@@ -304,11 +299,9 @@ func TestIndexImagesJob_TwoPhase(t *testing.T) {
 }
 
 func TestIndexImagesJob_SyncRobustness(t *testing.T) {
-	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
-	defer workerDB.Close()
-	defer imagesDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	application := app.NewApp(&app.Config{}, db, tfidfDB, workerDB, imagesDB, nil, nil, nil, nil)
 	job := NewIndexImagesJob(application)
@@ -412,11 +405,9 @@ func TestIndexImagesJob_SyncRobustness(t *testing.T) {
 }
 
 func TestIndexImagesJob_CorruptImage(t *testing.T) {
-	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
-	defer workerDB.Close()
-	defer imagesDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	tmpDir := t.TempDir()
 	config := &app.Config{
@@ -461,11 +452,9 @@ func TestIndexImagesJob_CorruptImage(t *testing.T) {
 }
 
 func TestIndexImagesJob_Rollback(t *testing.T) {
-	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
-	defer workerDB.Close()
-	defer imagesDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	tmpDir := t.TempDir()
 	config := &app.Config{
@@ -557,11 +546,9 @@ func TestIndexImagesJob_Rollback(t *testing.T) {
 }
 
 func TestIndexImagesJob_Overwrite(t *testing.T) {
-	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
-	defer workerDB.Close()
-	defer imagesDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	tmpDir := t.TempDir()
 	config := &app.Config{

@@ -10,16 +10,15 @@ import (
 	"testing"
 
 	"github.com/cho45/hanrangon/app"
+	"github.com/cho45/hanrangon/internal/testutil"
 	"github.com/cho45/hanrangon/model"
 )
 
 func TestIndexImagesJob_SimilarityIntegration(t *testing.T) {
 	// Setup databases
-	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
-	defer workerDB.Close()
-	defer imagesDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	tmpDir := t.TempDir()
 	config := &app.Config{

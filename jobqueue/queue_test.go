@@ -29,16 +29,10 @@ func (j *TestJob) Execute(ctx context.Context, arg json.RawMessage) error {
 	return j.executeFn(ctx, arg)
 }
 
-// setupTestDB はテスト用のインメモリDBをセットアップする
-func setupTestDB(t *testing.T) (*sql.DB, *model.Queries) {
-	t.Helper()
-	dbs := testutil.SetupAllDBs(t)
-	return dbs.Worker, dbs.WorkerQueries
-}
-
 func TestWorker_Enqueue(t *testing.T) {
-	db, queries := setupTestDB(t)
-	defer db.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, queries := dbs.Worker, dbs.WorkerQueries
 
 	registry := NewRegistry()
 	registry.Register(&TestJob{
@@ -66,8 +60,9 @@ func TestWorker_Enqueue(t *testing.T) {
 }
 
 func TestWorker_EnqueueWithUniqkey(t *testing.T) {
-	db, queries := setupTestDB(t)
-	defer db.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, queries := dbs.Worker, dbs.WorkerQueries
 
 	registry := NewRegistry()
 	registry.Register(&TestJob{
@@ -100,8 +95,9 @@ func TestWorker_EnqueueWithUniqkey(t *testing.T) {
 }
 
 func TestWorker_ProcessNextJob_Success(t *testing.T) {
-	db, queries := setupTestDB(t)
-	defer db.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, queries := dbs.Worker, dbs.WorkerQueries
 
 	executed := false
 	registry := NewRegistry()
@@ -144,8 +140,9 @@ func TestWorker_ProcessNextJob_Success(t *testing.T) {
 }
 
 func TestWorker_ProcessNextJob_Failure(t *testing.T) {
-	db, queries := setupTestDB(t)
-	defer db.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, queries := dbs.Worker, dbs.WorkerQueries
 
 	executionCount := 0
 	registry := NewRegistry()
@@ -200,8 +197,9 @@ func TestWorker_ProcessNextJob_Failure(t *testing.T) {
 }
 
 func TestWorker_ExponentialBackoff(t *testing.T) {
-	db, queries := setupTestDB(t)
-	defer db.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, queries := dbs.Worker, dbs.WorkerQueries
 
 	registry := NewRegistry()
 	registry.Register(&TestJob{
@@ -288,8 +286,9 @@ func TestWorker_ExponentialBackoff(t *testing.T) {
 }
 
 func TestWorker_ProcessNextJob_MaxRetries(t *testing.T) {
-	db, queries := setupTestDB(t)
-	defer db.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, queries := dbs.Worker, dbs.WorkerQueries
 
 	executionCount := 0
 	registry := NewRegistry()
@@ -338,8 +337,9 @@ func TestWorker_ProcessNextJob_MaxRetries(t *testing.T) {
 }
 
 func TestWorker_ProcessNextJob_NoJobs(t *testing.T) {
-	db, queries := setupTestDB(t)
-	defer db.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, queries := dbs.Worker, dbs.WorkerQueries
 
 	registry := NewRegistry()
 	worker := NewWorker(db, queries, registry)
@@ -352,8 +352,9 @@ func TestWorker_ProcessNextJob_NoJobs(t *testing.T) {
 }
 
 func TestWorker_ProcessNextJob_JobNotRegistered(t *testing.T) {
-	db, queries := setupTestDB(t)
-	defer db.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, queries := dbs.Worker, dbs.WorkerQueries
 
 	// ジョブを登録しないレジストリ
 	registry := NewRegistry()
@@ -383,8 +384,9 @@ func TestWorker_ProcessNextJob_JobNotRegistered(t *testing.T) {
 }
 
 func TestWorker_ProcessNextJob_Panic(t *testing.T) {
-	db, queries := setupTestDB(t)
-	defer db.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, queries := dbs.Worker, dbs.WorkerQueries
 
 	registry := NewRegistry()
 	registry.Register(&TestJob{
@@ -420,8 +422,9 @@ func TestWorker_ProcessNextJob_Panic(t *testing.T) {
 }
 
 func TestWorker_Integration(t *testing.T) {
-	db, queries := setupTestDB(t)
-	defer db.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, queries := dbs.Worker, dbs.WorkerQueries
 
 	executedJobs := make([]string, 0)
 	registry := NewRegistry()
@@ -472,8 +475,9 @@ func TestWorker_Integration(t *testing.T) {
 }
 
 func TestWorker_ProcessNextJob_RunAfter(t *testing.T) {
-	db, queries := setupTestDB(t)
-	defer db.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, queries := dbs.Worker, dbs.WorkerQueries
 
 	executed := false
 	registry := NewRegistry()
@@ -529,8 +533,9 @@ func TestWorker_ProcessNextJob_RunAfter(t *testing.T) {
 }
 
 func TestWorker_EnqueueWithUniqkey_DifferentJobTypes(t *testing.T) {
-	db, queries := setupTestDB(t)
-	defer db.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, queries := dbs.Worker, dbs.WorkerQueries
 
 	registry := NewRegistry()
 	registry.Register(&TestJob{
@@ -567,8 +572,9 @@ func TestWorker_EnqueueWithUniqkey_DifferentJobTypes(t *testing.T) {
 }
 
 func TestWorker_RecoverStuckJobs(t *testing.T) {
-	db, queries := setupTestDB(t)
-	defer db.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, queries := dbs.Worker, dbs.WorkerQueries
 
 	registry := NewRegistry()
 	registry.Register(&TestJob{
@@ -616,8 +622,9 @@ func TestWorker_RecoverStuckJobs(t *testing.T) {
 }
 
 func TestWorker_RecoverStuckJobs_MaxRetriesReached(t *testing.T) {
-	db, queries := setupTestDB(t)
-	defer db.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, queries := dbs.Worker, dbs.WorkerQueries
 
 	registry := NewRegistry()
 	registry.Register(&TestJob{
@@ -661,8 +668,9 @@ func TestWorker_RecoverStuckJobs_MaxRetriesReached(t *testing.T) {
 }
 
 func TestWorker_RecoverStuckJobs_NotStuck(t *testing.T) {
-	db, queries := setupTestDB(t)
-	defer db.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, queries := dbs.Worker, dbs.WorkerQueries
 
 	registry := NewRegistry()
 	registry.Register(&TestJob{
@@ -707,8 +715,9 @@ func TestWorker_RecoverStuckJobs_NotStuck(t *testing.T) {
 }
 
 func TestWorker_JobTimeout_Default(t *testing.T) {
-	db, queries := setupTestDB(t)
-	defer db.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, queries := dbs.Worker, dbs.WorkerQueries
 
 	executed := false
 	registry := NewRegistry()
@@ -773,8 +782,9 @@ func (j *TestJobWithTimeout) Execute(ctx context.Context, arg json.RawMessage) e
 }
 
 func TestWorker_JobTimeout_Custom(t *testing.T) {
-	db, queries := setupTestDB(t)
-	defer db.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, queries := dbs.Worker, dbs.WorkerQueries
 
 	customTimeout := 2 * time.Minute
 	executed := false
@@ -821,8 +831,9 @@ func TestWorker_JobTimeout_Custom(t *testing.T) {
 }
 
 func TestWorker_JobTimeout_Exceeded(t *testing.T) {
-	db, queries := setupTestDB(t)
-	defer db.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, queries := dbs.Worker, dbs.WorkerQueries
 
 	shortTimeout := 100 * time.Millisecond
 	executionStarted := false
@@ -886,8 +897,9 @@ func TestWorker_JobTimeout_Exceeded(t *testing.T) {
 }
 
 func TestWorker_GracefulShutdown_RunningJobCompletes(t *testing.T) {
-	db, queries := setupTestDB(t)
-	defer db.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, queries := dbs.Worker, dbs.WorkerQueries
 
 	jobStarted := make(chan struct{})
 	jobFinished := make(chan struct{})
@@ -960,8 +972,9 @@ func TestWorker_GracefulShutdown_RunningJobCompletes(t *testing.T) {
 }
 
 func TestWorker_GracefulShutdown_NoNewJobs(t *testing.T) {
-	db, queries := setupTestDB(t)
-	defer db.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, queries := dbs.Worker, dbs.WorkerQueries
 
 	executionCount := 0
 	registry := NewRegistry()

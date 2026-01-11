@@ -20,15 +20,10 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func setupTestDB(t *testing.T) (*sql.DB, *sql.DB, *sql.DB, *sql.DB) {
-	t.Helper()
-	dbs := testutil.SetupAllDBs(t)
-	return dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
-}
-
 func setupTest(t *testing.T) *testEnv {
 	t.Helper()
-	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
+	dbs := testutil.SetupAllDBs(t)
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	tmpDir, err := os.MkdirTemp("", "hanrangon-upload-test")
 	if err != nil {

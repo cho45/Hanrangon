@@ -2,7 +2,6 @@ package subcommands
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"io"
 	"os"
@@ -226,18 +225,10 @@ func joinLines(lines []string) string {
 
 // Integration tests
 
-func setupTestDB(t *testing.T) (*sql.DB, *sql.DB, *sql.DB, *sql.DB) {
-	t.Helper()
-	dbs := testutil.SetupAllDBs(t)
-	return dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
-}
-
 func TestMigrator_ProcessEntries(t *testing.T) {
-	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
-	defer workerDB.Close()
-	defer imagesDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	// Setup test app
 	tmpDir := t.TempDir()
@@ -442,11 +433,9 @@ func TestRewriteBodyImageURLs(t *testing.T) {
 }
 
 func TestMigrator_ProcessEntries_BodyField(t *testing.T) {
-	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
-	defer workerDB.Close()
-	defer imagesDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	// Setup test app
 	tmpDir := t.TempDir()
@@ -536,11 +525,9 @@ func TestMigrator_ProcessEntries_BodyField(t *testing.T) {
 }
 
 func TestMigrator_UpdateImageURIs(t *testing.T) {
-	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
-	defer workerDB.Close()
-	defer imagesDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	// Setup test app
 	config := &app.Config{
@@ -621,11 +608,9 @@ func TestMigrator_UpdateImageURIs(t *testing.T) {
 }
 
 func TestMigrator_Idempotency(t *testing.T) {
-	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
-	defer workerDB.Close()
-	defer imagesDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	// Setup test app
 	tmpDir := t.TempDir()
@@ -748,11 +733,9 @@ func TestMigrator_Idempotency(t *testing.T) {
 
 // TestMigrator_ProcessEntries_UploadError tests error handling during upload
 func TestMigrator_ProcessEntries_UploadError(t *testing.T) {
-	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
-	defer workerDB.Close()
-	defer imagesDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	// Setup test app
 	tmpDir := t.TempDir()
@@ -1088,11 +1071,9 @@ func TestMigrator_RemoveCommentsAndCDATA(t *testing.T) {
 
 // TestMigrator_ProcessEntriesWithLimit tests that the --limit flag correctly limits the number of entries processed
 func TestMigrator_ProcessEntriesWithLimit(t *testing.T) {
-	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
-	defer workerDB.Close()
-	defer imagesDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	// Setup test app
 	tmpDir := t.TempDir()
@@ -1214,11 +1195,9 @@ func TestMigrator_ProcessEntriesWithLimit(t *testing.T) {
 
 // TestMigrator_ProcessEntries_DryRun tests that dry-run mode doesn't make any actual changes
 func TestMigrator_ProcessEntries_DryRun(t *testing.T) {
-	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
-	defer workerDB.Close()
-	defer imagesDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	// Setup test app
 	tmpDir := t.TempDir()
@@ -1327,11 +1306,9 @@ func TestMigrator_ProcessEntries_DryRun(t *testing.T) {
 
 // TestMigrator_UpdateImageURIs_DryRun tests that UpdateImageURIs dry-run mode doesn't modify the database
 func TestMigrator_UpdateImageURIs_DryRun(t *testing.T) {
-	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
-	defer db.Close()
-	defer tfidfDB.Close()
-	defer workerDB.Close()
-	defer imagesDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	// Setup test app
 	config := &app.Config{

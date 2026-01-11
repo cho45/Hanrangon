@@ -2,18 +2,15 @@ package tfidf
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 
 	"github.com/cho45/hanrangon/internal/testutil"
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// setupTestDBForSimilarity creates in-memory databases for similarity testing
-func setupTestDBForSimilarity(t *testing.T) (*sql.DB, *sql.DB, *Calculator, *SimilarityCalculator) {
-	t.Helper()
+func TestCalculateSimilarEntries(t *testing.T) {
 	dbs := testutil.SetupAllDBs(t)
-
+	defer dbs.Close()
 	dataDB := dbs.Main
 	dataQueries := dbs.MainQueries
 	tfidfDB := dbs.TFIDF
@@ -26,14 +23,6 @@ func setupTestDBForSimilarity(t *testing.T) (*sql.DB, *sql.DB, *Calculator, *Sim
 
 	sim := NewSimilarityCalculator(tfidfDB, tfidfQueries)
 	sim.MinValidTerms = 0
-
-	return dataDB, tfidfDB, calc, sim
-}
-
-func TestCalculateSimilarEntries(t *testing.T) {
-	dataDB, tfidfDB, calc, sim := setupTestDBForSimilarity(t)
-	defer dataDB.Close()
-	defer tfidfDB.Close()
 
 	ctx := context.Background()
 
@@ -71,7 +60,7 @@ func TestCalculateSimilarEntries(t *testing.T) {
 	}
 
 	// Recalculate TF-IDF values
-	err := calc.RecalculateTFIDFValues(ctx, []int64{})
+	err = calc.RecalculateTFIDFValues(ctx, []int64{})
 	if err != nil {
 		t.Fatalf("failed to recalculate tfidf values: %v", err)
 	}
@@ -119,9 +108,20 @@ func TestCalculateSimilarEntries(t *testing.T) {
 }
 
 func TestCalculateSimilarEntriesMultiple(t *testing.T) {
-	dataDB, tfidfDB, calc, sim := setupTestDBForSimilarity(t)
-	defer dataDB.Close()
-	defer tfidfDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	dataDB := dbs.Main
+	dataQueries := dbs.MainQueries
+	tfidfDB := dbs.TFIDF
+	tfidfQueries := dbs.TFIDFQueries
+
+	calc, err := NewCalculator(tfidfDB, tfidfQueries, dataDB, dataQueries)
+	if err != nil {
+		t.Fatalf("failed to create calculator: %v", err)
+	}
+
+	sim := NewSimilarityCalculator(tfidfDB, tfidfQueries)
+	sim.MinValidTerms = 0
 
 	ctx := context.Background()
 
@@ -149,7 +149,7 @@ func TestCalculateSimilarEntriesMultiple(t *testing.T) {
 		}
 	}
 
-	err := calc.RecalculateTFIDFValues(ctx, []int64{})
+	err = calc.RecalculateTFIDFValues(ctx, []int64{})
 	if err != nil {
 		t.Fatalf("failed to recalculate tfidf values: %v", err)
 	}
@@ -172,9 +172,20 @@ func TestCalculateSimilarEntriesMultiple(t *testing.T) {
 }
 
 func TestCalculateSimilarEntriesNoSimilar(t *testing.T) {
-	dataDB, tfidfDB, calc, sim := setupTestDBForSimilarity(t)
-	defer dataDB.Close()
-	defer tfidfDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	dataDB := dbs.Main
+	dataQueries := dbs.MainQueries
+	tfidfDB := dbs.TFIDF
+	tfidfQueries := dbs.TFIDFQueries
+
+	calc, err := NewCalculator(tfidfDB, tfidfQueries, dataDB, dataQueries)
+	if err != nil {
+		t.Fatalf("failed to create calculator: %v", err)
+	}
+
+	sim := NewSimilarityCalculator(tfidfDB, tfidfQueries)
+	sim.MinValidTerms = 0
 
 	ctx := context.Background()
 
@@ -201,7 +212,7 @@ func TestCalculateSimilarEntriesNoSimilar(t *testing.T) {
 		}
 	}
 
-	err := calc.RecalculateTFIDFValues(ctx, []int64{})
+	err = calc.RecalculateTFIDFValues(ctx, []int64{})
 	if err != nil {
 		t.Fatalf("failed to recalculate tfidf values: %v", err)
 	}

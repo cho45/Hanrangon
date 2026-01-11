@@ -3,13 +3,15 @@ package tfidf
 import (
 	"context"
 	"testing"
+
+	"github.com/cho45/hanrangon/internal/testutil"
 )
 
 func TestSearch(t *testing.T) {
 	ctx := context.Background()
-	dataDB, dataQueries, tfidfDB, tfidfQueries := setupTestDBs(t)
-	defer dataDB.Close()
-	defer tfidfDB.Close()
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.Main, dbs.MainQueries, dbs.TFIDF, dbs.TFIDFQueries
 
 	calc, err := NewCalculator(tfidfDB, tfidfQueries, dataDB, dataQueries)
 	if err != nil {
