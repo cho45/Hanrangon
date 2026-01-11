@@ -489,10 +489,15 @@ func (app *AppImpl) populateSimilarEntries(ctx context.Context, entries []view.V
 								if seenImageURI[cand.Uri] {
 									continue
 								}
+								displayTitle, _ := model.ParseTitle(re.Title)
+								if displayTitle == "" {
+									displayTitle = "✖"
+								}
 								viewImages = append(viewImages, view.SimilarImage{
-									URI:       cand.Uri,
-									EntryPath: re.Path,
-									Score:     int64(cand.Jaccard * 100),
+									URI:        cand.Uri,
+									EntryPath:  re.Path,
+									EntryTitle: displayTitle,
+									Score:      int64(cand.Jaccard * 100),
 								})
 								seenImageURI[cand.Uri] = true
 								if len(viewImages) >= 3 { // Limit per entry

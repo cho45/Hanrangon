@@ -3645,11 +3645,11 @@ function Mr(e, t) {
 var bi = /* @__PURE__ */ N('<div class="loading svelte-xxb0sp">読み込み中...</div>'), wi = /* @__PURE__ */ N('<button class="indexed-icon svelte-xxb0sp" title="類似画像を検索">🔍</button>'), yi = /* @__PURE__ */ N('<div class="image-item svelte-xxb0sp"><div class="img-container svelte-xxb0sp"><img alt="" loading="lazy" class="svelte-xxb0sp"/> <!></div> <div class="info svelte-xxb0sp"><!> <div class="entry-link svelte-xxb0sp"><a class="svelte-xxb0sp">Entry: <strong> </strong></a></div> <div class="id svelte-xxb0sp"> </div></div></div>'), xi = /* @__PURE__ */ N('<div class="grid svelte-xxb0sp"></div>'), Mi = /* @__PURE__ */ N('<div class="selected-compare svelte-xxb0sp"><div class="image-item target svelte-xxb0sp"><div class="img-container svelte-xxb0sp"><img alt="" class="svelte-xxb0sp"/></div> <div class="info svelte-xxb0sp"><!> <div>Selected Image</div></div></div> <div class="arrow svelte-xxb0sp">→</div></div>'), Si = /* @__PURE__ */ N('<div class="loading svelte-xxb0sp">検索中...</div>'), ki = /* @__PURE__ */ N("<p>類似画像は見つかりませんでした。</p>"), Ei = /* @__PURE__ */ N('<div class="image-item svelte-xxb0sp"><div class="img-container svelte-xxb0sp"><img alt="" loading="lazy" class="svelte-xxb0sp"/></div> <div class="info svelte-xxb0sp"><!> <div class="entry-link svelte-xxb0sp"><a class="svelte-xxb0sp">Entry: <strong> </strong></a></div> <div class="id svelte-xxb0sp"> </div></div></div>'), Di = /* @__PURE__ */ N('<div class="grid similar-grid svelte-xxb0sp"></div>'), Ti = /* @__PURE__ */ N('<div class="image-list svelte-xxb0sp"><div class="header svelte-xxb0sp"><h2> </h2> <div class="pagination svelte-xxb0sp"><button>前へ</button> <span> </span> <button>次へ</button></div></div> <!></div> <dialog id="similarDialog" class="svelte-xxb0sp"><div class="dialog-header svelte-xxb0sp"><h3 class="svelte-xxb0sp">類似画像一覧</h3> <button type="button" class="close-btn svelte-xxb0sp">×</button></div> <div class="dialog-content svelte-xxb0sp"><!> <!></div></dialog>', 1);
 function Ai(e, t) {
   tt(t, !0);
-  let r = /* @__PURE__ */ H(pe([])), s = /* @__PURE__ */ H(0), a = 50, n = /* @__PURE__ */ H(0), l = /* @__PURE__ */ H(pe([])), u = /* @__PURE__ */ H(null), o = /* @__PURE__ */ H(null);
+  let r = /* @__PURE__ */ H(pe([])), s = /* @__PURE__ */ H(0), a = 20, n = /* @__PURE__ */ H(0), l = /* @__PURE__ */ H(pe([])), u = /* @__PURE__ */ H(null), o = /* @__PURE__ */ H(null);
   async function f() {
     try {
-      const A = await te.get(`/admin/api/images?limit=${a}&offset=${i(n)}`);
-      D(r, A.images || [], !0), D(s, A.total || 0, !0);
+      const A = await te.get(`/admin/api/images?limit=${a}&offset=${i(s)}`);
+      D(r, A.images || [], !0), D(n, A.total || 0, !0);
     } catch (A) {
       console.error(A);
     }
@@ -3665,10 +3665,10 @@ function Ai(e, t) {
   }
   Tt(f);
   function g() {
-    i(n) + a < i(s) && (D(n, i(n) + a), f());
+    i(s) + a < i(n) && (D(s, i(s) + a), f());
   }
   function _() {
-    i(n) - a >= 0 && (D(n, i(n) - a), f());
+    i(s) - a >= 0 && (D(s, i(s) - a), f());
   }
   var p = Ti(), E = St(p), b = c(E), d = c(b), y = c(d), O = h(d, 2), F = c(O);
   F.__click = _;
@@ -3768,9 +3768,9 @@ function Ai(e, t) {
   }
   mt(k, (A) => D(o, A), () => i(o)), Z(
     (A) => {
-      I(y, `画像一覧 (${i(s) ?? ""})`), F.disabled = i(n) === 0, I(R, `${i(n) + 1} - ${A ?? ""} / ${i(s) ?? ""}`), z.disabled = i(n) + a >= i(s);
+      I(y, `画像一覧 (${i(n) ?? ""})`), F.disabled = i(s) === 0, I(R, `${i(s) + 1} - ${A ?? ""} / ${i(n) ?? ""}`), z.disabled = i(s) + a >= i(n);
     },
-    [() => Math.min(i(n) + a, i(s))]
+    [() => Math.min(i(s) + a, i(n))]
   ), P(e, p), rt();
 }
 Bt(["click"]);

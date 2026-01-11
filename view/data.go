@@ -208,9 +208,10 @@ type SimilarEntry struct {
 
 // SimilarImage represents an image with similarity information
 type SimilarImage struct {
-	URI       string
-	EntryPath string
-	Score     int64
+	URI        string
+	EntryPath  string
+	EntryTitle string
+	Score      int64
 }
 
 // SimilarEntriesData holds data for similar entries
