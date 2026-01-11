@@ -13,7 +13,7 @@ export class ABCProcessor extends BaseProcessor {
   }
 
   applies(dom) {
-    return !!dom.querySelector('pre.lang-abc, pre.code.lang-abc');
+    return !!(dom.querySelector('pre.lang-abc, pre.code.lang-abc') || dom.querySelector('pre > code.language-abc'));
   }
 
   async prepare() {
@@ -22,8 +22,11 @@ export class ABCProcessor extends BaseProcessor {
   }
 
   async process(dom, baseURL) {
-    const codes = dom.querySelectorAll('pre.lang-abc, pre.code.lang-abc');
-    console.error(`[abc] Found ${codes.length} ABC blocks`);
+    const hatenaCodes = dom.querySelectorAll('pre.lang-abc, pre.code.lang-abc');
+    const markdownCodes = dom.querySelectorAll('pre > code.language-abc');
+    const codes = [...hatenaCodes, ...markdownCodes];
+
+    console.error(`[abc] Found ${codes.length} ABC blocks (${hatenaCodes.length} Hatena, ${markdownCodes.length} Markdown)`);
 
     const startTime = Date.now();
     let converted = 0;
@@ -66,8 +69,15 @@ export class ABCProcessor extends BaseProcessor {
           paddingleft: 0
         });
         
-        // <pre> を生成された <div> で置換
-        code.parentNode.replaceChild(container, code);
+        // 置換対象の要素を決定
+        // Markdown の場合は pre > code なので pre を置換したい
+        let target = code;
+        if (code.tagName === 'CODE' && code.parentNode && code.parentNode.tagName === 'PRE') {
+          target = code.parentNode;
+        }
+        
+        // 要素を生成された <div> で置換
+        target.parentNode.replaceChild(container, target);
         converted++;
       }
     } catch (err) {

@@ -13,7 +13,7 @@ export class HighlightProcessor extends BaseProcessor {
   }
 
   applies(dom) {
-    return !!dom.querySelector('pre.code');
+    return !!(dom.querySelector('pre.code') || dom.querySelector('pre > code[class*="language-"]'));
   }
 
   async prepare() {
@@ -22,23 +22,35 @@ export class HighlightProcessor extends BaseProcessor {
   }
 
   async process(dom, baseURL) {
-    const codes = dom.querySelectorAll('pre.code');
-    console.error(`[highlight] Found ${codes.length} code blocks`);
+    // Hatena-style: <pre class="code lang-javascript">
+    const hatenaCodes = dom.querySelectorAll('pre.code');
+    // Markdown-style: <pre><code class="language-javascript">
+    const markdownCodes = dom.querySelectorAll('pre > code[class*="language-"]');
+
+    console.error(`[highlight] Found ${hatenaCodes.length} Hatena code blocks and ${markdownCodes.length} Markdown code blocks`);
 
     const startTime = Date.now();
     let highlighted = 0;
 
-    for (const code of codes) {
+    for (const code of hatenaCodes) {
       if (/lang-(\S+)/.test(code.className)) {
         const lang = code.className.match(/lang-(\S+)/)[1];
-        // highlight.js でハイライトを適用
-        // highlightBlock は deprecated なので highlightElement を使用
         this.hljs.highlightElement(code);
         highlighted++;
-        console.error(`[highlight] Highlighted code block (${lang})`);
+        console.error(`[highlight] Highlighted Hatena code block (${lang})`);
       }
     }
 
-    console.error(`[highlight] Completed in ${Date.now() - startTime}ms (highlighted ${highlighted}/${codes.length} blocks)`);
+    for (const code of markdownCodes) {
+      const langMatch = code.className.match(/language-(\S+)/);
+      if (langMatch) {
+        const lang = langMatch[1];
+        this.hljs.highlightElement(code);
+        highlighted++;
+        console.error(`[highlight] Highlighted Markdown code block (${lang})`);
+      }
+    }
+
+    console.error(`[highlight] Completed in ${Date.now() - startTime}ms (highlighted ${highlighted}/${hatenaCodes.length + markdownCodes.length} blocks)`);
   }
 }
