@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, type Component } from 'svelte';
   import EntryList from './components/EntryList.svelte';
   import AppEditor from './components/AppEditor.svelte';
   import JobList from './components/JobList.svelte';
@@ -25,15 +25,53 @@
     searchParams = new URLSearchParams(window.location.search);
   }
 
-  // ルーティングロジック
-  const page = $derived.by(() => {
-    if (currentPath === '/admin/edit') return 'edit';
-    if (currentPath === '/admin/jobs') return 'jobs';
-    if (currentPath === '/admin/info') return 'info';
-    return 'list';
+  // ルートごとの定義
+  const ROUTE_CONFIG: Record<string, { component: Component<any>, page: string, getProps: (id: string | null) => any }> = {
+    '/admin/edit': { 
+      component: AppEditor, 
+      page: 'edit',
+      getProps: (id) => ({ id, onSave: (loc: string) => window.location.href = loc })
+    },
+    '/admin/jobs': { 
+      component: JobList, 
+      page: 'jobs',
+      getProps: () => ({})
+    },
+    '/admin/info': { 
+      component: InfoPage, 
+      page: 'info',
+      getProps: () => ({})
+    },
+    '/admin/': { 
+      component: EntryList, 
+      page: 'list',
+      getProps: () => ({ onEdit: (id: string) => navigate(`/admin/edit?id=${id}`) })
+    },
+  };
+
+  const navItems = [
+    { label: 'エントリ一覧', path: '/admin/',      page: 'list' },
+    { label: '新規作成',     path: '/admin/edit',  page: 'edit', exact: true },
+    { label: 'ジョブ一覧',   path: '/admin/jobs',  page: 'jobs' },
+    { label: '情報',         path: '/admin/info',  page: 'info' },
+  ];
+
+  // URLから全ての状態を導出
+  const route = $derived.by(() => {
+    const id = searchParams.get('id');
+    const config = ROUTE_CONFIG[currentPath] ?? ROUTE_CONFIG['/admin/'];
+    
+    return {
+      ...config,
+      props: config.getProps(id),
+      isActive: (item: typeof navItems[0]) => {
+        if (item.page !== config.page) return false;
+        if (item.exact && id) return false;
+        return true;
+      }
+    };
   });
 
-  const entryId = $derived(searchParams.get('id'));
   const isLocalhost = $derived(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 </script>
 
@@ -49,22 +87,19 @@
   </header>
 
   <nav class="sub-nav" class:is-localhost={isLocalhost}>
-    <a href="/admin/" class:active={page === 'list'} onclick={(e) => navigate('/admin/', e)}>エントリ一覧</a>
-    <a href="/admin/edit" class:active={page === 'edit' && !entryId} onclick={(e) => navigate('/admin/edit', e)}>新規作成</a>
-    <a href="/admin/jobs" class:active={page === 'jobs'} onclick={(e) => navigate('/admin/jobs', e)}>ジョブ一覧</a>
-    <a href="/admin/info" class:active={page === 'info'} onclick={(e) => navigate('/admin/info', e)}>情報</a>
+    {#each navItems as item}
+      <a 
+        href={item.path} 
+        class:active={route.isActive(item)} 
+        onclick={(e) => navigate(item.path, e)}
+      >
+        {item.label}
+      </a>
+    {/each}
   </nav>
 
   <main class="content">
-    {#if page === 'edit'}
-      <AppEditor id={entryId} onSave={(loc) => window.location.href = loc} />
-    {:else if page === 'jobs'}
-      <JobList />
-    {:else if page === 'info'}
-      <InfoPage />
-    {:else}
-      <EntryList onEdit={(id) => navigate(`/admin/edit?id=${id}`)} />
-    {/if}
+    <route.component {...route.props} />
   </main>
 </div>
 

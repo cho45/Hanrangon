@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { api } from '../lib/api.svelte';
 
   interface InfoData {
     is_development: boolean;
@@ -26,17 +27,12 @@
   }
 
   let info = $state<InfoData | null>(null);
-  let loading = $state(true);
 
   async function fetchInfo() {
-    loading = true;
     try {
-      const res = await fetch('/admin/api/info');
-      info = await res.json();
+      info = await api.get('/admin/api/info');
     } catch (e) {
       console.error(e);
-    } finally {
-      loading = false;
     }
   }
 
@@ -56,7 +52,7 @@
     <h2>システム情報</h2>
   </div>
 
-  {#if loading}
+  {#if api.loading && !info}
     <div class="loading-spinner-container">
       <div class="loading-spinner"></div>
     </div>
