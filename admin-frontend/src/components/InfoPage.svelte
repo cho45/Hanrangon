@@ -14,6 +14,10 @@
       top_terms: { term: string, df: number }[];
       avg_score: number;
     };
+    image_stats: {
+      total_images: number;
+      unindexed_images: number;
+    };
     debug_info: {
       go_version: string;
       num_goroutine: number;
@@ -78,6 +82,18 @@
               <span class="term-badge" title="DF: {item.df}">{item.term}</span>
             {/each}
           </div>
+        </div>
+      </section>
+
+      <section>
+        <h3>画像統計</h3>
+        <div class="table-container">
+          <table>
+            <tbody>
+              <tr><th>総画像数</th><td>{info.image_stats.total_images}</td></tr>
+              <tr><th>未インデックス画像数</th><td>{info.image_stats.unindexed_images}</td></tr>
+            </tbody>
+          </table>
         </div>
       </section>
 

@@ -14,6 +14,8 @@ import (
 	"syscall"
 	"time"
 
+	"runtime/pprof"
+
 	"github.com/cho45/hanrangon/app"
 	"github.com/cho45/hanrangon/jobqueue"
 	"github.com/cho45/hanrangon/jobs"
@@ -24,12 +26,42 @@ import (
 )
 
 func main() {
-	// 1. Determine subcommand
+	// 1. Determine subcommand and check for profiling flag
 	cmd := "serve"
 	subArgs := os.Args[1:]
-	if len(os.Args) > 1 && !strings.HasPrefix(os.Args[1], "-") {
-		cmd = os.Args[1]
-		subArgs = os.Args[2:]
+	cpuprofile := ""
+
+	// Simple global flag parsing before subcommand dispatch
+	filteredArgs := []string{}
+	for i := 1; i < len(os.Args); i++ {
+		arg := os.Args[i]
+		if strings.HasPrefix(arg, "--cpuprofile=") {
+			cpuprofile = strings.TrimPrefix(arg, "--cpuprofile=")
+		} else if arg == "--cpuprofile" && i+1 < len(os.Args) {
+			cpuprofile = os.Args[i+1]
+			i++
+		} else {
+			filteredArgs = append(filteredArgs, arg)
+		}
+	}
+
+	if len(filteredArgs) > 0 && !strings.HasPrefix(filteredArgs[0], "-") {
+		cmd = filteredArgs[0]
+		subArgs = filteredArgs[1:]
+	} else {
+		subArgs = filteredArgs
+	}
+
+	if cpuprofile != "" {
+		f, err := os.Create(cpuprofile)
+		if err != nil {
+			log.Fatalf("could not create CPU profile: %v", err)
+		}
+		defer f.Close()
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatalf("could not start CPU profile: %v", err)
+		}
+		defer pprof.StopCPUProfile()
 	}
 
 	// 2. Config読み込み

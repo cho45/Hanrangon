@@ -593,6 +593,9 @@ func (app *AppImpl) HandleAdminApiInfo(c echo.Context) error {
 	topTerms, _ := app.tfidfQueries.GetTopTermsByDF(c.Request().Context(), 20)
 	avgScore, _ := app.tfidfQueries.GetAverageSimilarityScore(c.Request().Context())
 
+	totalImages, _ := app.imagesQueries.CountImages(c.Request().Context())
+	unindexedImages, _ := app.imagesQueries.CountUnindexedImages(c.Request().Context())
+
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"is_development": app.config.IsDevelopment(),
 		"app_hash":       AppHash,
@@ -604,6 +607,10 @@ func (app *AppImpl) HandleAdminApiInfo(c echo.Context) error {
 			"entries_with_related": tfidfStats.EntriesWithRelated,
 			"top_terms":            topTerms,
 			"avg_score":            avgScore,
+		},
+		"image_stats": map[string]interface{}{
+			"total_images":     totalImages,
+			"unindexed_images": unindexedImages,
 		},
 		"debug_info": map[string]interface{}{
 			"go_version":      runtime.Version(),

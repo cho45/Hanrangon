@@ -5,8 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"os"
-	"runtime/pprof"
 
 	"github.com/cho45/hanrangon/app"
 	"github.com/cho45/hanrangon/tfidf"
@@ -17,20 +15,7 @@ func RecalcTFIDF(ctx context.Context, application app.App, args []string) error 
 	force := fs.Bool("force", false, "force execution of recalculation")
 	dryRun := fs.Bool("dry-run", false, "show what would be done without making changes")
 	similarityOnly := fs.Bool("similarity-only", false, "run only similarity calculation phase")
-	cpuprofile := fs.String("cpuprofile", "", "write cpu profile to file")
 	fs.Parse(args)
-
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
-		if err != nil {
-			return fmt.Errorf("could not create CPU profile: %w", err)
-		}
-		defer f.Close()
-		if err := pprof.StartCPUProfile(f); err != nil {
-			return fmt.Errorf("could not start CPU profile: %w", err)
-		}
-		defer pprof.StopCPUProfile()
-	}
 
 	if !*force && !*dryRun {
 		fmt.Println("Warning: This operation will recalculate TF-IDF scores for all entries and may take some time.")

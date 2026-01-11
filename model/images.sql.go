@@ -21,6 +21,17 @@ func (q *Queries) CountImages(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countUnindexedImages = `-- name: CountUnindexedImages :one
+SELECT COUNT(*) FROM images WHERE length(sig) = 0
+`
+
+func (q *Queries) CountUnindexedImages(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countUnindexedImages)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createImage = `-- name: CreateImage :one
 INSERT INTO images (uri, entry_id, sig) VALUES (?, ?, ?) RETURNING id
 `
@@ -52,21 +63,22 @@ func (q *Queries) CreateNgram(ctx context.Context, arg CreateNgramParams) error 
 	return err
 }
 
-const deleteImagesByEntryID = `-- name: DeleteImagesByEntryID :exec
-DELETE FROM images WHERE entry_id = ?
+const deleteImagesByIDs = `-- name: DeleteImagesByIDs :exec
+DELETE FROM images WHERE id IN (/*SLICE:ids*/?)
 `
 
-func (q *Queries) DeleteImagesByEntryID(ctx context.Context, entryID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteImagesByEntryID, entryID)
-	return err
-}
-
-const deleteNgramsByEntryID = `-- name: DeleteNgramsByEntryID :exec
-DELETE FROM ngram WHERE image_id IN (SELECT id FROM images WHERE entry_id = ?)
-`
-
-func (q *Queries) DeleteNgramsByEntryID(ctx context.Context, entryID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteNgramsByEntryID, entryID)
+func (q *Queries) DeleteImagesByIDs(ctx context.Context, ids []int64) error {
+	query := deleteImagesByIDs
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	_, err := q.db.ExecContext(ctx, query, queryParams...)
 	return err
 }
 
@@ -79,25 +91,55 @@ func (q *Queries) DeleteNgramsByImageID(ctx context.Context, imageID int64) erro
 	return err
 }
 
-const getImageByURI = `-- name: GetImageByURI :one
-SELECT id, uri, entry_id, sig FROM images WHERE uri = ? LIMIT 1
+const deleteNgramsByImageIDs = `-- name: DeleteNgramsByImageIDs :exec
+DELETE FROM ngram WHERE image_id IN (/*SLICE:ids*/?)
 `
 
-func (q *Queries) GetImageByURI(ctx context.Context, uri string) (Image, error) {
-	row := q.db.QueryRowContext(ctx, getImageByURI, uri)
-	var i Image
-	err := row.Scan(
-		&i.ID,
-		&i.Uri,
-		&i.EntryID,
-		&i.Sig,
-	)
-	return i, err
+func (q *Queries) DeleteNgramsByImageIDs(ctx context.Context, ids []int64) error {
+	query := deleteNgramsByImageIDs
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	_, err := q.db.ExecContext(ctx, query, queryParams...)
+	return err
+}
+
+const listEntryIDsWithUnindexedImages = `-- name: ListEntryIDsWithUnindexedImages :many
+SELECT DISTINCT entry_id FROM images WHERE length(sig) = 0
+`
+
+func (q *Queries) ListEntryIDsWithUnindexedImages(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listEntryIDsWithUnindexedImages)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var entry_id int64
+		if err := rows.Scan(&entry_id); err != nil {
+			return nil, err
+		}
+		items = append(items, entry_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listImages = `-- name: ListImages :many
 SELECT id, uri, entry_id, sig FROM images
-ORDER BY id DESC
+ORDER BY entry_id DESC
 LIMIT ? OFFSET ?
 `
 
@@ -208,67 +250,6 @@ func (q *Queries) ListImagesByEntryIDs(ctx context.Context, entryIds []int64) ([
 	return items, nil
 }
 
-const listSimilarImages = `-- name: ListSimilarImages :many
-SELECT
-    i.id,
-    i.uri,
-    i.entry_id,
-    COUNT(isw.word) as score
-FROM
-    images AS i
-JOIN 
-    ngram AS isw ON i.id = isw.image_id
-JOIN 
-    ngram AS isw_search ON isw.word = isw_search.word AND isw.image_id != isw_search.image_id
-WHERE
-    isw_search.image_id = ?
-GROUP BY 
-    i.id
-ORDER BY 
-    score DESC
-LIMIT ?
-`
-
-type ListSimilarImagesParams struct {
-	ImageID int64 `json:"image_id"`
-	Limit   int64 `json:"limit"`
-}
-
-type ListSimilarImagesRow struct {
-	ID      int64  `json:"id"`
-	Uri     string `json:"uri"`
-	EntryID int64  `json:"entry_id"`
-	Score   int64  `json:"score"`
-}
-
-func (q *Queries) ListSimilarImages(ctx context.Context, arg ListSimilarImagesParams) ([]ListSimilarImagesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSimilarImages, arg.ImageID, arg.Limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListSimilarImagesRow
-	for rows.Next() {
-		var i ListSimilarImagesRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Uri,
-			&i.EntryID,
-			&i.Score,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listSimilarImagesByImageIDs = `-- name: ListSimilarImagesByImageIDs :many
 SELECT
     isw_search.image_id AS search_image_id,
@@ -335,4 +316,18 @@ func (q *Queries) ListSimilarImagesByImageIDs(ctx context.Context, imageIds []in
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateImageSig = `-- name: UpdateImageSig :exec
+UPDATE images SET sig = ? WHERE id = ?
+`
+
+type UpdateImageSigParams struct {
+	Sig []byte `json:"sig"`
+	ID  int64  `json:"id"`
+}
+
+func (q *Queries) UpdateImageSig(ctx context.Context, arg UpdateImageSigParams) error {
+	_, err := q.db.ExecContext(ctx, updateImageSig, arg.Sig, arg.ID)
+	return err
 }

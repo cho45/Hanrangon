@@ -5,6 +5,8 @@ CREATE TABLE images (
 	sig BLOB NOT NULL
 );
 CREATE UNIQUE INDEX index_images_uri ON images (uri, entry_id);
+CREATE INDEX index_images_entry_id ON images (entry_id);
+CREATE INDEX index_images_unindexed ON images (entry_id) WHERE length(sig) = 0;
 
 CREATE TABLE ngram (
 	image_id INTEGER NOT NULL,

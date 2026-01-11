@@ -13,11 +13,17 @@ import (
 func IndexImages(ctx context.Context, application app.App, args []string) error {
 	fs := flag.NewFlagSet("index-images", flag.ExitOnError)
 	force := fs.Bool("force", false, "force execution of indexing")
-	dryRun := fs.Bool("dry-run", false, "show what would be done without making changes")
+	dryRun := fs.Bool("dry-run", false, "dry run mode (no actual changes)")
+	sync := fs.Bool("sync", false, "only synchronize image records with entry content (fast)")
+	fill := fs.Bool("fill", false, "only fill missing image signatures (slow)")
 	fs.Parse(args)
 
 	if !*force && !*dryRun {
-		fmt.Println("Warning: This operation will index all images in all entries and may take some time.")
+		fmt.Println("Warning: This operation will index images in entries and may take some time.")
+		fmt.Println("Use --sync to only synchronize records (fast).")
+		fmt.Println("Use --fill to only process missing images (slow).")
+		fmt.Println("If neither --sync nor --fill is specified, both will be executed.")
+		fmt.Println()
 		fmt.Println("Use --force to actually execute the operation, or --dry-run to see what would happen.")
 		fmt.Println()
 		fs.Usage()
@@ -28,29 +34,48 @@ func IndexImages(ctx context.Context, application app.App, args []string) error 
 		log.Println("DRY-RUN MODE: No changes will be saved to the database.")
 	}
 
-	total, err := application.Queries().CountAllEntries(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to count entries: %w", err)
-	}
-
-	log.Printf("Indexing images for %d entries...", total)
-
-	entries, err := application.Queries().ListAllEntries(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to list entries: %w", err)
-	}
+	// Default to both if neither is specified
+	doSync := *sync || (!*sync && !*fill)
+	doFill := *fill || (!*sync && !*fill)
 
 	job := jobs.NewIndexImagesJob(application)
 
-	for i, entry := range entries {
-		log.Printf("  [%d/%d] Processing id:%d %s", i+1, total, entry.ID, entry.Title)
-
-		if !*dryRun {
-			if err := job.IndexImagesForEntry(ctx, entry.ID); err != nil {
-				log.Printf("  Error indexing images for entry %d: %v", entry.ID, err)
-				continue
+	if doSync {
+		entries, err := application.Queries().ListAllEntries(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to list entries: %w", err)
+		}
+		total := len(entries)
+		log.Printf("Syncing images for %d entries...", total)
+		for i, entry := range entries {
+			if (i+1)%100 == 0 || i == 0 || i == total-1 {
+				log.Printf("  [%d/%d] Syncing id:%d %s", i+1, total, entry.ID, entry.Title)
+			}
+			if !*dryRun {
+				if err := job.SyncImagesForEntry(ctx, entry.ID); err != nil {
+					log.Printf("  Error syncing images for entry %d: %v", entry.ID, err)
+				}
 			}
 		}
+		log.Println("Syncing finished.")
+	}
+
+	if doFill {
+		entryIDs, err := application.ImagesQueries().ListEntryIDsWithUnindexedImages(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to list entries with unindexed images: %w", err)
+		}
+		total := len(entryIDs)
+		log.Printf("Filling signatures for %d entries...", total)
+		for i, id := range entryIDs {
+			log.Printf("  [%d/%d] Filling id:%d", i+1, total, id)
+			if !*dryRun {
+				if err := job.FillImagesForEntry(ctx, id); err != nil {
+					log.Printf("  Error filling images for entry %d: %v", id, err)
+				}
+			}
+		}
+		log.Println("Filling finished.")
 	}
 
 	if *dryRun {

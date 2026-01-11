@@ -17,14 +17,15 @@ type Querier interface {
 	CountImages(ctx context.Context) (int64, error)
 	CountJobs(ctx context.Context) (int64, error)
 	CountPendingJobs(ctx context.Context) (int64, error)
+	CountUnindexedImages(ctx context.Context) (int64, error)
 	CreateEntry(ctx context.Context, arg CreateEntryParams) (Entry, error)
 	CreateImage(ctx context.Context, arg CreateImageParams) (int64, error)
 	CreateNgram(ctx context.Context, arg CreateNgramParams) error
 	CreateTrackback(ctx context.Context, arg CreateTrackbackParams) error
 	DecrementTermDFCount(ctx context.Context, id int64) error
-	DeleteImagesByEntryID(ctx context.Context, entryID int64) error
-	DeleteNgramsByEntryID(ctx context.Context, entryID int64) error
+	DeleteImagesByIDs(ctx context.Context, ids []int64) error
 	DeleteNgramsByImageID(ctx context.Context, imageID int64) error
+	DeleteNgramsByImageIDs(ctx context.Context, ids []int64) error
 	DeletePostingsByEntryID(ctx context.Context, entryID int64) error
 	DeleteRelatedEntriesByEntryID(ctx context.Context, entryID int64) error
 	DeleteTrackbacksBySourceEntryId(ctx context.Context, trackbackEntryID sql.NullInt64) error
@@ -35,7 +36,6 @@ type Querier interface {
 	GetAverageSimilarityScore(ctx context.Context) (float64, error)
 	GetEntryById(ctx context.Context, id int64) (Entry, error)
 	GetEntryByPath(ctx context.Context, path string) (Entry, error)
-	GetImageByURI(ctx context.Context, uri string) (Image, error)
 	GetJobByID(ctx context.Context, id int64) (Job, error)
 	GetJobTypeByID(ctx context.Context, id int64) (JobType, error)
 	GetNewerEntry(ctx context.Context, createdAt time.Time) (Entry, error)
@@ -59,13 +59,13 @@ type Querier interface {
 	ListEntriesByDates(ctx context.Context, dates []string) ([]Entry, error)
 	ListEntriesByIds(ctx context.Context, ids []int64) ([]Entry, error)
 	ListEntriesByYearMonthDay(ctx context.Context, arg ListEntriesByYearMonthDayParams) ([]Entry, error)
+	ListEntryIDsWithUnindexedImages(ctx context.Context) ([]int64, error)
 	ListImages(ctx context.Context, arg ListImagesParams) ([]Image, error)
 	ListImagesByEntryID(ctx context.Context, entryID int64) ([]Image, error)
 	ListImagesByEntryIDs(ctx context.Context, entryIds []int64) ([]Image, error)
 	ListJobs(ctx context.Context, arg ListJobsParams) ([]ListJobsRow, error)
 	ListRelatedEntries(ctx context.Context, entryID int64) ([]ListRelatedEntriesRow, error)
 	ListRelatedEntriesByEntryIDs(ctx context.Context, entryIds []int64) ([]ListRelatedEntriesByEntryIDsRow, error)
-	ListSimilarImages(ctx context.Context, arg ListSimilarImagesParams) ([]ListSimilarImagesRow, error)
 	ListSimilarImagesByImageIDs(ctx context.Context, imageIds []int64) ([]ListSimilarImagesByImageIDsRow, error)
 	ListTrackbackEntries(ctx context.Context, entryID sql.NullInt64) ([]ListTrackbackEntriesRow, error)
 	ListUniqueDates(ctx context.Context, arg ListUniqueDatesParams) ([]string, error)
@@ -75,6 +75,7 @@ type Querier interface {
 	RecoverStuckJobs(ctx context.Context) error
 	SearchEntriesAdmin(ctx context.Context, arg SearchEntriesAdminParams) ([]Entry, error)
 	UpdateEntry(ctx context.Context, arg UpdateEntryParams) (Entry, error)
+	UpdateImageSig(ctx context.Context, arg UpdateImageSigParams) error
 	UpsertTerm(ctx context.Context, arg UpsertTermParams) (Term, error)
 }
 
