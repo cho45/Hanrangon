@@ -11,6 +11,7 @@ import (
 	_ "image/png"
 	"log"
 	"math"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -423,12 +424,14 @@ func (j *IndexImagesJob) loadImage(rawURL string) (image.Image, error) {
 		}
 
 		f, err := os.Open(p)
-		if err != nil {
-			return nil, err
+		if err == nil {
+			defer f.Close()
+			img, _, err := image.Decode(f)
+			if err == nil {
+				return img, nil
+			}
 		}
-		defer f.Close()
-		img, _, err := image.Decode(f)
-		return img, err
+		// If local open/decode failed, we might want to try other sources if it's an absolute URL
 	}
 
 	// 2. Handle absolute URLs to our host
@@ -438,6 +441,39 @@ func (j *IndexImagesJob) loadImage(rawURL string) (image.Image, error) {
 		if u.Host == baseU.Host && strings.HasPrefix(u.Path, uploadURLPrefix) {
 			// Reuse local path logic via recursing with the path part
 			return j.loadImage(u.Path)
+		}
+
+		// 3. Handle specific remote asset host with local fallback
+		// Pattern: https://assets.lowreal.net/entry/{filename}
+		if u.Scheme == "https" && u.Host == "assets.lowreal.net" && strings.HasPrefix(u.Path, "/entry/") {
+			filename := strings.TrimPrefix(u.Path, "/entry/")
+			localPath := filepath.Join(uploadDir, filename)
+			if unescaped, err := url.PathUnescape(localPath); err == nil {
+				localPath = unescaped
+			}
+
+			// Try local first
+			if f, err := os.Open(localPath); err == nil {
+				defer f.Close()
+				if img, _, err := image.Decode(f); err == nil {
+					return img, nil
+				}
+			}
+
+			// Fallback: download from remote
+			log.Printf("[INFO] Downloading remote image for indexing: %s", rawURL)
+			resp, err := http.Get(rawURL)
+			if err != nil {
+				return nil, fmt.Errorf("failed to download remote image: %w", err)
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				return nil, fmt.Errorf("failed to download remote image: status %d", resp.StatusCode)
+			}
+
+			img, _, err := image.Decode(resp.Body)
+			return img, err
 		}
 	}
 
