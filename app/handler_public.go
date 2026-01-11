@@ -439,19 +439,21 @@ func (app *AppImpl) populateSimilarEntries(ctx context.Context, entries []view.V
 			}
 
 			// Bulk fetch similar images for all images
-			similarRows, err := app.imagesQueries.ListSimilarImagesByImageIDs(ctx, imageIDs)
-			if err == nil && len(similarRows) > 0 {
+			similarMap, err := app.findSimilarImagesBulk(ctx, allImages)
+			if err == nil && len(similarMap) > 0 {
 				// Group candidates by Entry ID
-				candidatesMap := make(map[int64][]model.ListSimilarImagesByImageIDsRow)
+				candidatesMap := make(map[int64][]ScoredSimilarImage)
 				entryIDMap := make(map[int64]bool)
 				var entryIDsToFetch []int64
 
-				for _, row := range similarRows {
-					targetEntryID := imageToEntryMap[row.SearchImageID]
-					candidatesMap[targetEntryID] = append(candidatesMap[targetEntryID], row)
-					if !entryIDMap[row.EntryID] {
-						entryIDsToFetch = append(entryIDsToFetch, row.EntryID)
-						entryIDMap[row.EntryID] = true
+				for _, scoredImages := range similarMap {
+					for _, scoredImg := range scoredImages {
+						targetEntryID := imageToEntryMap[scoredImg.SearchImageID]
+						candidatesMap[targetEntryID] = append(candidatesMap[targetEntryID], scoredImg)
+						if !entryIDMap[scoredImg.EntryID] {
+							entryIDsToFetch = append(entryIDsToFetch, scoredImg.EntryID)
+							entryIDMap[scoredImg.EntryID] = true
+						}
 					}
 				}
 
@@ -475,6 +477,11 @@ func (app *AppImpl) populateSimilarEntries(ctx context.Context, entries []view.V
 							continue
 						}
 
+						// Sort candidates by Jaccard score since they might come from multiple source images
+						sort.Slice(candidates, func(i, j int) bool {
+							return candidates[i].Jaccard > candidates[j].Jaccard
+						})
+
 						var viewImages []view.SimilarImage
 						seenImageURI := make(map[string]bool)
 						for _, cand := range candidates {
@@ -485,10 +492,10 @@ func (app *AppImpl) populateSimilarEntries(ctx context.Context, entries []view.V
 								viewImages = append(viewImages, view.SimilarImage{
 									URI:       cand.Uri,
 									EntryPath: re.Path,
-									Score:     cand.Score,
+									Score:     int64(cand.Jaccard * 100),
 								})
 								seenImageURI[cand.Uri] = true
-								if len(viewImages) >= 10 { // Limit per entry
+								if len(viewImages) >= 3 { // Limit per entry
 									break
 								}
 							}

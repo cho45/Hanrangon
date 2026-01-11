@@ -145,11 +145,11 @@
 					</ul>
 				{{else if $e.SimilarImages}}
 					<h3>関連エントリー (画像)</h3>
-					<ul>
+					<ul class="similar-images">
 						{{range $e.SimilarImages}}
 							<li>
 								<a href="/{{.EntryPath}}">
-									<img src="{{.URI}}" style="max-width: 100px; max-height: 100px" />
+									<img src="{{.URI}}" />
 								</a>
 							</li>
 						{{end}}

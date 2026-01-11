@@ -15,9 +15,9 @@
   }
 
   let images = $state<Image[]>([]);
-  let total = $state(0);
-  let limit = $state(50);
-  let offset = $state(0);
+let offset = $state(0);
+let limit = $state(20);
+let total = $state(0);
 
   let similarImages = $state<SimilarImage[]>([]);
   let selectedImage = $state<Image | null>(null);

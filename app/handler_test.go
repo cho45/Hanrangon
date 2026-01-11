@@ -96,8 +96,8 @@ func TestHandleIndex_SimilarImagesBulkFallback(t *testing.T) {
 	// 2. Add images that are similar via ngrams
 	_, err = env.imagesDB.Exec(`
 		INSERT INTO images (id, uri, entry_id, sig) VALUES
-		(200, 'http://example.com/imgA.jpg', 100, ''),
-		(201, 'http://example.com/imgB.jpg', 101, '')
+		(200, 'http://example.com/imgA.jpg', 100, x'0101010101010101'),
+		(201, 'http://example.com/imgB.jpg', 101, x'0101010101010101')
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -249,8 +249,8 @@ func TestHandleEntry(t *testing.T) {
 		}
 		_, err = env.imagesDB.Exec(`
 			INSERT INTO images (id, uri, entry_id, sig) VALUES
-			(10, 'http://example.com/img4.jpg', 4, ''),
-			(11, 'http://example.com/img5.jpg', 5, '')
+			(10, 'http://example.com/img4.jpg', 4, x'0101010101010101'),
+			(11, 'http://example.com/img5.jpg', 5, x'0101010101010101')
 		`)
 		if err != nil {
 			t.Fatal(err)
