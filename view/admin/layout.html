@@ -29,38 +29,10 @@ links = [
 			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 			background-color: #f7f8f9;
 			margin: 0;
-			display: flex;
-			flex-direction: column;
 			height: 100vh;
 		}
-		header {
-			background: {{ if contains "localhost" .BaseURL }}#2e7d32{{ else }}#333{{ end }};
-			color: white;
-			padding: 0.5rem 1rem;
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
-			flex-shrink: 0;
-			font-size: 12px;
-		}
-		header h1 {
-			margin: 0;
-			font-size: 1.2rem;
-		}
-		header a {
-			color: white;
-			text-decoration: none;
-		}
-		nav ul {
-			list-style: none;
-			padding: 0;
-			margin: 0;
-			display: flex;
-			gap: 1rem;
-		}
-		main {
-			flex: 1;
-			min-height: 0;
+		#admin-root {
+			height: 100%;
 			display: flex;
 			flex-direction: column;
 		}
@@ -88,18 +60,8 @@ links = [
 	</style>
 </head>
 <body>
-	<header>
-		<h1><a href="/admin/"><img src="/images/hanrangen-icon.svg" alt="Hanrangon" style="height: 24px; display: block; filter: brightness(0) invert(1);"></a></h1>
-		<nav>
-			<ul>
-				<li><a href="/">サイト確認</a></li>
-				<li><a href="/logout">ログアウト</a></li>
-			</ul>
-		</nav>
-	</header>
-
-	<main id="admin-root">
+	<div id="admin-root">
 		<div class="loading"></div>
-	</main>
+	</div>
 </body>
 </html>

@@ -38,6 +38,16 @@
 </script>
 
 <div class="admin-app">
+  <header class:is-localhost={isLocalhost}>
+    <h1><a href="/admin/"><img src="/images/hanrangen-icon.svg" alt="Hanrangon" class="logo"></a></h1>
+    <nav class="main-nav">
+      <ul>
+        <li><a href="/">サイト確認</a></li>
+        <li><a href="/logout">ログアウト</a></li>
+      </ul>
+    </nav>
+  </header>
+
   <nav class="sub-nav" class:is-localhost={isLocalhost}>
     <a href="/admin/" class:active={page === 'list'} onclick={(e) => navigate('/admin/', e)}>エントリ一覧</a>
     <a href="/admin/edit" class:active={page === 'edit' && !entryId} onclick={(e) => navigate('/admin/edit', e)}>新規作成</a>
@@ -63,6 +73,45 @@
     display: flex;
     flex-direction: column;
     height: 100%;
+  }
+
+  header {
+    background: #333;
+    color: white;
+    padding: 0.5rem 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+    font-size: 12px;
+  }
+
+  header.is-localhost {
+    background: #2e7d32;
+  }
+
+  header h1 {
+    margin: 0;
+    font-size: 1.2rem;
+  }
+
+  header .logo {
+    height: 24px;
+    display: block;
+    filter: brightness(0) invert(1);
+  }
+
+  header a {
+    color: white;
+    text-decoration: none;
+  }
+
+  header nav ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    gap: 1rem;
   }
 
   .sub-nav {
