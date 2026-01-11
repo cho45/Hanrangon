@@ -34,7 +34,7 @@ MID_C_VIS = 0.2  # 視覚的に分かりやすくするため内層を 50% の�
 
 
 # 1. バケツにピッタリ収まるピクセルデータの生成
-def generate_bucket_pixels(l_idx, h_idx, c_idx, n=800):
+def generate_bucket_pixels(l_idx, h_idx, c_idx, n=15000):
     l_min, l_max = l_idx * 0.25, (l_idx + 1) * 0.25
     h_min, h_max = h_idx * 45, (h_idx + 1) * 45
     # 視覚的な彩度の範囲
@@ -55,10 +55,10 @@ def generate_bucket_pixels(l_idx, h_idx, c_idx, n=800):
 
 # 特徴的なバケツを複数埋める
 np.random.seed(42)
-x1, y1, z1, c1 = generate_bucket_pixels(2, 3, 1)  # 明るい緑 (Vivid)
-x2, y2, z2, c2 = generate_bucket_pixels(1, 0, 1)  # 暗い赤 (Vivid)
-x3, y3, z3, c3 = generate_bucket_pixels(3, 0, 0)  # 非常に明るい無彩色 (Muted)
-x4, y4, z4, c4 = generate_bucket_pixels(0, 5, 0)  # 真っ暗な青系 (Muted)
+x1, y1, z1, c1 = generate_bucket_pixels(0, 2, 1)  # 明るい緑 (Vivid)
+x2, y2, z2, c2 = generate_bucket_pixels(1, 7, 1)  # 暗い赤 (Vivid)
+x3, y3, z3, c3 = generate_bucket_pixels(2, 0, 0)  # 非常に明るい無彩色 (Muted)
+x4, y4, z4, c4 = generate_bucket_pixels(0, 5, 0, 0)  # 真っ暗な青系 (Muted)
 
 X = np.concatenate([x1, x2, x3, x4])
 Y = np.concatenate([y1, y2, y3, y4])
