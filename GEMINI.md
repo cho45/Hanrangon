@@ -8,6 +8,7 @@ Hanrangon is a modern rewrite of the Nogag CMS (originally Perl) in Go. It is de
 *   **Web Framework:** Echo v4
 *   **Database:** SQLite (partitioned into Data, Images, TF-IDF, and Worker DBs).
 *   **Data Access:** `sqlc` is used for type-safe SQL execution.
+*   **Image Handling:** Supports JPEG, PNG, WebP, and AVIF (via `vegidio/avif-go`).
 *   **Frontend (Public):** Server-side rendered `html/template`.
 *   **Frontend (Admin):** Single Page Application (SPA) built with Svelte 5 and Vite.
 *   **Post-processing:** Node.js sidecar process for heavy content rendering (MathJax, Syntax Highlighting).

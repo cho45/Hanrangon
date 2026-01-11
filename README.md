@@ -42,11 +42,14 @@ Perl 版 Nogag (氾濫原) の Go (Golang) によるリライトプロジェク�
 
 ## Prerequisites
 
-- Go 1.24+
+- Go 1.24+ (CGo required for SQLite and AVIF)
 - `Node.js` (記事保存時のポストプロセスおよび管理画面のビルドに使用)
 - `sqlc` CLI (DB コード生成に使用)
 - `goimports` (コードのフォーマットに使用)
 - `air` (開発時のホットリロードに使用)
+
+> [!NOTE]
+> AVIF のデコードには `vegidio/avif-go` を使用しています。主要な OS/アーキテクチャ（Linux, macOS, Windows）向けの静的ライブラリが同梱されているため、通常はシステム側に `libavif` をインストールする必要はありません。
 
 ## Setup & Run
 

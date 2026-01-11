@@ -20,6 +20,7 @@ import (
 	"github.com/cho45/hanrangon/app"
 	"github.com/cho45/hanrangon/model"
 	"github.com/nfnt/resize"
+	_ "github.com/vegidio/avif-go"
 	_ "golang.org/x/image/webp"
 	"golang.org/x/net/html"
 	"golang.org/x/sync/errgroup"

@@ -54,6 +54,7 @@ require (
 	github.com/spf13/cast v1.7.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
+	github.com/vegidio/avif-go v0.0.0-20260104153230-9241dada5213 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
