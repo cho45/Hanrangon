@@ -16,11 +16,12 @@ import (
 
 // ConvertToAVIFOptions はAVIF変換コマンドのオプション
 type ConvertToAVIFOptions struct {
-	DryRun   bool // ドライランモード（変更なし）
-	Force    bool // 確認なしで実行
-	Parallel int  // 並列変換数（常に1、avifencが--jobs 3を使用）
-	Backup   bool // マイグレーション前にバックアップを作成
-	Limit    int  // 処理するエントリ数の上限（0=無制限、ID昇順で古いものから処理）
+	DryRun   bool  // ドライランモード（変更なし）
+	Force    bool  // 確認なしで実行
+	Parallel int   // 並列変換数（常に1、avifencが--jobs 3を使用）
+	Backup   bool  // マイグレーション前にバックアップを作成
+	Limit    int   // 処理するエントリ数の上限（0=無制限、ID昇順で古いものから処理）
+	EntryID  int64 // 特定のエントリIDのみを処理（0=無効）
 }
 
 // ConvertToAVIF はJPG/JPEG画像をAVIFに変換し、データベースのエントリを書き換える
@@ -31,6 +32,7 @@ func ConvertToAVIF(ctx context.Context, application app.App, args []string) erro
 	fs.BoolVar(&opts.Force, "force", false, "Force execution without confirmation")
 	fs.BoolVar(&opts.Backup, "backup", false, "Create database backup before conversion")
 	fs.IntVar(&opts.Limit, "limit", 0, "Limit number of entries to process (0=unlimited, processes oldest entries first by ID)")
+	fs.Int64Var(&opts.EntryID, "entry-id", 0, "Process only the entry with this ID (0=disabled)")
 	opts.Parallel = 1 // 固定値（avifencが--jobs 3を使用するため）
 	fs.Parse(args)
 
@@ -79,8 +81,18 @@ func ConvertToAVIF(ctx context.Context, application app.App, args []string) erro
 	}
 
 	// 検証
-	if err := converter.Verify(ctx); err != nil {
-		log.Printf("警告: 検証に失敗しました: %v", err)
+	// 理由: すべての変換が完了した後に、残っている未変換データがないか確認
+	// ただし、dry-run、limit、entry-id指定時は部分的な処理なので検証をスキップ
+	if !opts.DryRun && opts.Limit == 0 && opts.EntryID == 0 {
+		if err := converter.Verify(ctx); err != nil {
+			log.Printf("警告: 検証に失敗しました: %v", err)
+		}
+	} else if opts.DryRun {
+		log.Printf("ドライランモードのため検証をスキップします")
+	} else if opts.Limit > 0 {
+		log.Printf("--limit指定のため検証をスキップします（部分的な処理のみ実行）")
+	} else if opts.EntryID > 0 {
+		log.Printf("--entry-id指定のため検証をスキップします（単一エントリのみ処理）")
 	}
 
 	log.Printf("AVIF変換完了")
@@ -99,18 +111,33 @@ type AVIFConverter struct {
 // 各エントリごとに: 画像抽出 → AVIF変換 → DB更新 → JPG削除を完結させる
 func (c *AVIFConverter) ProcessEntries(ctx context.Context) error {
 	// .jpg または .jpeg を含むエントリをクエリ
-	// ID昇順（古いものから）処理し、オプションでLIMITを適用
-	query := `
-		SELECT id, path, body, formatted_body
-		FROM entries
-		WHERE body LIKE '%/images/entry/%.jpg%'
-		   OR body LIKE '%/images/entry/%.jpeg%'
-		   OR formatted_body LIKE '%/images/entry/%.jpg%'
-		   OR formatted_body LIKE '%/images/entry/%.jpeg%'
-		ORDER BY id
-	`
-	if c.opts.Limit > 0 {
-		query += fmt.Sprintf(" LIMIT %d", c.opts.Limit)
+	// ID昇順（古いものから）処理し、オプションでLIMITまたはEntryIDを適用
+	var query string
+	if c.opts.EntryID > 0 {
+		// 特定のエントリIDのみを処理
+		query = fmt.Sprintf(`
+			SELECT id, path, body, formatted_body
+			FROM entries
+			WHERE id = %d
+			  AND (body LIKE '%%/images/entry/%%.jpg%%'
+			       OR body LIKE '%%/images/entry/%%.jpeg%%'
+			       OR formatted_body LIKE '%%/images/entry/%%.jpg%%'
+			       OR formatted_body LIKE '%%/images/entry/%%.jpeg%%')
+		`, c.opts.EntryID)
+	} else {
+		// 通常の処理（全件またはLIMIT付き）
+		query = `
+			SELECT id, path, body, formatted_body
+			FROM entries
+			WHERE body LIKE '%/images/entry/%.jpg%'
+			   OR body LIKE '%/images/entry/%.jpeg%'
+			   OR formatted_body LIKE '%/images/entry/%.jpg%'
+			   OR formatted_body LIKE '%/images/entry/%.jpeg%'
+			ORDER BY id
+		`
+		if c.opts.Limit > 0 {
+			query += fmt.Sprintf(" LIMIT %d", c.opts.Limit)
+		}
 	}
 
 	rows, err := c.app.DB().QueryContext(ctx, query)
@@ -143,13 +170,16 @@ func (c *AVIFConverter) ProcessEntries(ctx context.Context) error {
 
 	if c.opts.DryRun {
 		log.Printf("ドライラン: %d個のエントリを処理します（実際には変更しません）", len(entries))
-		return nil
 	}
 
-	// avifencコマンドのパスを取得
-	avifencPath, err := c.findAVIFEnc()
-	if err != nil {
-		return fmt.Errorf("avifenc not found: %w", err)
+	// avifencコマンドのパスを取得（dry-runモードでは不要だがエラーチェックのため取得）
+	var avifencPath string
+	if !c.opts.DryRun {
+		var err error
+		avifencPath, err = c.findAVIFEnc()
+		if err != nil {
+			return fmt.Errorf("avifenc not found: %w", err)
+		}
 	}
 
 	successCount := 0
@@ -178,6 +208,21 @@ func (c *AVIFConverter) ProcessEntries(ctx context.Context) error {
 		}
 
 		log.Printf("  %d個の画像ファイルを変換します", len(imageFiles))
+
+		// ドライランモードの場合は、ここで詳細を表示してスキップ
+		if c.opts.DryRun {
+			for _, imgFile := range imageFiles {
+				avifFilename := c.getAVIFFilename(imgFile)
+				log.Printf("    [dry-run] %s → %s", imgFile, avifFilename)
+			}
+			// BaseURL + entries.path でURLを出力
+			baseURL := c.app.Config().BaseURL
+			entryURL := fmt.Sprintf("%s%s", strings.TrimSuffix(baseURL, "/"), e.path)
+			log.Printf("  [dry-run] DB更新対象: %s", entryURL)
+			log.Printf("  [dry-run] 元ファイル削除: %d個", len(imageFiles))
+			successCount++
+			continue
+		}
 
 		// ステップ1: 画像をAVIFに変換
 		convertSuccess := true
@@ -210,7 +255,7 @@ func (c *AVIFConverter) ProcessEntries(ctx context.Context) error {
 		newBody := c.rewriteExtensions(e.body)
 		newHTML := c.rewriteExtensions(e.formattedBody)
 
-		_, err = c.app.DB().ExecContext(ctx, `
+		_, err := c.app.DB().ExecContext(ctx, `
 			UPDATE entries
 			SET body = ?, formatted_body = ?
 			WHERE id = ?

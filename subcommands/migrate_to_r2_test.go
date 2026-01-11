@@ -1304,6 +1304,109 @@ func TestMigrator_ProcessEntries_DryRun(t *testing.T) {
 	}
 }
 
+// TestMigrator_ProcessEntriesWithEntryID tests that --entry-id processes only the specified entry
+func TestMigrator_ProcessEntriesWithEntryID(t *testing.T) {
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
+
+	// Setup test app
+	tmpDir := t.TempDir()
+	config := &app.Config{
+		R2PublicURL: "https://assets.lowreal.net",
+		UploadDir:   tmpDir,
+		BaseURL:     "http://localhost:5555",
+	}
+
+	registry := jobqueue.NewRegistry()
+	workerQueries := model.New(workerDB)
+	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+
+	tfidfQueries := model.New(tfidfDB)
+	dataQueries := model.New(db)
+	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+
+	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+
+	// Insert 5 test entries with images
+	for i := 1; i <= 5; i++ {
+		// Create dummy image files
+		if err := os.WriteFile(filepath.Join(tmpDir, fmt.Sprintf("test-%d.jpg", i)), []byte("test"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err := db.Exec(`
+			INSERT INTO entries (id, path, title, body, formatted_body, format, status, date, created_at, modified_at, publish_at)
+			VALUES (?, ?, ?, ?, ?, 'html', 'public', '2024-01-01', datetime('now'), datetime('now'), datetime('now'))
+		`, i, fmt.Sprintf("/2024/01/entry-%d", i), fmt.Sprintf("Entry %d", i), "", fmt.Sprintf(`<p><img src="/images/entry/test-%d.jpg"></p>`, i))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Create mock storage
+	mockStorage := &mockR2Storage{
+		uploadedFiles: make(map[string]bool),
+		uploadedData:  make(map[string][]byte),
+	}
+
+	// Create migrator with entry-id=3
+	migrator := &Migrator{
+		app:         application,
+		r2Storage:   mockStorage,
+		r2PublicURL: "https://assets.lowreal.net",
+		uploadDir:   tmpDir,
+		opts: &MigrateToR2Options{
+			DryRun:  false,
+			EntryID: 3, // Only process entry ID 3
+		},
+	}
+
+	// Execute ProcessEntries with entry-id
+	ctx := context.Background()
+	if err := migrator.ProcessEntries(ctx); err != nil {
+		t.Fatalf("ProcessEntries failed: %v", err)
+	}
+
+	// Verify that only entry 3 was processed
+	for i := 1; i <= 5; i++ {
+		var formattedBody string
+		err := db.QueryRow(`SELECT formatted_body FROM entries WHERE id = ?`, i).Scan(&formattedBody)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if i == 3 {
+			// Entry 3 should be migrated
+			if !strings.Contains(formattedBody, "assets.lowreal.net") {
+				t.Errorf("Entry 3 should have been migrated, got: %s", formattedBody)
+			}
+			if strings.Contains(formattedBody, "/images/entry/") {
+				t.Errorf("Entry 3 should not contain /images/entry/, got: %s", formattedBody)
+			}
+		} else {
+			// Other entries should NOT be migrated
+			if !strings.Contains(formattedBody, "/images/entry/") {
+				t.Errorf("Entry %d should NOT have been migrated, got: %s", i, formattedBody)
+			}
+			if strings.Contains(formattedBody, "assets.lowreal.net") {
+				t.Errorf("Entry %d should not be migrated, got: %s", i, formattedBody)
+			}
+		}
+	}
+
+	// Verify exactly 1 file was uploaded (test-3.jpg)
+	if len(mockStorage.uploadedFiles) != 1 {
+		t.Errorf("Expected 1 file to be uploaded, got %d: %v", len(mockStorage.uploadedFiles), mockStorage.uploadedFiles)
+	}
+
+	if !mockStorage.uploadedFiles["test-3.jpg"] {
+		t.Error("Expected test-3.jpg to be uploaded")
+	}
+}
+
 // TestMigrator_UpdateImageURIs_DryRun tests that UpdateImageURIs dry-run mode doesn't modify the database
 func TestMigrator_UpdateImageURIs_DryRun(t *testing.T) {
 	dbs := testutil.SetupAllDBs(t)

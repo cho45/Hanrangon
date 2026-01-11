@@ -20,12 +20,13 @@ import (
 
 // MigrateToR2Options はマイグレーションコマンドのオプション
 type MigrateToR2Options struct {
-	DryRun   bool // ドライランモード（変更なし）
-	Force    bool // 確認なしで実行
-	Verify   bool // 検証のみ（マイグレーションなし）
-	Parallel int  // 並列アップロード数
-	Backup   bool // マイグレーション前にバックアップを作成
-	Limit    int  // 処理するエントリ数の上限（0=無制限、ID昇順で古いものから処理）
+	DryRun   bool  // ドライランモード（変更なし）
+	Force    bool  // 確認なしで実行
+	Verify   bool  // 検証のみ（マイグレーションなし）
+	Parallel int   // 並列アップロード数
+	Backup   bool  // マイグレーション前にバックアップを作成
+	Limit    int   // 処理するエントリ数の上限（0=無制限、ID昇順で古いものから処理）
+	EntryID  int64 // 特定のエントリIDのみを処理（0=無効）
 }
 
 // MigrateToR2 はローカル画像をR2に移行し、データベースのエントリを書き換える
@@ -38,6 +39,7 @@ func MigrateToR2(ctx context.Context, application app.App, args []string) error 
 	fs.IntVar(&opts.Parallel, "parallel", 4, "Number of parallel uploads")
 	fs.BoolVar(&opts.Backup, "backup", false, "Create database backup before migration")
 	fs.IntVar(&opts.Limit, "limit", 0, "Limit number of entries to process (0=unlimited, processes oldest entries first by ID)")
+	fs.Int64Var(&opts.EntryID, "entry-id", 0, "Process only the entry with this ID (0=disabled)")
 	fs.Parse(args)
 
 	config := application.Config()
@@ -111,8 +113,17 @@ func MigrateToR2(ctx context.Context, application app.App, args []string) error 
 
 	// 検証
 	// 理由: すべての移行が完了した後に、残っている未移行データがないか確認
-	if err := migrator.Verify(ctx); err != nil {
-		log.Printf("警告: 検証に失敗しました: %v", err)
+	// ただし、dry-run、limit、entry-id指定時は部分的な処理なので検証をスキップ
+	if !opts.DryRun && opts.Limit == 0 && opts.EntryID == 0 {
+		if err := migrator.Verify(ctx); err != nil {
+			log.Printf("警告: 検証に失敗しました: %v", err)
+		}
+	} else if opts.DryRun {
+		log.Printf("ドライランモードのため検証をスキップします")
+	} else if opts.Limit > 0 {
+		log.Printf("--limit指定のため検証をスキップします（部分的な処理のみ実行）")
+	} else if opts.EntryID > 0 {
+		log.Printf("--entry-id指定のため検証をスキップします（単一エントリのみ処理）")
 	}
 
 	log.Printf("マイグレーション完了")
@@ -132,15 +143,27 @@ type Migrator struct {
 // 各エントリごとに: 画像抽出 → R2アップロード → DB更新を完結させる
 func (m *Migrator) ProcessEntries(ctx context.Context) error {
 	// /images/entry/を含むエントリをクエリ
-	// ID昇順（古いものから）処理し、オプションでLIMITを適用
-	query := `
-		SELECT id, path, body, formatted_body
-		FROM entries
-		WHERE body LIKE '%/images/entry/%' OR formatted_body LIKE '%/images/entry/%'
-		ORDER BY id
-	`
-	if m.opts.Limit > 0 {
-		query += fmt.Sprintf(" LIMIT %d", m.opts.Limit)
+	// ID昇順（古いものから）処理し、オプションでLIMITまたはEntryIDを適用
+	var query string
+	if m.opts.EntryID > 0 {
+		// 特定のエントリIDのみを処理
+		query = fmt.Sprintf(`
+			SELECT id, path, body, formatted_body
+			FROM entries
+			WHERE id = %d
+			  AND (body LIKE '%%/images/entry/%%' OR formatted_body LIKE '%%/images/entry/%%')
+		`, m.opts.EntryID)
+	} else {
+		// 通常の処理（全件またはLIMIT付き）
+		query = `
+			SELECT id, path, body, formatted_body
+			FROM entries
+			WHERE body LIKE '%/images/entry/%' OR formatted_body LIKE '%/images/entry/%'
+			ORDER BY id
+		`
+		if m.opts.Limit > 0 {
+			query += fmt.Sprintf(" LIMIT %d", m.opts.Limit)
+		}
 	}
 
 	rows, err := m.app.DB().QueryContext(ctx, query)
@@ -173,7 +196,6 @@ func (m *Migrator) ProcessEntries(ctx context.Context) error {
 
 	if m.opts.DryRun {
 		log.Printf("ドライラン: %d個のエントリを処理します（実際には変更しません）", len(entries))
-		return nil
 	}
 
 	successCount := 0
@@ -199,6 +221,19 @@ func (m *Migrator) ProcessEntries(ctx context.Context) error {
 		}
 
 		log.Printf("  %d個の画像ファイルをアップロードします", len(imageFiles))
+
+		// ドライランモードの場合は、ここで詳細を表示してスキップ
+		if m.opts.DryRun {
+			for _, imgFile := range imageFiles {
+				log.Printf("    [dry-run] %s → R2 (%s/entry/%s)", imgFile, strings.TrimSuffix(m.r2PublicURL, "/"), imgFile)
+			}
+			// BaseURL + entries.path でURLを出力
+			baseURL := m.app.Config().BaseURL
+			entryURL := fmt.Sprintf("%s%s", strings.TrimSuffix(baseURL, "/"), e.path)
+			log.Printf("  [dry-run] DB更新対象: %s", entryURL)
+			successCount++
+			continue
+		}
 
 		// ステップ1: 画像をR2にアップロード
 		uploadSuccess := true

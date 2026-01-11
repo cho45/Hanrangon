@@ -836,3 +836,150 @@ func TestAVIFConverter_ProcessEntries_DryRun(t *testing.T) {
 		}
 	}
 }
+
+// TestAVIFConverter_ProcessEntriesWithEntryID tests that --entry-id processes only the specified entry
+func TestAVIFConverter_ProcessEntriesWithEntryID(t *testing.T) {
+	// Check if avifenc is available
+	if _, err := exec.LookPath("avifenc"); err != nil {
+		t.Skip("avifenc not found in PATH, skipping test")
+	}
+
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
+
+	// Setup test app
+	tmpDir := t.TempDir()
+	config := &app.Config{
+		UploadDir: tmpDir,
+		BaseURL:   "http://localhost:5555",
+	}
+
+	registry := jobqueue.NewRegistry()
+	workerQueries := model.New(workerDB)
+	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+
+	tfidfQueries := model.New(tfidfDB)
+	dataQueries := model.New(db)
+	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+
+	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+
+	// Create 5 test JPEG files and entries
+	for i := 1; i <= 5; i++ {
+		// Create a valid minimal JPEG file (1x1 pixel red image)
+		jpgPath := fmt.Sprintf("%s/test-%d.jpg", tmpDir, i)
+		// Minimal valid JPEG header + 1x1 red pixel
+		minimalJPEG := []byte{
+			0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01,
+			0x00, 0x01, 0x00, 0x00, 0xFF, 0xDB, 0x00, 0x43, 0x00, 0x08, 0x06, 0x06, 0x07, 0x06, 0x05, 0x08,
+			0x07, 0x07, 0x07, 0x09, 0x09, 0x08, 0x0A, 0x0C, 0x14, 0x0D, 0x0C, 0x0B, 0x0B, 0x0C, 0x19, 0x12,
+			0x13, 0x0F, 0x14, 0x1D, 0x1A, 0x1F, 0x1E, 0x1D, 0x1A, 0x1C, 0x1C, 0x20, 0x24, 0x2E, 0x27, 0x20,
+			0x22, 0x2C, 0x23, 0x1C, 0x1C, 0x28, 0x37, 0x29, 0x2C, 0x30, 0x31, 0x34, 0x34, 0x34, 0x1F, 0x27,
+			0x39, 0x3D, 0x38, 0x32, 0x3C, 0x2E, 0x33, 0x34, 0x32, 0xFF, 0xC0, 0x00, 0x0B, 0x08, 0x00, 0x01,
+			0x00, 0x01, 0x01, 0x01, 0x11, 0x00, 0xFF, 0xC4, 0x00, 0x14, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09, 0xFF, 0xDA, 0x00, 0x08,
+			0x01, 0x01, 0x00, 0x00, 0x3F, 0x00, 0x7F, 0xA2, 0xFF, 0xD9,
+		}
+		if err := os.WriteFile(jpgPath, minimalJPEG, 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Insert test entry
+		_, err := db.Exec(`
+			INSERT INTO entries (id, path, title, body, formatted_body, format, status, date, created_at, modified_at, publish_at)
+			VALUES (?, ?, ?, ?, ?, 'html', 'public', '2024-01-01', datetime('now'), datetime('now'), datetime('now'))
+		`, i, fmt.Sprintf("/2024/01/entry-%d", i), fmt.Sprintf("Entry %d", i), "", fmt.Sprintf(`<p><img src="/images/entry/test-%d.jpg"></p>`, i))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Create converter with entry-id=3
+	converter := &AVIFConverter{
+		app:       application,
+		uploadDir: tmpDir,
+		config:    config,
+		opts: &ConvertToAVIFOptions{
+			DryRun:  false,
+			EntryID: 3, // Only process entry ID 3
+		},
+	}
+
+	// Execute ProcessEntries with entry-id
+	ctx := context.Background()
+	if err := converter.ProcessEntries(ctx); err != nil {
+		t.Fatalf("ProcessEntries failed: %v", err)
+	}
+
+	// Verify that only entry 3 was processed
+	for i := 1; i <= 5; i++ {
+		var formattedBody string
+		err := db.QueryRow(`SELECT formatted_body FROM entries WHERE id = ?`, i).Scan(&formattedBody)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if i == 3 {
+			// Entry 3 should be converted to AVIF
+			if !strings.Contains(formattedBody, ".avif") {
+				t.Errorf("Entry 3 should have been converted to AVIF, got: %s", formattedBody)
+			}
+			if strings.Contains(formattedBody, ".jpg") {
+				t.Errorf("Entry 3 should not contain .jpg, got: %s", formattedBody)
+			}
+		} else {
+			// Other entries should NOT be converted
+			if !strings.Contains(formattedBody, ".jpg") {
+				t.Errorf("Entry %d should NOT have been converted, got: %s", i, formattedBody)
+			}
+			if strings.Contains(formattedBody, ".avif") {
+				t.Errorf("Entry %d should not contain .avif, got: %s", i, formattedBody)
+			}
+		}
+	}
+
+	// Verify exactly 1 AVIF file was created (test-3.avif)
+	avifExists := make(map[int]bool)
+	for i := 1; i <= 5; i++ {
+		avifPath := fmt.Sprintf("%s/test-%d.avif", tmpDir, i)
+		_, err := os.Stat(avifPath)
+		avifExists[i] = !os.IsNotExist(err)
+	}
+
+	if !avifExists[3] {
+		t.Error("test-3.avif should have been created")
+	}
+
+	for i := 1; i <= 5; i++ {
+		if i == 3 {
+			continue
+		}
+		if avifExists[i] {
+			t.Errorf("test-%d.avif should NOT have been created", i)
+		}
+	}
+
+	// Verify that only test-3.jpg was deleted
+	jpgExists := make(map[int]bool)
+	for i := 1; i <= 5; i++ {
+		jpgPath := fmt.Sprintf("%s/test-%d.jpg", tmpDir, i)
+		_, err := os.Stat(jpgPath)
+		jpgExists[i] = !os.IsNotExist(err)
+	}
+
+	if jpgExists[3] {
+		t.Error("test-3.jpg should have been deleted after conversion")
+	}
+
+	for i := 1; i <= 5; i++ {
+		if i == 3 {
+			continue
+		}
+		if !jpgExists[i] {
+			t.Errorf("test-%d.jpg should still exist (not processed)", i)
+		}
+	}
+}
