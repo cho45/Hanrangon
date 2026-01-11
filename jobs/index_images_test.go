@@ -101,8 +101,8 @@ func TestIndexImagesJob_Execute(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if count != 8 {
-		t.Errorf("expected 8 ngrams, got %d", count)
+	if count != 49 {
+		t.Errorf("expected 49 ngrams, got %d", count)
 	}
 }
 
@@ -226,7 +226,7 @@ func TestIndexImagesJob_TwoPhase(t *testing.T) {
 	}
 
 	// 2. Initial Fill
-	if err := job.FillImagesForEntry(ctx, entryID); err != nil {
+	if err := job.FillImagesForEntry(ctx, entryID, false); err != nil {
 		t.Fatalf("Fill failed: %v", err)
 	}
 
@@ -275,7 +275,7 @@ func TestIndexImagesJob_TwoPhase(t *testing.T) {
 	}
 
 	// 4. Final Fill
-	if err := job.FillImagesForEntry(ctx, entryID); err != nil {
+	if err := job.FillImagesForEntry(ctx, entryID, false); err != nil {
 		t.Fatalf("Final fill failed: %v", err)
 	}
 	err = imagesDB.QueryRow("SELECT sig FROM images WHERE entry_id = ?", entryID).Scan(&sig2)
@@ -427,7 +427,7 @@ func TestIndexImagesJob_CorruptImage(t *testing.T) {
 	}
 
 	// Fill should also "succeed" but set sig to empty
-	if err := job.FillImagesForEntry(ctx, entryID); err != nil {
+	if err := job.FillImagesForEntry(ctx, entryID, false); err != nil {
 		t.Fatalf("Fill failed: %v", err)
 	}
 
@@ -518,7 +518,7 @@ func TestIndexImagesJob_Rollback(t *testing.T) {
 		END;
 	`)
 
-	err = job.FillImagesForEntry(ctx, entryID)
+	err = job.FillImagesForEntry(ctx, entryID, false)
 	if err == nil {
 		t.Fatal("Fill should have failed due to ngram trigger")
 	}

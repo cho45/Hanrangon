@@ -16,12 +16,14 @@ func IndexImages(ctx context.Context, application app.App, args []string) error 
 	dryRun := fs.Bool("dry-run", false, "dry run mode (no actual changes)")
 	sync := fs.Bool("sync", false, "only synchronize image records with entry content (fast)")
 	fill := fs.Bool("fill", false, "only fill missing image signatures (slow)")
+	overwrite := fs.Bool("overwrite", false, "force recalculate image signatures even if already indexed")
 	fs.Parse(args)
 
 	if !*force && !*dryRun {
 		fmt.Println("Warning: This operation will index images in entries and may take some time.")
 		fmt.Println("Use --sync to only synchronize records (fast).")
 		fmt.Println("Use --fill to only process missing images (slow).")
+		fmt.Println("Use --overwrite to force recalculate image signatures even if already indexed.")
 		fmt.Println("If neither --sync nor --fill is specified, both will be executed.")
 		fmt.Println()
 		fmt.Println("Use --force to actually execute the operation, or --dry-run to see what would happen.")
@@ -88,7 +90,7 @@ func IndexImages(ctx context.Context, application app.App, args []string) error 
 
 			log.Printf("  [%d/%d] Filling chunk of %d entries (last id:%d)", end, total, len(chunk), chunk[len(chunk)-1])
 			if !*dryRun {
-				if err := job.FillImagesForEntries(ctx, chunk); err != nil {
+				if err := job.FillImagesForEntries(ctx, chunk, *overwrite); err != nil {
 					log.Printf("  Error filling images for chunk: %v", err)
 				}
 			}

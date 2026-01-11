@@ -88,7 +88,7 @@ func TestIndexImagesJob_SimilarityIntegration(t *testing.T) {
 	}
 
 	// 3. Run indexing
-	err = job.FillImagesForEntry(ctx, entryID)
+	err = job.FillImagesForEntry(ctx, entryID, false)
 	if err != nil {
 		t.Fatalf("indexing failed: %v", err)
 	}
@@ -103,8 +103,8 @@ func TestIndexImagesJob_SimilarityIntegration(t *testing.T) {
 	for _, row := range similar {
 		if row.ID == id2 {
 			found = true
-			if row.Score != 8 {
-				t.Errorf("expected perfect score 8 for identical image, got %d", row.Score)
+			if row.Score != 49 {
+				t.Errorf("expected perfect score 49 for identical image, got %d", row.Score)
 			}
 		}
 	}

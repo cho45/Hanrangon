@@ -45,7 +45,8 @@ func (j *IndexImagesJob) Timeout() time.Duration {
 }
 
 type IndexImagesArg struct {
-	EntryID int64 `json:"entry_id"`
+	EntryID   int64 `json:"entry_id"`
+	Overwrite bool  `json:"overwrite"`
 }
 
 func (j *IndexImagesJob) extractImageURLs(htmlStr string) []string {
@@ -87,7 +88,7 @@ func (j *IndexImagesJob) Execute(ctx context.Context, arg json.RawMessage) error
 		return fmt.Errorf("failed to sync images: %w", err)
 	}
 
-	return j.FillImagesForEntry(ctx, a.EntryID)
+	return j.FillImagesForEntry(ctx, a.EntryID, a.Overwrite)
 }
 
 func (j *IndexImagesJob) SyncImagesForEntry(ctx context.Context, entryID int64) error {
@@ -180,11 +181,11 @@ func (j *IndexImagesJob) syncInternal(ctx context.Context, qtx *model.Queries, e
 	return nil
 }
 
-func (j *IndexImagesJob) FillImagesForEntry(ctx context.Context, entryID int64) error {
-	return j.FillImagesForEntries(ctx, []int64{entryID})
+func (j *IndexImagesJob) FillImagesForEntry(ctx context.Context, entryID int64, force bool) error {
+	return j.FillImagesForEntries(ctx, []int64{entryID}, force)
 }
 
-func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []int64) error {
+func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []int64, force bool) error {
 	if len(entryIDs) == 0 {
 		return nil
 	}
@@ -197,7 +198,7 @@ func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []in
 			return err
 		}
 		for _, img := range images {
-			if len(img.Sig) == 0 {
+			if force || len(img.Sig) == 0 {
 				allImages = append(allImages, img)
 			}
 		}
@@ -278,9 +279,10 @@ func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []in
 			}
 
 			h := res.hash.GetHash()
-			for i := int32(0); i < 8; i++ {
-				segment := int32((h >> (i * 8)) & 0xFF)
-				word := int64((i << 8) | segment)
+			for i := 0; i <= 64-16; i++ {
+				pattern := int64((h >> i) & 0xFFFF)
+				// Pack position into the word to match original logic and avoid collisions
+				word := (int64(i) << 16) | pattern
 
 				if err := qtx.CreateNgram(ctx, model.CreateNgramParams{
 					ImageID: res.imgRecord.ID,
