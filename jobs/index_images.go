@@ -300,15 +300,17 @@ func (j *IndexImagesJob) CalculateColorSignatureFromImage(img image.Image) uint6
 	// 人間の知覚に基づいた OKLCH 空間で、色空間を 4x2x8 = 64分割して集計します。
 	//
 	// 64bit整数の各ビット（0〜63番目）が、特定の「色領域（バケツ）」に対応します。
-	// ある色が 64ビット中の何番目のビットに該当するか（ビット位置）を以下の 6bit で決定します：
-	//   ビット位置 (0-63) = [ Lightness(2bit) | Hue(3bit) | Chroma(1bit) ]
-	//   - 0 bit目 (LSB): Chroma (0=低彩度/無彩色に近い, 1=高彩度/鮮やか)
-	//   - 1-3 bit目: Hue (0-7, 45度刻みの色相: 赤, 黄, 緑, 青, 紫...)
-	//   - 4-5 bit目: Lightness (0-3, 知覚的な明るさ: 黒〜白)
+	// ある色が 64ビット中の何番目のビットに該当するか（ビット位置）を、
+	// 空間充填曲線の一種である Z-order (Morton order) を用いて決定します。
 	//
-	// この配置により、知覚的に近い特徴を持つ色がビット列上でも隣り合うように並びます。
+	// ビットインターリーブ順:
+	//   ビット位置 (0-63) = [ H2 | L1 | H1 | L0 | H0 | C0 ]
+	//   - L = Lightness(2bit), H = Hue(3bit), C = Chroma(1bit)
+	//
+	// この Z-order 配置により、色空間（L, H, C）上で近い特徴を持つ色が、
+	// 1次元のビット列上でも高い確率で隣り合う（空間局所性が保存される）ようになります。
 	// これによりスライディングウィンドウ（12bit 窓）による検索が、
-	// 「似た色調の組み合わせ（パレット）」を効果的に捉えられるようになります。
+	// 「色空間上の局所的な色の塊」をより意味のあるパターンとして捉えられます。
 	counts := make([]int, 64)
 	bounds := resized.Bounds()
 	totalPixels := 0
@@ -320,15 +322,19 @@ func (j *IndexImagesJob) CalculateColorSignatureFromImage(img image.Image) uint6
 			l, c, h := rgbToOKLCH(float64(r)/65535.0, float64(g)/65535.0, float64(b)/65535.0)
 
 			// 量子化 (4x2x8 = 64 ビン)
-			li := int(l * 3.99) // 明度: 4段階
+			li := int(l * 3.99) // 明度: 4段階 (2bit: l1, l0)
 			ci := 0
 			if c > 0.05 {
 				ci = 1
-			} // 彩度: 2段階 (0.05以上を鮮やかとみなす)
-			hi := int((h / 360.0) * 7.99) // 色相: 8段階
+			} // 彩度: 2段階 (1bit: c0)
+			hi := int((h / 360.0) * 7.99) // 色相: 8段階 (3bit: h2, h1, h0)
 
-			// ビット位置を計算 (0-63)
-			bitPos := (li << 4) | (hi << 1) | ci
+			// Z-order インターリーブ計算 [ H2 L1 H1 L0 H0 C0 ]
+			l1, l0 := (li>>1)&1, li&1
+			h2, h1, h0 := (hi>>2)&1, (hi>>1)&1, hi&1
+			c0 := ci & 1
+
+			bitPos := (h2 << 5) | (l1 << 4) | (h1 << 3) | (l0 << 2) | (h0 << 1) | c0
 			counts[bitPos]++
 			totalPixels++
 		}

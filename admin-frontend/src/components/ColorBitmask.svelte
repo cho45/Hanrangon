@@ -32,19 +32,39 @@
   });
 
   // Calculate OKLCH CSS color for a given bit index (0-63)
-  // Index: [ L(2bit) | H(3bit) | C(1bit) ]
+  // Index: [ H2 | L1 | H1 | L0 | H0 | C0 ]
   function getOKLCH(index: number) {
-    const l_idx = (index >> 4) & 0x3;
-    const h_idx = (index >> 1) & 0x7;
-    const c_idx = index & 0x1;
+    // Morton Order (Z-order) Decoding
+    const h2 = (index >> 5) & 1;
+    const l1 = (index >> 4) & 1;
+    const h1 = (index >> 3) & 1;
+    const l0 = (index >> 2) & 1;
+    const h0 = (index >> 1) & 1;
+    const c0 = index & 1;
+
+    const l_idx = (l1 << 1) | l0;
+    const h_idx = (h2 << 2) | (h1 << 1) | h0;
+    const c_idx = c0;
 
     // Map quantized indices to OKLCH values
-    // L: 20% to 90%, C: 0.01 or 0.15, H: 0 to 315
+    // L: 25% to 85%, C: 0.01 or 0.15, H: 0 to 315
     const L = [25, 45, 65, 85][l_idx];
     const C = c_idx === 0 ? 0.01 : 0.15;
     const H = h_idx * 45;
 
     return `oklch(${L}% ${C} ${H})`;
+  }
+
+  // Visual layout remains HxL grid, but the bit 'index' mapped to each cell 
+  // must match the Z-order address calculated in the Go backend.
+  function getBitIndex(l: number, h: number, c: number) {
+    const l1 = (l >> 1) & 1;
+    const l0 = l & 1;
+    const h2 = (h >> 2) & 1;
+    const h1 = (h >> 1) & 1;
+    const h0 = h & 1;
+    const c0 = c & 1;
+    return (h2 << 5) | (l1 << 4) | (h1 << 3) | (l0 << 2) | (h0 << 1) | c0;
   }
 </script>
 
@@ -58,7 +78,7 @@
           {#each [3, 2, 1, 0] as l}
             <div class="row">
               {#each [0, 1, 2, 3, 4, 5, 6, 7] as h}
-                {@const index = (l << 4) | (h << 1) | c}
+                {@const index = getBitIndex(l, h, c)}
                 <div 
                   class="bit" 
                   class:active={bits[index]}
