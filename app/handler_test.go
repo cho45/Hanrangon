@@ -104,8 +104,8 @@ func TestHandleIndex_SimilarImagesBulkFallback(t *testing.T) {
 	}
 	_, err = env.imagesDB.Exec(`
 		INSERT INTO ngram (image_id, word) VALUES
-		(200, 'shared_tag'),
-		(201, 'shared_tag')
+		(200, 1),
+		(201, 1)
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -257,8 +257,8 @@ func TestHandleEntry(t *testing.T) {
 		}
 		_, err = env.imagesDB.Exec(`
 			INSERT INTO ngram (image_id, word) VALUES
-			(10, 'common'),
-			(11, 'common')
+			(10, 1),
+			(11, 1)
 		`)
 		if err != nil {
 			t.Fatal(err)

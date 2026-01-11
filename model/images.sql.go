@@ -54,8 +54,8 @@ INSERT OR REPLACE INTO ngram (image_id, word) VALUES (?, ?)
 `
 
 type CreateNgramParams struct {
-	ImageID int64  `json:"image_id"`
-	Word    []byte `json:"word"`
+	ImageID int64 `json:"image_id"`
+	Word    int64 `json:"word"`
 }
 
 func (q *Queries) CreateNgram(ctx context.Context, arg CreateNgramParams) error {

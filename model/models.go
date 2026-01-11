@@ -63,8 +63,8 @@ type JobType struct {
 }
 
 type Ngram struct {
-	ImageID int64  `json:"image_id"`
-	Word    []byte `json:"word"`
+	Word    int64 `json:"word"`
+	ImageID int64 `json:"image_id"`
 }
 
 type Posting struct {

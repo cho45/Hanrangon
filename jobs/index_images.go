@@ -229,7 +229,7 @@ func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []in
 			if err != nil {
 				status = fmt.Sprintf("FAIL (%v)", err)
 			} else {
-				hash, err = goimagehash.PerceptionHash(img)
+				hash, err = goimagehash.DifferenceHash(img)
 				if err != nil {
 					status = fmt.Sprintf("HASH_FAIL (%v)", err)
 				} else {
@@ -278,11 +278,9 @@ func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []in
 			}
 
 			h := res.hash.GetHash()
-			for i := uint16(0); i < 4; i++ {
-				segment := uint16((h >> (i * 16)) & 0xFFFF)
-				word := make([]byte, 4)
-				binary.BigEndian.PutUint16(word[0:2], i)
-				binary.BigEndian.PutUint16(word[2:4], segment)
+			for i := int32(0); i < 8; i++ {
+				segment := int32((h >> (i * 8)) & 0xFF)
+				word := int64((i << 8) | segment)
 
 				if err := qtx.CreateNgram(ctx, model.CreateNgramParams{
 					ImageID: res.imgRecord.ID,

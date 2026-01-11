@@ -101,8 +101,8 @@ func TestIndexImagesJob_Execute(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if count != 4 {
-		t.Errorf("expected 4 ngrams, got %d", count)
+	if count != 8 {
+		t.Errorf("expected 8 ngrams, got %d", count)
 	}
 }
 
