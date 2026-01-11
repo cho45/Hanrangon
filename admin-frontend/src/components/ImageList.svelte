@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from '../lib/api.svelte';
+  import ColorBitmask from './ColorBitmask.svelte';
 
   interface Image {
     id: number;
@@ -84,6 +85,7 @@
             {/if}
           </div>
           <div class="info">
+            <ColorBitmask sig={image.sig} />
             <div class="entry-link">
               <a href="/admin/edit?id={image.entry_id}">Entry: <strong>{image.entry_id}</strong></a>
             </div>
@@ -101,6 +103,21 @@
     <button type="button" class="close-btn" onclick={() => similarDialog.close()}>×</button>
   </div>
   <div class="dialog-content">
+    {#if selectedImage}
+      <div class="selected-compare">
+        <div class="image-item target">
+          <div class="img-container">
+            <img src={selectedImage.uri} alt="" />
+          </div>
+          <div class="info">
+            <ColorBitmask sig={selectedImage.sig} />
+            <div>Selected Image</div>
+          </div>
+        </div>
+        <div class="arrow">→</div>
+      </div>
+    {/if}
+
     {#if api.loading && similarImages.length === 0}
       <div class="loading">検索中...</div>
     {:else if similarImages.length === 0}
@@ -113,6 +130,7 @@
               <img src={image.uri} alt="" loading="lazy" />
             </div>
             <div class="info">
+              <ColorBitmask sig={image.sig} />
               <div class="entry-link">
                 <a href="/admin/edit?id={image.entry_id}" onclick={() => similarDialog.close()}>Entry: <strong>{image.entry_id}</strong></a>
               </div>
@@ -165,6 +183,7 @@
     align-items: center;
     justify-content: center;
     position: relative;
+    max-height: 150px;
   }
 
   .indexed-icon {
@@ -193,7 +212,7 @@
   .img-container img {
     max-width: 100%;
     max-height: 100%;
-    object-fit: cover;
+    object-fit: contain;
   }
 
   .info {
@@ -259,12 +278,32 @@
   }
 
   .similar-grid {
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     gap: 12px;
   }
 
   .loading {
     text-align: center;
     padding: 40px;
+  }
+
+  .selected-compare {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 2px dashed #eee;
+  }
+
+  .selected-compare .target {
+    width: 150px;
+    flex-shrink: 0;
+    border: 2px solid #007bff;
+  }
+
+  .selected-compare .arrow {
+    font-size: 32px;
+    color: #ccc;
   }
 </style>
