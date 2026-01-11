@@ -21,6 +21,9 @@ type StorageClient interface {
 	// key: ファイル名のみ（例: "20240101120000-image.jpg"）
 	// 実装側で適切なパス（例: "entry/{key}"）を構築する
 	Upload(ctx context.Context, key string, body io.Reader, contentType string) (string, error)
+
+	// Exists checks if the file exists in the storage
+	Exists(ctx context.Context, key string) (bool, error)
 }
 
 // LocalStorage はローカルファイルシステムへの保存
@@ -60,9 +63,23 @@ func (s *LocalStorage) Upload(ctx context.Context, key string, body io.Reader, c
 	return s.uploadURLPrefix + url.PathEscape(key), nil
 }
 
+// Exists checks if the file exists locally
+func (s *LocalStorage) Exists(ctx context.Context, key string) (bool, error) {
+	destPath := filepath.Join(s.uploadDir, key)
+	_, err := os.Stat(destPath)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
+}
+
 // S3ClientInterface はS3クライアントの抽象化インターフェース（テスト用）
 type S3ClientInterface interface {
 	PutObject(ctx context.Context, params *s3.PutObjectInput, optFns ...func(*s3.Options)) (*s3.PutObjectOutput, error)
+	HeadObject(ctx context.Context, params *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error)
 }
 
 // R2Storage はCloudflare R2への保存
@@ -147,4 +164,24 @@ func (s *R2Storage) Upload(ctx context.Context, key string, body io.Reader, cont
 	// 公開URLを生成
 	publicURL := fmt.Sprintf("%s/entry/%s", strings.TrimSuffix(s.publicURL, "/"), url.PathEscape(key))
 	return publicURL, nil
+}
+
+// Exists checks if the file exists in R2
+func (s *R2Storage) Exists(ctx context.Context, key string) (bool, error) {
+	// R2のオブジェクトキー: entry/{key}
+	objectKey := "entry/" + key
+
+	_, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(objectKey),
+	})
+	if err != nil {
+		// エラーが404相当ならfalse、それ以外はエラーを返す
+		if strings.Contains(err.Error(), "NotFound") || strings.Contains(err.Error(), "404") {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to check existence in R2: %w", err)
+	}
+
+	return true, nil
 }

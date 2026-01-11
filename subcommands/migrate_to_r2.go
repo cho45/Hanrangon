@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"mime"
-	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -440,19 +439,7 @@ func RewriteBodyImageURLs(body, newBaseURL string) string {
 
 // existsOnR2 はファイルがR2に存在するかチェックする
 func (m *Migrator) existsOnR2(ctx context.Context, filename string) (bool, error) {
-	url := fmt.Sprintf("%s/entry/%s", strings.TrimSuffix(m.r2PublicURL, "/"), filename)
-	req, err := http.NewRequestWithContext(ctx, "HEAD", url, nil)
-	if err != nil {
-		return false, err
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return false, err
-	}
-	defer resp.Body.Close()
-
-	return resp.StatusCode == http.StatusOK, nil
+	return m.r2Storage.Exists(ctx, filename)
 }
 
 // uploadFile は単一ファイルをR2にアップロードする

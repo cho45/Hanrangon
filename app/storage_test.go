@@ -14,8 +14,10 @@ import (
 
 // mockS3Client はS3ClientInterfaceのモック実装
 type mockS3Client struct {
-	putObjectCalls []mockPutObjectCall
-	putObjectError error
+	putObjectCalls  []mockPutObjectCall
+	putObjectError  error
+	headObjectCalls []mockHeadObjectCall
+	headObjectError error
 }
 
 type mockPutObjectCall struct {
@@ -25,6 +27,11 @@ type mockPutObjectCall struct {
 	cacheControl  string
 	contentLength int64
 	body          []byte
+}
+
+type mockHeadObjectCall struct {
+	bucket string
+	key    string
 }
 
 func (m *mockS3Client) PutObject(ctx context.Context, params *s3.PutObjectInput, optFns ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
@@ -45,6 +52,20 @@ func (m *mockS3Client) PutObject(ctx context.Context, params *s3.PutObjectInput,
 	m.putObjectCalls = append(m.putObjectCalls, call)
 
 	return &s3.PutObjectOutput{}, nil
+}
+
+func (m *mockS3Client) HeadObject(ctx context.Context, params *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
+	call := mockHeadObjectCall{
+		bucket: *params.Bucket,
+		key:    *params.Key,
+	}
+	m.headObjectCalls = append(m.headObjectCalls, call)
+
+	if m.headObjectError != nil {
+		return nil, m.headObjectError
+	}
+
+	return &s3.HeadObjectOutput{}, nil
 }
 
 func TestLocalStorage_Upload(t *testing.T) {
@@ -437,6 +458,103 @@ func TestR2Storage_Upload_Efficiency(t *testing.T) {
 		}
 		if string(call.body) != content {
 			t.Errorf("expected body %q, got %q", content, string(call.body))
+		}
+	})
+}
+
+func TestLocalStorage_Exists(t *testing.T) {
+	tmpDir := t.TempDir()
+	storage := NewLocalStorage(tmpDir, "/images/entry/")
+	ctx := context.Background()
+
+	filename := "exists.jpg"
+	localPath := filepath.Join(tmpDir, filename)
+
+	// 最初は存在しない
+	exists, err := storage.Exists(ctx, filename)
+	if err != nil {
+		t.Fatalf("Exists failed: %v", err)
+	}
+	if exists {
+		t.Error("expected exists to be false")
+	}
+
+	// ファイルを作成
+	if err := os.WriteFile(localPath, []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+
+	// 存在するはず
+	exists, err = storage.Exists(ctx, filename)
+	if err != nil {
+		t.Fatalf("Exists failed: %v", err)
+	}
+	if !exists {
+		t.Error("expected exists to be true")
+	}
+}
+
+func TestR2Storage_Exists(t *testing.T) {
+	t.Run("exists", func(t *testing.T) {
+		mock := &mockS3Client{}
+		storage := &R2Storage{
+			client:    mock,
+			bucket:    "test-bucket",
+			publicURL: "https://assets.example.com",
+		}
+		ctx := context.Background()
+		filename := "exists.jpg"
+
+		exists, err := storage.Exists(ctx, filename)
+		if err != nil {
+			t.Fatalf("Exists failed: %v", err)
+		}
+		if !exists {
+			t.Error("expected exists to be true")
+		}
+
+		if len(mock.headObjectCalls) != 1 {
+			t.Fatalf("expected 1 HeadObject call, got %d", len(mock.headObjectCalls))
+		}
+		if mock.headObjectCalls[0].key != "entry/exists.jpg" {
+			t.Errorf("expected key %q, got %q", "entry/exists.jpg", mock.headObjectCalls[0].key)
+		}
+	})
+
+	t.Run("not found (404)", func(t *testing.T) {
+		mock := &mockS3Client{
+			headObjectError: errors.New("api error: 404 Not Found"),
+		}
+		storage := &R2Storage{
+			client:    mock,
+			bucket:    "test-bucket",
+			publicURL: "https://assets.example.com",
+		}
+		ctx := context.Background()
+
+		exists, err := storage.Exists(ctx, "notfound.jpg")
+		if err != nil {
+			t.Fatalf("Exists failed: %v", err)
+		}
+		if exists {
+			t.Error("expected exists to be false")
+		}
+	})
+
+	t.Run("other error", func(t *testing.T) {
+		mock := &mockS3Client{
+			headObjectError: errors.New("api error: 500 Internal Server Error"),
+		}
+		storage := &R2Storage{
+			client:    mock,
+			bucket:    "test-bucket",
+			publicURL: "https://assets.example.com",
+		}
+		ctx := context.Background()
+
+		_, err := storage.Exists(ctx, "error.jpg")
+		if err == nil {
+			t.Fatal("expected error, got nil")
 		}
 	})
 }

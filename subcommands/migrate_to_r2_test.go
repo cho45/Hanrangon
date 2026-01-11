@@ -372,6 +372,13 @@ func (m *mockR2Storage) Upload(ctx context.Context, key string, body io.Reader, 
 	return fmt.Sprintf("https://assets.lowreal.net/entry/%s", key), nil
 }
 
+func (m *mockR2Storage) Exists(ctx context.Context, key string) (bool, error) {
+	if m.uploadedFiles == nil {
+		return false, nil
+	}
+	return m.uploadedFiles[key], nil
+}
+
 func TestRewriteBodyImageURLs(t *testing.T) {
 	tests := []struct {
 		name     string
