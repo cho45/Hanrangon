@@ -106,8 +106,17 @@ func MigrateToR2(ctx context.Context, application app.App, args []string) error 
 	// images.uriを一括更新
 	// 理由: エントリ本文の書き換えが完了した後に、画像DBも同期する
 	//       REPLACEによる一括更新なので高速
-	if err := migrator.UpdateImageURIs(ctx); err != nil {
-		return fmt.Errorf("image URI update failed: %w", err)
+	// ただし、dry-run、limit、entry-id指定時は部分的な処理なので一括更新をスキップ
+	if !opts.DryRun && opts.Limit == 0 && opts.EntryID == 0 {
+		if err := migrator.UpdateImageURIs(ctx); err != nil {
+			return fmt.Errorf("image URI update failed: %w", err)
+		}
+	} else if opts.DryRun {
+		log.Printf("ドライランモードのため画像URI更新をスキップします")
+	} else if opts.Limit > 0 {
+		log.Printf("--limit指定のため画像URI更新をスキップします（部分的な処理のみ実行）")
+	} else if opts.EntryID > 0 {
+		log.Printf("--entry-id指定のため画像URI更新をスキップします（単一エントリのみ処理）")
 	}
 
 	// 検証

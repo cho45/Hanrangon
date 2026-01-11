@@ -76,8 +76,17 @@ func ConvertToAVIF(ctx context.Context, application app.App, args []string) erro
 
 	// images.uriを一括更新
 	// 理由: すべてのエントリ処理が完了した後に、画像DBも同期する
-	if err := converter.UpdateImageURIs(ctx); err != nil {
-		log.Printf("警告: 画像URI更新に失敗しました: %v", err)
+	// ただし、dry-run、limit、entry-id指定時は部分的な処理なので一括更新をスキップ
+	if !opts.DryRun && opts.Limit == 0 && opts.EntryID == 0 {
+		if err := converter.UpdateImageURIs(ctx); err != nil {
+			log.Printf("警告: 画像URI更新に失敗しました: %v", err)
+		}
+	} else if opts.DryRun {
+		log.Printf("ドライランモードのため画像URI更新をスキップします")
+	} else if opts.Limit > 0 {
+		log.Printf("--limit指定のため画像URI更新をスキップします（部分的な処理のみ実行）")
+	} else if opts.EntryID > 0 {
+		log.Printf("--entry-id指定のため画像URI更新をスキップします（単一エントリのみ処理）")
 	}
 
 	// 検証

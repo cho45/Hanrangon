@@ -510,6 +510,7 @@ hanrangon migrate-to-r2 [OPTIONS]
 
 - `--dry-run`: ドライランモード。実際の変更を行わず、処理内容のみを表示
 - `--limit N`: 処理するエントリ数の上限（0=無制限、ID昇順で古いものから処理）
+- `--entry-id N`: 特定のエントリIDのみを処理（0=無効）
 - `--backup`: データベースバックアップを作成してから実行（未実装）
 - `--verify-only`: 検証のみを実行（未実装）
 - `--parallel N`: 並列度を指定（未実装、現在は4固定）
@@ -524,6 +525,12 @@ go run . migrate-to-r2 --limit 10
 
 # 最も古い100件のエントリのみを処理（ドライラン）
 go run . migrate-to-r2 --limit 100 --dry-run
+
+# 特定のエントリIDのみを処理
+go run . migrate-to-r2 --entry-id 12345
+
+# 特定のエントリIDでドライラン（問題が報告されたエントリなど）
+go run . migrate-to-r2 --dry-run --entry-id 12345
 
 # 本番実行（全エントリ）
 go run . migrate-to-r2
