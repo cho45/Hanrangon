@@ -34,7 +34,7 @@ links = [
 			height: 100vh;
 		}
 		header {
-			background: #333;
+			background: {{ if contains "localhost" .BaseURL }}#2e7d32{{ else }}#333{{ end }};
 			color: white;
 			padding: 0.5rem 1rem;
 			display: flex;
