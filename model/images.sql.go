@@ -110,6 +110,49 @@ func (q *Queries) DeleteNgramsByImageIDs(ctx context.Context, ids []int64) error
 	return err
 }
 
+const getImage = `-- name: GetImage :one
+SELECT id, uri, entry_id, sig FROM images WHERE id = ?
+`
+
+func (q *Queries) GetImage(ctx context.Context, id int64) (Image, error) {
+	row := q.db.QueryRowContext(ctx, getImage, id)
+	var i Image
+	err := row.Scan(
+		&i.ID,
+		&i.Uri,
+		&i.EntryID,
+		&i.Sig,
+	)
+	return i, err
+}
+
+const listAllEntryIDsInImages = `-- name: ListAllEntryIDsInImages :many
+SELECT DISTINCT entry_id FROM images
+`
+
+func (q *Queries) ListAllEntryIDsInImages(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listAllEntryIDsInImages)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var entry_id int64
+		if err := rows.Scan(&entry_id); err != nil {
+			return nil, err
+		}
+		items = append(items, entry_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listEntryIDsWithUnindexedImages = `-- name: ListEntryIDsWithUnindexedImages :many
 SELECT DISTINCT entry_id FROM images WHERE length(sig) = 0
 `
@@ -256,6 +299,7 @@ SELECT
     i.id,
     i.uri,
     i.entry_id,
+    i.sig,
     COUNT(isw.word) as score
 FROM
     images AS i
@@ -276,6 +320,7 @@ type ListSimilarImagesByImageIDsRow struct {
 	ID            int64  `json:"id"`
 	Uri           string `json:"uri"`
 	EntryID       int64  `json:"entry_id"`
+	Sig           []byte `json:"sig"`
 	Score         int64  `json:"score"`
 }
 
@@ -303,6 +348,7 @@ func (q *Queries) ListSimilarImagesByImageIDs(ctx context.Context, imageIds []in
 			&i.ID,
 			&i.Uri,
 			&i.EntryID,
+			&i.Sig,
 			&i.Score,
 		); err != nil {
 			return nil, err

@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"image"
 	"image/color"
@@ -16,6 +17,34 @@ import (
 	"github.com/cho45/hanrangon/tfidf"
 	_ "github.com/mattn/go-sqlite3"
 )
+
+func createTestImage(t *testing.T, path string, seed int) {
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("failed to create image file: %v", err)
+	}
+	defer f.Close()
+
+	img := image.NewRGBA(image.Rect(0, 0, 64, 64))
+	// Create several large blocks of different colors based on seed
+	colors := []color.RGBA{
+		{255, 0, 0, 255},   // Red
+		{0, 255, 0, 255},   // Green
+		{0, 0, 255, 255},   // Blue
+		{255, 255, 0, 255}, // Yellow
+	}
+
+	for y := 0; y < 64; y++ {
+		for x := 0; x < 64; x++ {
+			// Select color based on coordinates and seed
+			cIdx := (x/16 + y/16 + seed) % len(colors)
+			img.Set(x, y, colors[cIdx])
+		}
+	}
+	if err := png.Encode(f, img); err != nil {
+		t.Fatalf("failed to encode image: %v", err)
+	}
+}
 
 func TestIndexImagesJob_Execute(t *testing.T) {
 	// Setup databases
@@ -54,15 +83,7 @@ func TestIndexImagesJob_Execute(t *testing.T) {
 	// Create a dummy image
 	imgName := "test.png"
 	imgFile := filepath.Join(tmpDir, imgName)
-	f, _ := os.Create(imgFile)
-	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
-	for x := 0; x < 10; x++ {
-		for y := 0; y < 10; y++ {
-			img.Set(x, y, color.RGBA{uint8(x * 25), uint8(y * 25), 0, 255})
-		}
-	}
-	png.Encode(f, img)
-	f.Close()
+	createTestImage(t, imgFile, 1)
 
 	ctx := context.Background()
 	entryID := int64(1)
@@ -101,8 +122,16 @@ func TestIndexImagesJob_Execute(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if count != 49 {
-		t.Errorf("expected 49 ngrams, got %d", count)
+
+	h := binary.BigEndian.Uint64(sig)
+	uniqueNgrams := make(map[int64]bool)
+	for i := 0; i <= 64-12; i++ {
+		word := int64((h >> i) & 0xFFF)
+		uniqueNgrams[word] = true
+	}
+
+	if count != len(uniqueNgrams) {
+		t.Errorf("expected %d unique ngrams, got %d", len(uniqueNgrams), count)
 	}
 }
 
@@ -196,10 +225,7 @@ func TestIndexImagesJob_TwoPhase(t *testing.T) {
 	// Create a dummy image
 	imgName := "test.png"
 	imgFile := filepath.Join(tmpDir, imgName)
-	f, _ := os.Create(imgFile)
-	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
-	png.Encode(f, img)
-	f.Close()
+	createTestImage(t, imgFile, 1)
 
 	ctx := context.Background()
 	entryID := int64(1)
@@ -243,9 +269,7 @@ func TestIndexImagesJob_TwoPhase(t *testing.T) {
 	// Create another image
 	imgName2 := "test2.png"
 	imgFile2 := filepath.Join(tmpDir, imgName2)
-	f2, _ := os.Create(imgFile2)
-	png.Encode(f2, img)
-	f2.Close()
+	createTestImage(t, imgFile2, 2)
 
 	newBody := `<p><img src="/images/entry/test2.png"></p>` // test.png is gone
 	db.Exec(`UPDATE entries SET formatted_body = ? WHERE id = ?`, newBody, entryID)
@@ -505,10 +529,7 @@ func TestIndexImagesJob_Rollback(t *testing.T) {
 
 	// Create a dummy image file so it tries to process it
 	imgFile := filepath.Join(tmpDir, "test.png")
-	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
-	f, _ := os.Create(imgFile)
-	png.Encode(f, img)
-	f.Close()
+	createTestImage(t, imgFile, 3)
 
 	// Setup a trigger to fail on ngram insertion
 	imagesDB.Exec(`
@@ -537,5 +558,131 @@ func TestIndexImagesJob_Rollback(t *testing.T) {
 	imagesDB.QueryRow("SELECT COUNT(*) FROM ngram").Scan(&count)
 	if count != 0 {
 		t.Errorf("Fill rollback failed: ngrams were partially inserted")
+	}
+}
+
+func TestIndexImagesJob_Overwrite(t *testing.T) {
+	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
+	defer db.Close()
+	defer tfidfDB.Close()
+	defer workerDB.Close()
+	defer imagesDB.Close()
+
+	tmpDir := t.TempDir()
+	config := &app.Config{
+		BaseURL:         "http://localhost:5555",
+		UploadURLPrefix: "/images/entry/",
+		UploadDir:       tmpDir,
+	}
+
+	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, nil, nil, nil, nil)
+	job := NewIndexImagesJob(application)
+
+	imgName := "test.png"
+	imgFile := filepath.Join(tmpDir, imgName)
+	createTestImage(t, imgFile, 1)
+
+	ctx := context.Background()
+	entryID := int64(1)
+	body := "<p><img src=\"/images/entry/test.png\"></p>"
+	db.Exec(`INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at)
+		VALUES (?, 'T', 'B', ?, 'P', 'M', '2026-01-01', '2026-01-01', '2026-01-01')`,
+		entryID, body)
+
+	// 1. Initial indexing
+	arg1 := IndexImagesArg{EntryID: entryID, Overwrite: false}
+	argJSON1, _ := json.Marshal(arg1)
+	if err := job.Execute(ctx, argJSON1); err != nil {
+		t.Fatal(err)
+	}
+
+	var sig1 []byte
+	imagesDB.QueryRow("SELECT sig FROM images WHERE entry_id = ?", entryID).Scan(&sig1)
+
+	// 2. Manually corrupt sig and ngrams
+	fakeSig := []byte("corrupt!")
+	imagesDB.Exec("UPDATE images SET sig = ?", fakeSig)
+	imagesDB.Exec("DELETE FROM ngram")
+
+	// 3. Run with overwrite=false (should NOT update because sig is not empty)
+	arg2 := IndexImagesArg{EntryID: entryID, Overwrite: false}
+	argJSON2, _ := json.Marshal(arg2)
+	if err := job.Execute(ctx, argJSON2); err != nil {
+		t.Fatal(err)
+	}
+	var sig2 []byte
+	imagesDB.QueryRow("SELECT sig FROM images WHERE entry_id = ?", entryID).Scan(&sig2)
+	if string(sig2) != string(fakeSig) {
+		t.Errorf("sig was updated despite overwrite=false. got %s, want %s", sig2, fakeSig)
+	}
+
+	// 4. Run with overwrite=true (should update)
+	arg3 := IndexImagesArg{EntryID: entryID, Overwrite: true}
+	argJSON3, _ := json.Marshal(arg3)
+	if err := job.Execute(ctx, argJSON3); err != nil {
+		t.Fatal(err)
+	}
+	var sig3 []byte
+	imagesDB.QueryRow("SELECT sig FROM images WHERE entry_id = ?", entryID).Scan(&sig3)
+	if string(sig3) != string(sig1) {
+		t.Errorf("sig was not restored despite overwrite=true. got %x, want %x", sig3, sig1)
+	}
+
+	var ngramCount int
+	imagesDB.QueryRow("SELECT COUNT(*) FROM ngram").Scan(&ngramCount)
+	if ngramCount == 0 {
+		t.Error("ngrams were not recreated")
+	}
+}
+
+func TestCalculateColorSignature(t *testing.T) {
+	job := &IndexImagesJob{}
+
+	tests := []struct {
+		name     string
+		color    color.RGBA
+		expected uint
+	}{
+		{
+			name:     "Pure Red",
+			color:    color.RGBA{255, 0, 0, 255},
+			expected: (3 << 4) | (0 << 2) | 0, // R=3, G=0, B=0 -> 110000 (48)
+		},
+		{
+			name:     "Pure Green",
+			color:    color.RGBA{0, 255, 0, 255},
+			expected: (0 << 4) | (3 << 2) | 0, // R=0, G=3, B=0 -> 001100 (12)
+		},
+		{
+			name:     "Pure Blue",
+			color:    color.RGBA{0, 0, 255, 255},
+			expected: (0 << 4) | (0 << 2) | 3, // R=0, G=0, B=3 -> 000011 (3)
+		},
+		{
+			name:     "White",
+			color:    color.RGBA{255, 255, 255, 255},
+			expected: (3 << 4) | (3 << 2) | 3, // R=3, G=3, B=3 -> 111111 (63)
+		},
+		{
+			name:     "Black",
+			color:    color.RGBA{0, 0, 0, 255},
+			expected: 0, // R=0, G=0, B=0 -> 000000 (0)
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			img := image.NewRGBA(image.Rect(0, 0, 10, 10))
+			for y := 0; y < 10; y++ {
+				for x := 0; x < 10; x++ {
+					img.Set(x, y, tt.color)
+				}
+			}
+
+			sig := job.CalculateColorSignatureFromImage(img)
+			if sig != (1 << tt.expected) {
+				t.Errorf("expected bit %d to be set (sig: %064b), got %064b", tt.expected, 1<<tt.expected, sig)
+			}
+		})
 	}
 }

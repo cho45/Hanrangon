@@ -18,7 +18,7 @@ import (
 
 	"github.com/cho45/hanrangon/app"
 	"github.com/cho45/hanrangon/model"
-	"github.com/corona10/goimagehash"
+	"github.com/nfnt/resize"
 	_ "golang.org/x/image/webp"
 	"golang.org/x/net/html"
 	"golang.org/x/sync/errgroup"
@@ -211,8 +211,8 @@ func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []in
 	// 2. Process images in parallel
 	type result struct {
 		imgRecord model.Image
-		sig       []byte
-		hash      *goimagehash.ImageHash
+		sig       uint64
+		success   bool
 	}
 	results := make([]result, len(allImages))
 
@@ -222,33 +222,22 @@ func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []in
 	for i, imgRecord := range allImages {
 		i, imgRecord := i, imgRecord
 		g.Go(func() error {
-			var sig []byte
-			var hash *goimagehash.ImageHash
-
 			img, err := j.loadImage(imgRecord.Uri)
 			status := "SUCCESS"
 			if err != nil {
 				status = fmt.Sprintf("FAIL (%v)", err)
 			} else {
-				hash, err = goimagehash.DifferenceHash(img)
-				if err != nil {
-					status = fmt.Sprintf("HASH_FAIL (%v)", err)
-				} else {
-					sig = make([]byte, 8)
-					binary.BigEndian.PutUint64(sig, hash.GetHash())
+				// 1. Calculate color signature
+				sig := j.CalculateColorSignatureFromImage(img)
+
+				results[i] = result{
+					imgRecord: imgRecord,
+					sig:       sig,
+					success:   true,
 				}
 			}
 			log.Printf("    Image %d: %s -> %s", imgRecord.ID, imgRecord.Uri, status)
 
-			if sig == nil {
-				sig = []byte{} // Mark as tried but failed
-			}
-
-			results[i] = result{
-				imgRecord: imgRecord,
-				sig:       sig,
-				hash:      hash,
-			}
 			return nil
 		})
 	}
@@ -266,23 +255,27 @@ func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []in
 	qtx := j.app.ImagesQueries().WithTx(tx)
 
 	for _, res := range results {
+		sigBytes := []byte{}
+		if res.success {
+			sigBytes = make([]byte, 8)
+			binary.BigEndian.PutUint64(sigBytes, res.sig)
+		}
+
 		if err := qtx.UpdateImageSig(ctx, model.UpdateImageSigParams{
-			Sig: res.sig,
+			Sig: sigBytes,
 			ID:  res.imgRecord.ID,
 		}); err != nil {
 			return err
 		}
 
-		if res.hash != nil {
+		if res.success {
 			if err := qtx.DeleteNgramsByImageID(ctx, res.imgRecord.ID); err != nil {
 				return err
 			}
 
-			h := res.hash.GetHash()
-			for i := 0; i <= 64-16; i++ {
-				pattern := int64((h >> i) & 0xFFFF)
-				// Pack position into the word to match original logic and avoid collisions
-				word := (int64(i) << 16) | pattern
+			// Sliding window of 12-bits (53 ngrams)
+			for i := 0; i <= 64-12; i++ {
+				word := int64((res.sig >> i) & 0xFFF)
 
 				if err := qtx.CreateNgram(ctx, model.CreateNgramParams{
 					ImageID: res.imgRecord.ID,
@@ -295,6 +288,68 @@ func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []in
 	}
 
 	return tx.Commit()
+}
+
+func (j *IndexImagesJob) CalculateColorSignatureFromImage(img image.Image) uint64 {
+	// 1. リサイズ
+	// 処理速度の向上と、ノイズ除去（平滑化）のために 64x64 に縮小します。
+	resized := resize.Resize(64, 64, img, resize.NearestNeighbor)
+
+	// 2. カラーヒストグラムの集計
+	// RGB空間を 4x4x4 = 64分割し、各ピクセルがどの色領域（ビン）に属するかカウントします。
+	//
+	// 64bit整数のビット配置（0-63）と色の対応:
+	//   ビットインデックス (6bit) = [ R(2bit) | G(2bit) | B(2bit) ]
+	//   - 0-1bit: Blue  (0-3)
+	//   - 2-3bit: Green (0-3)
+	//   - 4-5bit: Red   (0-3)
+	//
+	// 例:
+	//   - 000000 (0)  -> R=0, G=0, B=0 (黒)
+	//   - 110000 (48) -> R=3, G=0, B=0 (鮮やかな赤)
+	//   - 111111 (63) -> R=3, G=3, B=3 (白)
+	counts := make([]int, 64)
+	bounds := resized.Bounds()
+	totalPixels := 0
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			r, g, b, _ := resized.At(x, y).RGBA()
+			// 16-bit (0-65535) から上位2-bit (0-3) を抽出
+			ri := (r >> 14) & 0x3
+			gi := (g >> 14) & 0x3
+			bi := (b >> 14) & 0x3
+			// ビット位置を計算 (0-63)
+			bitPos := (ri << 4) | (gi << 2) | bi
+			counts[bitPos]++
+			totalPixels++
+		}
+	}
+
+	// 3. 64bit シグネチャ（主要色ビットマスク）の生成
+	// 集計結果から「その画像を象徴する主要な色」を抽出し、64bit整数の対応するビットを立てます。
+	// これにより、画像のパレット情報を 1つの整数に凝縮（指紋化）します。
+
+	maxCount := 0
+	maxBitPos := 0
+	threshold := totalPixels * 3 / 100 // 面積の 3% 以上を占める色を「主要な色」とみなす
+	var sig uint64
+
+	for bitPos, count := range counts {
+		// 最も支配的な色を記録しておく（sigが空になるのを防ぐため）
+		if count > maxCount {
+			maxCount = count
+			maxBitPos = bitPos
+		}
+		// 閾値を超えた色のビットを 1 にする
+		if count > threshold {
+			sig |= (1 << uint(bitPos))
+		}
+	}
+
+	// 最低でも最も多い1色は必ず含める
+	sig |= (1 << uint(maxBitPos))
+
+	return sig
 }
 
 func (j *IndexImagesJob) loadImage(rawURL string) (image.Image, error) {

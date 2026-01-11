@@ -2,7 +2,9 @@ package jobs
 
 import (
 	"context"
+	"encoding/binary"
 	"io"
+	"math/bits"
 	"os"
 	"path/filepath"
 	"testing"
@@ -94,6 +96,26 @@ func TestIndexImagesJob_SimilarityIntegration(t *testing.T) {
 	}
 
 	// 4. Verify similarity
+	// In the new color bitmask implementation, we should use Jaccard similarity or bit intersection
+	var sig1, sig2 []byte
+	application.ImagesQueries().GetImage(ctx, id1)
+	img1, _ := application.ImagesQueries().GetImage(ctx, id1)
+	img2, _ := application.ImagesQueries().GetImage(ctx, id2)
+	sig1 = img1.Sig
+	sig2 = img2.Sig
+
+	s1 := binary.BigEndian.Uint64(sig1)
+	s2 := binary.BigEndian.Uint64(sig2)
+
+	intersection := bits.OnesCount64(s1 & s2)
+	union := bits.OnesCount64(s1 | s2)
+	jaccard := float64(intersection) / float64(union)
+
+	if jaccard != 1.0 {
+		t.Errorf("expected perfect Jaccard similarity 1.0 for identical images, got %f (intersection:%d, union:%d)", jaccard, intersection, union)
+	}
+
+	// Check if they are found as similar in the query
 	similar, err := application.ImagesQueries().ListSimilarImagesByImageIDs(ctx, []int64{id1})
 	if err != nil {
 		t.Fatal(err)
@@ -103,17 +125,15 @@ func TestIndexImagesJob_SimilarityIntegration(t *testing.T) {
 	for _, row := range similar {
 		if row.ID == id2 {
 			found = true
-			if row.Score != 49 {
-				t.Errorf("expected perfect score 49 for identical image, got %d", row.Score)
+			// Score in ListSimilarImagesByImageIDs is just ngram match count,
+			// which will be small but non-zero
+			if row.Score == 0 {
+				t.Errorf("expected non-zero ngram match score for identical image, got %d", row.Score)
 			}
 		}
 	}
 
 	if !found {
 		t.Errorf("identical image %d was not found in similarity results for %d", id2, id1)
-		// Debug: check what was found
-		for _, row := range similar {
-			t.Logf("Found similar: ID=%d, Score=%d, URI=%s", row.ID, row.Score, row.Uri)
-		}
 	}
 }

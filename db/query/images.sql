@@ -27,6 +27,9 @@ SELECT COUNT(*) FROM images WHERE length(sig) = 0;
 -- name: ListEntryIDsWithUnindexedImages :many
 SELECT DISTINCT entry_id FROM images WHERE length(sig) = 0;
 
+-- name: ListAllEntryIDsInImages :many
+SELECT DISTINCT entry_id FROM images;
+
 -- name: UpdateImageSig :exec
 UPDATE images SET sig = ? WHERE id = ?;
 
@@ -39,6 +42,7 @@ SELECT
     i.id,
     i.uri,
     i.entry_id,
+    i.sig,
     COUNT(isw.word) as score
 FROM
     images AS i
@@ -52,6 +56,9 @@ GROUP BY
     isw_search.image_id, i.id
 ORDER BY 
     score DESC;
+
+-- name: GetImage :one
+SELECT * FROM images WHERE id = ?;
 
 -- name: ListImagesByEntryIDs :many
 SELECT * FROM images WHERE entry_id IN (sqlc.slice('entry_ids'));

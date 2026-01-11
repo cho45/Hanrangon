@@ -73,12 +73,18 @@ func IndexImages(ctx context.Context, application app.App, args []string) error 
 	}
 
 	if doFill {
-		entryIDs, err := application.ImagesQueries().ListEntryIDsWithUnindexedImages(ctx)
+		var entryIDs []int64
+		var err error
+		if *overwrite {
+			entryIDs, err = application.ImagesQueries().ListAllEntryIDsInImages(ctx)
+		} else {
+			entryIDs, err = application.ImagesQueries().ListEntryIDsWithUnindexedImages(ctx)
+		}
 		if err != nil {
-			return fmt.Errorf("failed to list entries with unindexed images: %w", err)
+			return fmt.Errorf("failed to list entries for filling: %w", err)
 		}
 		total := len(entryIDs)
-		log.Printf("Filling signatures for %d entries...", total)
+		log.Printf("Filling signatures for %d entries (overwrite:%v)...", total, *overwrite)
 
 		const chunkSize = 100 // Smaller chunk size for fill as it's heavy
 		for i := 0; i < total; i += chunkSize {

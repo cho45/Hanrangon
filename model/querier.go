@@ -36,6 +36,7 @@ type Querier interface {
 	GetAverageSimilarityScore(ctx context.Context) (float64, error)
 	GetEntryById(ctx context.Context, id int64) (Entry, error)
 	GetEntryByPath(ctx context.Context, path string) (Entry, error)
+	GetImage(ctx context.Context, id int64) (Image, error)
 	GetJobByID(ctx context.Context, id int64) (Job, error)
 	GetJobTypeByID(ctx context.Context, id int64) (JobType, error)
 	GetNewerEntry(ctx context.Context, createdAt time.Time) (Entry, error)
@@ -51,6 +52,7 @@ type Querier interface {
 	InsertRelatedEntry(ctx context.Context, arg InsertRelatedEntryParams) error
 	ListAllEntries(ctx context.Context) ([]Entry, error)
 	ListAllEntriesForSitemap(ctx context.Context) ([]ListAllEntriesForSitemapRow, error)
+	ListAllEntryIDsInImages(ctx context.Context) ([]int64, error)
 	ListArchiveMonths(ctx context.Context) ([]ListArchiveMonthsRow, error)
 	// Note: date column is now TEXT type, so sqlc can map it directly to string without CAST.
 	ListEntries(ctx context.Context, arg ListEntriesParams) ([]Entry, error)

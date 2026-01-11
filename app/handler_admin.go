@@ -3,15 +3,18 @@ package app
 import (
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"math/bits"
 	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"time"
 
@@ -581,17 +584,78 @@ func (app *AppImpl) HandleAdminApiSimilarImages(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid ID")
 	}
 
-	similarRows, err := app.imagesQueries.ListSimilarImagesByImageIDs(c.Request().Context(), []int64{id})
+	ctx := c.Request().Context()
+	targetImg, err := app.imagesQueries.GetImage(ctx, id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return echo.NewHTTPError(http.StatusNotFound, "Image not found")
+		}
+		return err
+	}
+
+	if len(targetImg.Sig) != 8 {
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"similar": []interface{}{},
+		})
+	}
+
+	targetSig := binary.BigEndian.Uint64(targetImg.Sig)
+
+	similarRows, err := app.imagesQueries.ListSimilarImagesByImageIDs(ctx, []int64{id})
 	if err != nil {
 		return err
 	}
 
-	if similarRows == nil {
-		similarRows = []model.ListSimilarImagesByImageIDsRow{}
+	type ScoredImage struct {
+		model.ListSimilarImagesByImageIDsRow
+		Jaccard float64 `json:"jaccard"`
+	}
+
+	var results []ScoredImage
+	for _, row := range similarRows {
+		if len(row.Sig) != 8 {
+			continue
+		}
+		candidateSig := binary.BigEndian.Uint64(row.Sig)
+
+		// Jaccard Similarity: |A ∩ B| / |A ∪ B|
+		intersection := bits.OnesCount64(targetSig & candidateSig)
+		union := bits.OnesCount64(targetSig | candidateSig)
+
+		if union == 0 {
+			continue
+		}
+
+		jaccard := float64(intersection) / float64(union)
+
+		// Threshold: Jaccard >= 0.25 (somewhat similar color palettes)
+		if jaccard >= 0.25 {
+			// Convert to 0-100 score for frontend
+			row.Score = int64(jaccard * 100)
+			results = append(results, ScoredImage{
+				ListSimilarImagesByImageIDsRow: row,
+				Jaccard:                        jaccard,
+			})
+		}
+	}
+
+	// Sort by Jaccard similarity (descending)
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].Jaccard != results[j].Jaccard {
+			return results[i].Jaccard > results[j].Jaccard
+		}
+		// Tie-breaker: prefer higher raw intersection
+		return bits.OnesCount64(targetSig&binary.BigEndian.Uint64(results[i].Sig)) >
+			bits.OnesCount64(targetSig&binary.BigEndian.Uint64(results[j].Sig))
+	})
+
+	// Limit results
+	if len(results) > 50 {
+		results = results[:50]
 	}
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"similar": similarRows,
+		"similar": results,
 	})
 }
 
