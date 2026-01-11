@@ -492,6 +492,10 @@ func (app *AppImpl) HandleAdminApiEntries(c echo.Context) error {
 		return err
 	}
 
+	if entries == nil {
+		entries = []model.Entry{}
+	}
+
 	hasMore := false
 	if len(entries) > limit {
 		hasMore = true
@@ -559,11 +563,35 @@ func (app *AppImpl) HandleAdminApiImages(c echo.Context) error {
 		return err
 	}
 
+	if images == nil {
+		images = []model.Image{}
+	}
+
 	total, _ := app.imagesQueries.CountImages(c.Request().Context())
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"images": images,
 		"total":  total,
+	})
+}
+
+func (app *AppImpl) HandleAdminApiSimilarImages(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid ID")
+	}
+
+	similarRows, err := app.imagesQueries.ListSimilarImagesByImageIDs(c.Request().Context(), []int64{id})
+	if err != nil {
+		return err
+	}
+
+	if similarRows == nil {
+		similarRows = []model.ListSimilarImagesByImageIDsRow{}
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"similar": similarRows,
 	})
 }
 

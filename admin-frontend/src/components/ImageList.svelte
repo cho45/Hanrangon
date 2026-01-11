@@ -6,6 +6,11 @@
     id: number;
     uri: string;
     entry_id: number;
+    sig: string;
+  }
+
+  interface SimilarImage extends Image {
+    score: number;
   }
 
   let images = $state<Image[]>([]);
@@ -13,11 +18,27 @@
   let limit = $state(50);
   let offset = $state(0);
 
+  let similarImages = $state<SimilarImage[]>([]);
+  let selectedImage = $state<Image | null>(null);
+  let similarDialog = $state<HTMLDialogElement>(null!);
+
   async function fetchImages() {
     try {
-      const res = await api.get(`/admin/api/images?limit=${limit}&offset=${offset}`);
-      images = res.images;
-      total = res.total;
+      const res = await api.get<{ images: Image[], total: number }>(`/admin/api/images?limit=${limit}&offset=${offset}`);
+      images = res.images || [];
+      total = res.total || 0;
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function fetchSimilarImages(image: Image) {
+    selectedImage = image;
+    similarImages = [];
+    similarDialog.showModal();
+    try {
+      const res = await api.get<{ similar: SimilarImage[] }>(`/admin/api/image/${image.id}/similar`);
+      similarImages = res.similar || [];
     } catch (e) {
       console.error(e);
     }
@@ -58,18 +79,51 @@
         <div class="image-item">
           <div class="img-container">
             <img src={image.uri} alt="" loading="lazy" />
+            {#if image.sig?.length > 0}
+              <button class="indexed-icon" title="類似画像を検索" onclick={() => fetchSimilarImages(image)}>🔍</button>
+            {/if}
           </div>
           <div class="info">
-            <div class="id">ID: {image.id}</div>
             <div class="entry-link">
-              <a href="/admin/edit?id={image.entry_id}">Entry: {image.entry_id}</a>
+              <a href="/admin/edit?id={image.entry_id}">Entry: <strong>{image.entry_id}</strong></a>
             </div>
+            <div class="id">ID: {image.id}</div>
           </div>
         </div>
       {/each}
     </div>
   {/if}
 </div>
+
+<dialog bind:this={similarDialog} id="similarDialog">
+  <div class="dialog-header">
+    <h3>類似画像一覧</h3>
+    <button type="button" class="close-btn" onclick={() => similarDialog.close()}>×</button>
+  </div>
+  <div class="dialog-content">
+    {#if api.loading && similarImages.length === 0}
+      <div class="loading">検索中...</div>
+    {:else if similarImages.length === 0}
+      <p>類似画像は見つかりませんでした。</p>
+    {:else}
+      <div class="grid similar-grid">
+        {#each similarImages as image}
+          <div class="image-item">
+            <div class="img-container">
+              <img src={image.uri} alt="" loading="lazy" />
+            </div>
+            <div class="info">
+              <div class="entry-link">
+                <a href="/admin/edit?id={image.entry_id}" onclick={() => similarDialog.close()}>Entry: <strong>{image.entry_id}</strong></a>
+              </div>
+              <div class="id">ID: {image.id} / Score: {image.score}</div>
+            </div>
+          </div>
+        {/each}
+      </div>
+    {/if}
+  </div>
+</dialog>
 
 <style>
   .image-list {
@@ -110,6 +164,30 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative;
+  }
+
+  .indexed-icon {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid #ccc;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .indexed-icon:hover {
+    background: #fff;
+    transform: scale(1.1);
   }
 
   .img-container img {
@@ -121,13 +199,68 @@
   .info {
     padding: 8px;
     font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .id {
+    color: #999;
   }
 
   .entry-link {
-    margin-top: 4px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .entry-link a {
+    color: #333;
+    text-decoration: none;
+  }
+
+  .entry-link a:hover {
+    text-decoration: underline;
+  }
+
+  #similarDialog {
+    width: 90%;
+    max-width: 1000px;
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    padding: 0;
+  }
+
+  .dialog-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    border-bottom: 1px solid #eee;
+    background: #f8f9fa;
+  }
+
+  .dialog-header h3 {
+    margin: 0;
+    font-size: 16px;
+  }
+
+  .close-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #999;
+  }
+
+  .dialog-content {
+    padding: 20px;
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+
+  .similar-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
   }
 
   .loading {

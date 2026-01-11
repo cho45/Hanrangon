@@ -9,6 +9,7 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+	"log"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -18,7 +19,9 @@ import (
 	"github.com/cho45/hanrangon/app"
 	"github.com/cho45/hanrangon/model"
 	"github.com/corona10/goimagehash"
+	_ "golang.org/x/image/webp"
 	"golang.org/x/net/html"
+	"golang.org/x/sync/errgroup"
 )
 
 type IndexImagesJob struct {
@@ -178,77 +181,120 @@ func (j *IndexImagesJob) syncInternal(ctx context.Context, qtx *model.Queries, e
 }
 
 func (j *IndexImagesJob) FillImagesForEntry(ctx context.Context, entryID int64) error {
-	images, err := j.app.ImagesQueries().ListImagesByEntryID(ctx, entryID)
-	if err != nil {
-		return err
+	return j.FillImagesForEntries(ctx, []int64{entryID})
+}
+
+func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []int64) error {
+	if len(entryIDs) == 0 {
+		return nil
 	}
 
-	for _, imgRecord := range images {
-		if len(imgRecord.Sig) > 0 {
-			continue // Already indexed
-		}
-
-		var sig []byte
-		var hash *goimagehash.ImageHash
-
-		img, err := j.loadImage(imgRecord.Uri)
-		if err == nil {
-			hash, err = goimagehash.PerceptionHash(img)
-			if err == nil {
-				sig = make([]byte, 8)
-				binary.BigEndian.PutUint64(sig, hash.GetHash())
-			}
-		}
-
-		if sig == nil {
-			sig = []byte{} // Mark as tried but failed with empty blob
-		}
-
-		// Update signature and n-grams in a small transaction for each image
-		tx, err := j.app.ImagesDB().BeginTx(ctx, nil)
+	// 1. Get all unindexed images for these entries
+	var allImages []model.Image
+	for _, entryID := range entryIDs {
+		images, err := j.app.ImagesQueries().ListImagesByEntryID(ctx, entryID)
 		if err != nil {
 			return err
 		}
-		qtx := j.app.ImagesQueries().WithTx(tx)
+		for _, img := range images {
+			if len(img.Sig) == 0 {
+				allImages = append(allImages, img)
+			}
+		}
+	}
 
+	if len(allImages) == 0 {
+		return nil
+	}
+
+	// 2. Process images in parallel
+	type result struct {
+		imgRecord model.Image
+		sig       []byte
+		hash      *goimagehash.ImageHash
+	}
+	results := make([]result, len(allImages))
+
+	var g errgroup.Group
+	g.SetLimit(3) // Limit concurrency to 3 as requested
+
+	for i, imgRecord := range allImages {
+		i, imgRecord := i, imgRecord
+		g.Go(func() error {
+			var sig []byte
+			var hash *goimagehash.ImageHash
+
+			img, err := j.loadImage(imgRecord.Uri)
+			status := "SUCCESS"
+			if err != nil {
+				status = fmt.Sprintf("FAIL (%v)", err)
+			} else {
+				hash, err = goimagehash.PerceptionHash(img)
+				if err != nil {
+					status = fmt.Sprintf("HASH_FAIL (%v)", err)
+				} else {
+					sig = make([]byte, 8)
+					binary.BigEndian.PutUint64(sig, hash.GetHash())
+				}
+			}
+			log.Printf("    Image %d: %s -> %s", imgRecord.ID, imgRecord.Uri, status)
+
+			if sig == nil {
+				sig = []byte{} // Mark as tried but failed
+			}
+
+			results[i] = result{
+				imgRecord: imgRecord,
+				sig:       sig,
+				hash:      hash,
+			}
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	// 3. Save results in a single transaction
+	tx, err := j.app.ImagesDB().BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	qtx := j.app.ImagesQueries().WithTx(tx)
+
+	for _, res := range results {
 		if err := qtx.UpdateImageSig(ctx, model.UpdateImageSigParams{
-			Sig: sig,
-			ID:  imgRecord.ID,
+			Sig: res.sig,
+			ID:  res.imgRecord.ID,
 		}); err != nil {
-			tx.Rollback()
 			return err
 		}
 
-		if hash != nil {
-			// Clear any existing ngrams just in case (though should be empty)
-			if err := qtx.DeleteNgramsByImageID(ctx, imgRecord.ID); err != nil {
-				tx.Rollback()
+		if res.hash != nil {
+			if err := qtx.DeleteNgramsByImageID(ctx, res.imgRecord.ID); err != nil {
 				return err
 			}
 
-			h := hash.GetHash()
+			h := res.hash.GetHash()
 			for i := uint16(0); i < 4; i++ {
 				segment := uint16((h >> (i * 16)) & 0xFFFF)
 				word := make([]byte, 4)
-				binary.BigEndian.PutUint16(word[0:2], i)       // Position
-				binary.BigEndian.PutUint16(word[2:4], segment) // Value
+				binary.BigEndian.PutUint16(word[0:2], i)
+				binary.BigEndian.PutUint16(word[2:4], segment)
 
 				if err := qtx.CreateNgram(ctx, model.CreateNgramParams{
-					ImageID: imgRecord.ID,
+					ImageID: res.imgRecord.ID,
 					Word:    word,
 				}); err != nil {
-					tx.Rollback()
 					return err
 				}
 			}
 		}
-
-		if err := tx.Commit(); err != nil {
-			return err
-		}
 	}
 
-	return nil
+	return tx.Commit()
 }
 
 func (j *IndexImagesJob) loadImage(rawURL string) (image.Image, error) {
@@ -258,13 +304,13 @@ func (j *IndexImagesJob) loadImage(rawURL string) (image.Image, error) {
 
 	// 1. Handle local paths
 	if strings.HasPrefix(rawURL, uploadURLPrefix) {
-		filename := strings.TrimPrefix(rawURL, uploadURLPrefix)
-		unescaped, err := url.PathUnescape(filename)
-		if err == nil {
-			filename = unescaped
+		p := filepath.Join(uploadDir, strings.TrimPrefix(rawURL, uploadURLPrefix))
+		// Handle URL encoded filenames
+		if unescaped, err := url.PathUnescape(p); err == nil {
+			p = unescaped
 		}
-		path := filepath.Join(uploadDir, filename)
-		f, err := os.Open(path)
+
+		f, err := os.Open(p)
 		if err != nil {
 			return nil, err
 		}

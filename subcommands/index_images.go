@@ -77,11 +77,19 @@ func IndexImages(ctx context.Context, application app.App, args []string) error 
 		}
 		total := len(entryIDs)
 		log.Printf("Filling signatures for %d entries...", total)
-		for i, id := range entryIDs {
-			log.Printf("  [%d/%d] Filling id:%d", i+1, total, id)
+
+		const chunkSize = 100 // Smaller chunk size for fill as it's heavy
+		for i := 0; i < total; i += chunkSize {
+			end := i + chunkSize
+			if end > total {
+				end = total
+			}
+			chunk := entryIDs[i:end]
+
+			log.Printf("  [%d/%d] Filling chunk of %d entries (last id:%d)", end, total, len(chunk), chunk[len(chunk)-1])
 			if !*dryRun {
-				if err := job.FillImagesForEntry(ctx, id); err != nil {
-					log.Printf("  Error filling images for entry %d: %v", id, err)
+				if err := job.FillImagesForEntries(ctx, chunk); err != nil {
+					log.Printf("  Error filling images for chunk: %v", err)
 				}
 			}
 		}
