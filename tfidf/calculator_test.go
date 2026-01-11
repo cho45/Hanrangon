@@ -6,39 +6,16 @@ import (
 	"os"
 	"testing"
 
+	"github.com/cho45/hanrangon/internal/testutil"
 	"github.com/cho45/hanrangon/model"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 // setupTestDBs creates in-memory databases for testing (Data and TF-IDF)
 func setupTestDBs(t *testing.T) (*sql.DB, *model.Queries, *sql.DB, *model.Queries) {
-	// Data DB
-	dataDB, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatalf("failed to open data db: %v", err)
-	}
-	dataSchema, err := os.ReadFile("../db/schema/schema.sql")
-	if err != nil {
-		t.Fatalf("failed to read data schema: %v", err)
-	}
-	if _, err := dataDB.Exec(string(dataSchema)); err != nil {
-		t.Fatalf("failed to apply data schema: %v", err)
-	}
-
-	// TF-IDF DB
-	tfidfDB, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatalf("failed to open tfidf db: %v", err)
-	}
-	tfidfSchema, err := os.ReadFile("../db/schema/tfidf.sql")
-	if err != nil {
-		t.Fatalf("failed to read tfidf schema: %v", err)
-	}
-	if _, err := tfidfDB.Exec(string(tfidfSchema)); err != nil {
-		t.Fatalf("failed to apply tfidf schema: %v", err)
-	}
-
-	return dataDB, model.New(dataDB), tfidfDB, model.New(tfidfDB)
+	t.Helper()
+	dbs := testutil.SetupAllDBs(t)
+	return dbs.Main, dbs.MainQueries, dbs.TFIDF, dbs.TFIDFQueries
 }
 
 func TestExtractTerms(t *testing.T) {

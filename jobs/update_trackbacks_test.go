@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"os"
 	"testing"
 
 	"github.com/cho45/hanrangon/app"
+	"github.com/cho45/hanrangon/internal/testutil"
 	"github.com/cho45/hanrangon/jobqueue"
 	"github.com/cho45/hanrangon/model"
 	"github.com/cho45/hanrangon/tfidf"
@@ -16,60 +16,8 @@ import (
 
 func setupTestDB(t *testing.T) (*sql.DB, *sql.DB, *sql.DB, *sql.DB) {
 	t.Helper()
-
-	// Main DB
-	db, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatalf("failed to open memory db: %v", err)
-	}
-	schema, err := os.ReadFile("../db/schema/schema.sql")
-	if err != nil {
-		t.Fatalf("failed to read schema: %v", err)
-	}
-	if _, err := db.Exec(string(schema)); err != nil {
-		t.Fatalf("failed to apply schema: %v", err)
-	}
-
-	// TFIDF DB
-	tfidfDB, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatalf("failed to open memory tfidf db: %v", err)
-	}
-	tfidfSchema, err := os.ReadFile("../db/schema/tfidf.sql")
-	if err != nil {
-		t.Fatalf("failed to read tfidf schema: %v", err)
-	}
-	if _, err := tfidfDB.Exec(string(tfidfSchema)); err != nil {
-		t.Fatalf("failed to apply tfidf schema: %v", err)
-	}
-
-	// Worker DB
-	workerDB, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatalf("failed to open memory worker db: %v", err)
-	}
-	workerSchema, err := os.ReadFile("../db/schema/worker.sql")
-	if err != nil {
-		t.Fatalf("failed to read worker schema: %v", err)
-	}
-	if _, err := workerDB.Exec(string(workerSchema)); err != nil {
-		t.Fatalf("failed to apply worker schema: %v", err)
-	}
-
-	// Images DB
-	imagesDB, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatalf("failed to open memory images db: %v", err)
-	}
-	imagesSchema, err := os.ReadFile("../db/schema/images.sql")
-	if err != nil {
-		t.Fatalf("failed to read images schema: %v", err)
-	}
-	if _, err := imagesDB.Exec(string(imagesSchema)); err != nil {
-		t.Fatalf("failed to apply images schema: %v", err)
-	}
-
-	return db, tfidfDB, workerDB, imagesDB
+	dbs := testutil.SetupAllDBs(t)
+	return dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 }
 
 func setupTestApp(t *testing.T) (app.App, *sql.DB) {

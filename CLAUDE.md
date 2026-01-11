@@ -158,10 +158,40 @@ type App struct {
 1. **ユニットテスト**: 各パッケージの `*_test.go` でロジック単体をテスト
 2. **統合テスト**: `main_test.go` でHTTPハンドラをエンドツーエンドでテスト
    - in-memoryデータベースを使用
-   - `setupTestDB()` でスキーマ読み込み＆初期化
+   - `internal/testutil` パッケージでDB初期化
 3. **マイグレーションテスト**: `cmd/migration-test/` で旧Perl実装との出力一致性を検証
    - `var/db/data.db` の実データに対して実行
    - HTML正規化＋diff比較でフォーマッタの正しさを保証
+
+#### テストデータベースの初期化
+
+全てのテストで `internal/testutil` パッケージを使用してデータベースを初期化する:
+
+```go
+import "github.com/cho45/hanrangon/internal/testutil"
+
+// 全DBが必要な場合（Main, TFIDF, Worker, Images）
+dbs := testutil.SetupAllDBs(t)
+defer dbs.Close()
+
+// 特定のDBのみ使用する場合
+dbs := testutil.SetupAllDBs(t)
+defer dbs.Close()
+db := dbs.Worker          // Worker DBのみ使用
+queries := dbs.WorkerQueries
+
+// Main + TFIDF DBを使用する場合（TF-IDF関連テスト）
+dbs := testutil.SetupAllDBs(t)
+defer dbs.Close()
+dataDB, dataQueries := dbs.Main, dbs.MainQueries
+tfidfDB, tfidfQueries := dbs.TFIDF, dbs.TFIDFQueries
+```
+
+**重要な特徴**:
+- 全テストで `Asia/Tokyo` タイムゾーンに統一
+- 4つのDB（Main, TFIDF, Worker, Images）と対応するQueriesを自動生成
+- プロジェクトルートから相対パスでスキーマファイルを読み込み
+- 一貫したエラーハンドリングとt.Helper()の使用
 
 ## 設定管理
 

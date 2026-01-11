@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/cho45/hanrangon/internal/testutil"
 	"github.com/cho45/hanrangon/model"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -31,22 +31,9 @@ func (j *TestJob) Execute(ctx context.Context, arg json.RawMessage) error {
 
 // setupTestDB はテスト用のインメモリDBをセットアップする
 func setupTestDB(t *testing.T) (*sql.DB, *model.Queries) {
-	db, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatalf("failed to open db: %v", err)
-	}
-
-	// スキーマをロード
-	schema, err := os.ReadFile("../db/schema/worker.sql")
-	if err != nil {
-		t.Fatalf("failed to read schema: %v", err)
-	}
-
-	if _, err := db.Exec(string(schema)); err != nil {
-		t.Fatalf("failed to create schema: %v", err)
-	}
-
-	return db, model.New(db)
+	t.Helper()
+	dbs := testutil.SetupAllDBs(t)
+	return dbs.Worker, dbs.WorkerQueries
 }
 
 func TestWorker_Enqueue(t *testing.T) {

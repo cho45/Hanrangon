@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/cho45/hanrangon/app"
+	"github.com/cho45/hanrangon/internal/testutil"
 	"github.com/cho45/hanrangon/jobqueue"
 	"github.com/cho45/hanrangon/model"
 	"github.com/cho45/hanrangon/tfidf"
@@ -227,62 +228,8 @@ func joinLines(lines []string) string {
 
 func setupTestDB(t *testing.T) (*sql.DB, *sql.DB, *sql.DB, *sql.DB) {
 	t.Helper()
-
-	// Main DB
-	db, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Load schema
-	schema, err := os.ReadFile("../db/schema/schema.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(string(schema)); err != nil {
-		t.Fatal(err)
-	}
-
-	// TF-IDF DB
-	tfidfDB, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	tfidfSchema, err := os.ReadFile("../db/schema/tfidf.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := tfidfDB.Exec(string(tfidfSchema)); err != nil {
-		t.Fatal(err)
-	}
-
-	// Worker DB
-	workerDB, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	workerSchema, err := os.ReadFile("../db/schema/worker.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := workerDB.Exec(string(workerSchema)); err != nil {
-		t.Fatal(err)
-	}
-
-	// Images DB
-	imagesDB, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	imagesSchema, err := os.ReadFile("../db/schema/images.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := imagesDB.Exec(string(imagesSchema)); err != nil {
-		t.Fatal(err)
-	}
-
-	return db, tfidfDB, workerDB, imagesDB
+	dbs := testutil.SetupAllDBs(t)
+	return dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 }
 
 func TestMigrator_ProcessEntries(t *testing.T) {

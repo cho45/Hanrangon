@@ -615,9 +615,10 @@ func TestAVIFConverter_Idempotency(t *testing.T) {
 
 // TestAVIFConverter_ProcessEntriesWithLimit tests that the --limit flag correctly limits the number of entries processed
 func TestAVIFConverter_ProcessEntriesWithLimit(t *testing.T) {
-	// Note: このテストはrewriteExtensionsのロジックのみを検証する
-	// 実際のAVIF変換は行わないため、avifencは不要
-	// 代わりにDB更新とlimit機能を検証する
+	// Check if avifenc is available
+	if _, err := exec.LookPath("avifenc"); err != nil {
+		t.Skip("avifenc not found - skipping conversion test")
+	}
 
 	db, tfidfDB, workerDB, imagesDB := setupTestDB(t)
 	defer db.Close()

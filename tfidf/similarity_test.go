@@ -3,43 +3,21 @@ package tfidf
 import (
 	"context"
 	"database/sql"
-	"os"
 	"testing"
 
-	"github.com/cho45/hanrangon/model"
+	"github.com/cho45/hanrangon/internal/testutil"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 // setupTestDBForSimilarity creates in-memory databases for similarity testing
 func setupTestDBForSimilarity(t *testing.T) (*sql.DB, *sql.DB, *Calculator, *SimilarityCalculator) {
-	// Data DB
-	dataDB, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatalf("failed to open data db: %v", err)
-	}
-	dataSchema, err := os.ReadFile("../db/schema/schema.sql")
-	if err != nil {
-		t.Fatalf("failed to read data schema: %v", err)
-	}
-	if _, err := dataDB.Exec(string(dataSchema)); err != nil {
-		t.Fatalf("failed to apply data schema: %v", err)
-	}
+	t.Helper()
+	dbs := testutil.SetupAllDBs(t)
 
-	// TF-IDF DB
-	tfidfDB, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatalf("failed to open tfidf db: %v", err)
-	}
-	tfidfSchema, err := os.ReadFile("../db/schema/tfidf.sql")
-	if err != nil {
-		t.Fatalf("failed to read tfidf schema: %v", err)
-	}
-	if _, err := tfidfDB.Exec(string(tfidfSchema)); err != nil {
-		t.Fatalf("failed to apply tfidf schema: %v", err)
-	}
-
-	dataQueries := model.New(dataDB)
-	tfidfQueries := model.New(tfidfDB)
+	dataDB := dbs.Main
+	dataQueries := dbs.MainQueries
+	tfidfDB := dbs.TFIDF
+	tfidfQueries := dbs.TFIDFQueries
 
 	calc, err := NewCalculator(tfidfDB, tfidfQueries, dataDB, dataQueries)
 	if err != nil {
