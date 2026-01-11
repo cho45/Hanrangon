@@ -47,13 +47,23 @@ func IndexImages(ctx context.Context, application app.App, args []string) error 
 		}
 		total := len(entries)
 		log.Printf("Syncing images for %d entries...", total)
-		for i, entry := range entries {
-			if (i+1)%100 == 0 || i == 0 || i == total-1 {
-				log.Printf("  [%d/%d] Syncing id:%d %s", i+1, total, entry.ID, entry.Title)
+
+		const chunkSize = 1000
+		for i := 0; i < total; i += chunkSize {
+			end := i + chunkSize
+			if end > total {
+				end = total
 			}
+			chunk := entries[i:end]
+			ids := make([]int64, len(chunk))
+			for j, entry := range chunk {
+				ids[j] = entry.ID
+			}
+
+			log.Printf("  [%d/%d] Syncing chunk of %d entries (last id:%d %s)", end, total, len(ids), chunk[len(chunk)-1].ID, chunk[len(chunk)-1].Title)
 			if !*dryRun {
-				if err := job.SyncImagesForEntry(ctx, entry.ID); err != nil {
-					log.Printf("  Error syncing images for entry %d: %v", entry.ID, err)
+				if err := job.SyncImagesForEntries(ctx, ids); err != nil {
+					log.Printf("  Error syncing images for chunk: %v", err)
 				}
 			}
 		}

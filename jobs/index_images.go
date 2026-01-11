@@ -88,6 +88,31 @@ func (j *IndexImagesJob) Execute(ctx context.Context, arg json.RawMessage) error
 }
 
 func (j *IndexImagesJob) SyncImagesForEntry(ctx context.Context, entryID int64) error {
+	return j.SyncImagesForEntries(ctx, []int64{entryID})
+}
+
+func (j *IndexImagesJob) SyncImagesForEntries(ctx context.Context, entryIDs []int64) error {
+	if len(entryIDs) == 0 {
+		return nil
+	}
+
+	tx, err := j.app.ImagesDB().BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	qtx := j.app.ImagesQueries().WithTx(tx)
+
+	for _, entryID := range entryIDs {
+		if err := j.syncInternal(ctx, qtx, entryID); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (j *IndexImagesJob) syncInternal(ctx context.Context, qtx *model.Queries, entryID int64) error {
 	entry, err := j.app.Queries().GetEntryById(ctx, entryID)
 	if err != nil {
 		return err
@@ -101,7 +126,7 @@ func (j *IndexImagesJob) SyncImagesForEntry(ctx context.Context, entryID int64) 
 	}
 
 	// Get existing images from DB
-	existingImages, err := j.app.ImagesQueries().ListImagesByEntryID(ctx, entryID)
+	existingImages, err := qtx.ListImagesByEntryID(ctx, entryID)
 	if err != nil {
 		return err
 	}
@@ -124,13 +149,10 @@ func (j *IndexImagesJob) SyncImagesForEntry(ctx context.Context, entryID int64) 
 		}
 	}
 
-	// Apply changes in transaction
-	tx, err := j.app.ImagesDB().BeginTx(ctx, nil)
-	if err != nil {
-		return err
+	// Skip if no changes
+	if len(idsToDelete) == 0 && len(urlsToAdd) == 0 {
+		return nil
 	}
-	defer tx.Rollback()
-	qtx := j.app.ImagesQueries().WithTx(tx)
 
 	if len(idsToDelete) > 0 {
 		if err := qtx.DeleteNgramsByImageIDs(ctx, idsToDelete); err != nil {
@@ -152,7 +174,7 @@ func (j *IndexImagesJob) SyncImagesForEntry(ctx context.Context, entryID int64) 
 		}
 	}
 
-	return tx.Commit()
+	return nil
 }
 
 func (j *IndexImagesJob) FillImagesForEntry(ctx context.Context, entryID int64) error {
