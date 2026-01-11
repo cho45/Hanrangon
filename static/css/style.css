@@ -78,6 +78,15 @@ a:hover {
 	text-decoration: none;
 }
 
+/* Inline code and keyboard input */
+code, kbd {
+	font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+	font-size: 0.9em;
+	background-color: rgba(0, 0, 0, 0.05);
+	padding: 0.1rem 0.3rem;
+	border-radius: 3px;
+}
+
 /* Disable opacity on image links to prevent whitening on hover */
 a:has(img):hover,
 .photo a:hover,
@@ -317,6 +326,15 @@ pre {
 	border-bottom: 1px solid var(--border-color);
 	/* Dynamically align code start with content container */
 	padding: 1.5rem calc((100vw - var(--container-width)) / 2 + 1.5rem) !important;
+}
+
+/* Ensure code inside pre blocks doesn't double up on background/padding (Markdown) */
+pre code {
+	font-family: inherit !important;
+	font-size: inherit !important;
+	background-color: transparent !important;
+	padding: 0 !important;
+	border-radius: 0;
 }
 
 /* Adjust code padding for mobile */
