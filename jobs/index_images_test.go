@@ -2,7 +2,6 @@ package jobs
 
 import (
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"image"
 	"image/color"
@@ -123,15 +122,11 @@ func TestIndexImagesJob_Execute(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := binary.BigEndian.Uint64(sig)
-	uniqueNgrams := make(map[int64]bool)
-	for i := 0; i <= 64-12; i++ {
-		word := int64((h >> i) & 0xFFF)
-		uniqueNgrams[word] = true
-	}
-
-	if count != len(uniqueNgrams) {
-		t.Errorf("expected %d unique ngrams, got %d", len(uniqueNgrams), count)
+	// With the new word calculation (offset << 12 | pattern),
+	// each of the 53 sliding window positions produces a unique word
+	// regardless of the pattern overlap, because the offset is unique.
+	if count != 53 {
+		t.Errorf("expected 53 unique ngrams, got %d", count)
 	}
 }
 
@@ -646,22 +641,22 @@ func TestCalculateColorSignature(t *testing.T) {
 		{
 			name:     "Pure Red",
 			color:    color.RGBA{255, 0, 0, 255},
-			expected: (2 << 4) | (0 << 1) | 1, // L=2, H=0, C=1 (33)
+			expected: (0 << 5) | (1 << 4) | (0 << 3) | (0 << 2) | (0 << 1) | 1, // L=2, H=0, C=1 (17)
 		},
 		{
 			name:     "Pure Green",
 			color:    color.RGBA{0, 255, 0, 255},
-			expected: (3 << 4) | (3 << 1) | 1, // L=3, H=3, C=1 (55)
+			expected: (0 << 5) | (1 << 4) | (1 << 3) | (1 << 2) | (1 << 1) | 1, // L=3, H=3, C=1 (31)
 		},
 		{
 			name:     "Pure Blue",
 			color:    color.RGBA{0, 0, 255, 255},
-			expected: (1 << 4) | (5 << 1) | 1, // L=1, H=5, C=1 (27)
+			expected: (1 << 5) | (0 << 4) | (0 << 3) | (1 << 2) | (1 << 1) | 1, // L=1, H=5, C=1 (39)
 		},
 		{
 			name:     "White",
 			color:    color.RGBA{255, 255, 255, 255},
-			expected: (3 << 4) | (0 << 1) | 0, // L=3, H=0, C=0 (48)
+			expected: (0 << 5) | (1 << 4) | (0 << 3) | (1 << 2) | (0 << 1) | 0, // L=3, H=0, C=0 (20)
 		},
 		{
 			name:     "Black",

@@ -275,8 +275,11 @@ func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []in
 			}
 
 			// Sliding window of 12-bits (53 ngrams)
+			// Including the offset 'i' in the word ensures that we only match
+			// patterns at the same absolute position in the color space.
 			for i := 0; i <= 64-12; i++ {
-				word := int64((res.sig >> i) & 0xFFF)
+				pattern := int64((res.sig >> i) & 0xFFF)
+				word := (int64(i) << 12) | pattern
 
 				if err := qtx.CreateNgram(ctx, model.CreateNgramParams{
 					ImageID: res.imgRecord.ID,
