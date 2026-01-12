@@ -468,41 +468,95 @@ func (c *AVIFConverter) UpdateImageURIsForEntry(ctx context.Context, entryID int
 	return nil
 }
 
-// Verify はAVIF変換を検証する
+// Verify はAVIF変換を検証し、DBに参照があるのに実体がないファイルなどをレポートする
 func (c *AVIFConverter) Verify(ctx context.Context) error {
 	log.Printf("AVIF変換を検証中...")
 
-	// エントリに残っている .jpg/.jpeg をチェック
-	var count int
-	err := c.app.DB().QueryRowContext(ctx, `
-		SELECT COUNT(*)
+	rows, err := c.app.DB().QueryContext(ctx, `
+		SELECT id, path, body, formatted_body
 		FROM entries
-		WHERE (formatted_body LIKE '%/images/entry/%.jpg%' OR formatted_body LIKE '%/images/entry/%.jpeg%')
-	`).Scan(&count)
+		WHERE (body LIKE '%/images/entry/%.jpg%' OR body LIKE '%/images/entry/%.jpeg%' OR
+		       formatted_body LIKE '%/images/entry/%.jpg%' OR formatted_body LIKE '%/images/entry/%.jpeg%')
+	`)
 	if err != nil {
 		return fmt.Errorf("failed to query entries: %w", err)
 	}
+	defer rows.Close()
 
-	if count > 0 {
-		log.Printf("警告: %d個のエントリにまだ .jpg/.jpeg が含まれています", count)
+	missingCount := 0
+	totalEntriesWithJPG := 0
+	for rows.Next() {
+		var id int
+		var path, body, formattedBody string
+		if err := rows.Scan(&id, &path, &body, &formattedBody); err != nil {
+			return err
+		}
+		totalEntriesWithJPG++
+
+		imageFiles := c.extractImageFiles(body, formattedBody)
+		for _, imgFile := range imageFiles {
+			jpgPath := filepath.Join(c.uploadDir, imgFile)
+			if _, err := os.Stat(jpgPath); os.IsNotExist(err) {
+				avifFilename := c.getAVIFFilename(imgFile)
+				avifPath := filepath.Join(c.uploadDir, avifFilename)
+				hasAVIF := "なし"
+				if _, err := os.Stat(avifPath); err == nil {
+					hasAVIF = "あり"
+				}
+
+				log.Printf("[欠落] エントリID:%d (%s) 画像: %s (AVIF:%s)", id, path, imgFile, hasAVIF)
+				missingCount++
+			}
+		}
+	}
+
+	if totalEntriesWithJPG > 0 {
+		log.Printf("警告: %d個のエントリにまだ .jpg/.jpeg 参照が残っています", totalEntriesWithJPG)
 	} else {
-		log.Printf("✓ すべてのエントリが変換されました")
+		log.Printf("✓ すべてのエントリのDB更新が完了しています")
+	}
+
+	if missingCount > 0 {
+		log.Printf("⚠ 合計 %d 個の参照されている元画像ファイルが見つかりませんでした", missingCount)
 	}
 
 	// images.uriに残っている .jpg/.jpeg をチェック
-	err = c.app.ImagesDB().QueryRowContext(ctx, `
-		SELECT COUNT(*)
+	rows, err = c.app.ImagesDB().QueryContext(ctx, `
+		SELECT entry_id, uri
 		FROM images
 		WHERE uri LIKE '%/images/entry/%.jpg' OR uri LIKE '%/images/entry/%.jpeg'
-	`).Scan(&count)
+	`)
 	if err != nil {
 		return fmt.Errorf("failed to query images: %w", err)
 	}
+	defer rows.Close()
 
-	if count > 0 {
-		log.Printf("警告: %d個の画像がまだ .jpg/.jpeg URIを持っています", count)
+	imageURICount := 0
+	missingImageFiles := 0
+	for rows.Next() {
+		var entryID int
+		var uri string
+		if err := rows.Scan(&entryID, &uri); err != nil {
+			return err
+		}
+		imageURICount++
+
+		filename := strings.TrimPrefix(uri, "/images/entry/")
+		jpgPath := filepath.Join(c.uploadDir, filename)
+		if _, err := os.Stat(jpgPath); os.IsNotExist(err) {
+			log.Printf("[欠落] imagesテーブル EntryID:%d URI: %s", entryID, uri)
+			missingImageFiles++
+		}
+	}
+
+	if imageURICount > 0 {
+		log.Printf("警告: %d個の画像URI（imagesテーブル）がまだ .jpg/.jpeg を指しています", imageURICount)
 	} else {
-		log.Printf("✓ すべての画像URIが変換されました")
+		log.Printf("✓ すべての画像URIの変換が完了しています")
+	}
+
+	if missingImageFiles > 0 {
+		log.Printf("⚠ imagesテーブルで参照されている %d 個のファイルが見つかりませんでした", missingImageFiles)
 	}
 
 	return nil
