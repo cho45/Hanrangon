@@ -32,7 +32,9 @@ jobs:
       with:
         node-version: '22'
         cache: 'npm'
-        cache-dependency-path: postprocess/package-lock.json
+        cache-dependency-path: |
+          postprocess/package-lock.json
+          admin-frontend/package-lock.json
 
     - name: Install Go dependencies
       run: go mod download
@@ -41,8 +43,15 @@ jobs:
       working-directory: ./postprocess
       run: npm ci
 
+    - name: Install Admin Frontend dependencies
+      working-directory: ./admin-frontend
+      run: npm ci
+
     - name: Run Go Tests
-      run: make test
+      run: make test-go
 
     - name: Run Postprocess Tests
       run: make postprocess-test
+
+    - name: Run Admin Frontend Tests
+      run: make admin-test

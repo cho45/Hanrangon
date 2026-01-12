@@ -1,7 +1,7 @@
 BINARY_NAME=hanrangon
 GO_TAGS=sqlite_math_functions
 
-.PHONY: all build test generate generate-icons fmt clean postprocess-test setup watch run lint
+.PHONY: all build test test-go admin-test generate generate-icons fmt clean postprocess-test setup watch run lint
 
 all: build
 
@@ -33,7 +33,9 @@ watch:
 	(cd admin-frontend && npm run dev) & \
 	HANRANGON_FE_DEV=true air
 
-test:
+test: test-go postprocess-test admin-test
+
+test-go:
 	go test -tags "$(GO_TAGS)" ./...
 
 generate:
@@ -51,6 +53,9 @@ ogp-base:
 
 postprocess-test:
 	cd postprocess && npm test
+
+admin-test:
+	cd admin-frontend && npm test
 
 clean:
 	rm -f $(BINARY_NAME)
