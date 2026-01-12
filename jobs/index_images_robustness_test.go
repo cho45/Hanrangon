@@ -32,6 +32,9 @@ func TestIndexImagesJob_UniqueConstraintError(t *testing.T) {
 
 	tfidfQueries := model.New(tfidfDB)
 	calc, err := tfidf.NewCalculator(tfidfDB, model.New(tfidfDB), db, model.New(db))
+	if err != nil {
+		t.Fatal(err)
+	}
 	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
 	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
 

@@ -28,7 +28,7 @@ import (
 func main() {
 	// 1. Determine subcommand and check for profiling flag
 	cmd := "serve"
-	subArgs := os.Args[1:]
+	var subArgs []string
 	cpuprofile := ""
 
 	// Simple global flag parsing before subcommand dispatch

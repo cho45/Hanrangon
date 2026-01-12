@@ -222,9 +222,12 @@ func TestIndexImagesJob_TwoPhase(t *testing.T) {
 
 	// 1. Initial Sync
 	body := `<p><img src="/images/entry/test.png"></p>`
-	db.Exec(`INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at)
+	_, err := db.Exec(`INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at)
 		VALUES (?, 'Title', 'Body', ?, 'path', 'Markdown', '2026-01-01', '2026-01-01 00:00:00', '2026-01-01 00:00:00')`,
 		entryID, body)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if err := job.SyncImagesForEntry(ctx, entryID); err != nil {
 		t.Fatalf("Sync failed: %v", err)
@@ -233,7 +236,7 @@ func TestIndexImagesJob_TwoPhase(t *testing.T) {
 	// Verify record exists with empty sig
 	var id1 int64
 	var sig1 []byte
-	err := imagesDB.QueryRow("SELECT id, sig FROM images WHERE entry_id = ?", entryID).Scan(&id1, &sig1)
+	err = imagesDB.QueryRow("SELECT id, sig FROM images WHERE entry_id = ?", entryID).Scan(&id1, &sig1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,6 +296,9 @@ func TestIndexImagesJob_TwoPhase(t *testing.T) {
 		t.Fatalf("Final fill failed: %v", err)
 	}
 	err = imagesDB.QueryRow("SELECT sig FROM images WHERE entry_id = ?", entryID).Scan(&sig2)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(sig2) == 0 {
 		t.Error("sig should be filled after final fill")
 	}
@@ -643,7 +649,7 @@ func TestCalculateColorSignature(t *testing.T) {
 		{
 			name:     "White",
 			color:    color.RGBA{255, 255, 255, 255},
-			expected: (0 << 5) | (1 << 4) | (0 << 3) | (1 << 2) | (0 << 1) | 0, // L=3, H=0, C=0 (20)
+			expected: (0 << 5) | (1 << 4) | (0 << 3) | (1 << 2) | (0 << 1), // L=3, H=0, C=0 (20)
 		},
 		{
 			name:     "Black",

@@ -28,15 +28,19 @@ var (
 	ogpBasePaletted *image.Paletted
 	ogpPaletteLUT   []uint8
 	ogpFont         *opentype.Font
-	ogpTitleFace    font.Face
-	ogpMetaFace     font.Face
 	ogpAssetOnce    sync.Once
 
 	rgbaPool = sync.Pool{
-		New: func() any { return make([]byte, 1200*630*4) },
+		New: func() any {
+			b := make([]byte, 1200*630*4)
+			return &b
+		},
 	}
 	palettedPool = sync.Pool{
-		New: func() any { return make([]byte, 1200*630) },
+		New: func() any {
+			b := make([]byte, 1200*630)
+			return &b
+		},
 	}
 )
 
@@ -92,11 +96,6 @@ func (app *AppImpl) loadOGPAssets() {
 		fontPath := filepath.Join(app.config.StaticDir, "fonts", "NotoSansJP-Bold.ttf")
 		if fontBytes, err := os.ReadFile(fontPath); err == nil {
 			ogpFont, _ = opentype.Parse(fontBytes)
-			if ogpFont != nil {
-				const dpi = 72
-				ogpTitleFace, _ = opentype.NewFace(ogpFont, &opentype.FaceOptions{Size: 64, DPI: dpi, Hinting: font.HintingFull})
-				ogpMetaFace, _ = opentype.NewFace(ogpFont, &opentype.FaceOptions{Size: 36, DPI: dpi, Hinting: font.HintingFull})
-			}
 		}
 		lut := make([]uint8, 32768)
 		for r := 0; r < 32; r++ {
@@ -190,16 +189,18 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 	}
 
 	// 4. 描画実行
-	pix := rgbaPool.Get().([]byte)
-	defer rgbaPool.Put(pix)
+	pixPtr := rgbaPool.Get().(*[]byte)
+	defer rgbaPool.Put(pixPtr)
+	pix := *pixPtr
 	dst := &image.RGBA{Pix: pix, Stride: 1200 * 4, Rect: image.Rect(0, 0, 1200, 630)}
 
 	var textLayer *image.RGBA
 	var d *font.Drawer
 	if needsFade {
 		// フェードアウトが必要な場合は、合成計算のためにテキストのみを別レイヤー（透明）に描画
-		tpix := rgbaPool.Get().([]byte)
-		defer rgbaPool.Put(tpix)
+		tpixPtr := rgbaPool.Get().(*[]byte)
+		defer rgbaPool.Put(tpixPtr)
+		tpix := *tpixPtr
 		for i := range tpix {
 			tpix[i] = 0
 		}
@@ -246,8 +247,9 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 
 	// 5. 最終的な画像形式への変換 (RGBA -> 16色パレット)
 	// ファイルサイズを劇的に削減するため、フルカラー(RGBA)から16色のインデックス形式(Paletted)へ変換する
-	ppix := palettedPool.Get().([]byte)
-	defer palettedPool.Put(ppix)
+	ppixPtr := palettedPool.Get().(*[]byte)
+	defer palettedPool.Put(ppixPtr)
+	ppix := *ppixPtr
 	paletted := &image.Paletted{Pix: ppix, Stride: 1200, Rect: dst.Rect, Palette: getOGPPalette()}
 
 	lut, pPix, dPix := ogpPaletteLUT, paletted.Pix, dst.Pix

@@ -2,16 +2,12 @@ package view
 
 import (
 	"io"
-	"regexp"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/cho45/hanrangon/model"
 	"golang.org/x/net/html"
 )
-
-var htmlTagRegexp = regexp.MustCompile(`<[^>]*>`)
-var whitespaceRegexp = regexp.MustCompile(`\s+`)
 
 // FormatDate formats a date string from "2006-01-02" to "2006年 01月 02日"
 func FormatDate(dateStr string) string {
