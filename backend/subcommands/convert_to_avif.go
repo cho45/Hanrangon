@@ -484,9 +484,13 @@ func (c *AVIFConverter) Verify(ctx context.Context) error {
 		if err := rows.Scan(&id, &path, &body, &formattedBody); err != nil {
 			return err
 		}
-		totalEntriesWithJPG++
 
 		imageFiles := c.extractImageFiles(body, formattedBody)
+		if len(imageFiles) == 0 {
+			continue // 実際のローカルJPGがなければスキップ
+		}
+		totalEntriesWithJPG++
+
 		for _, imgFile := range imageFiles {
 			jpgPath := filepath.Join(c.uploadDir, imgFile)
 			if _, err := os.Stat(jpgPath); os.IsNotExist(err) {
@@ -531,6 +535,11 @@ func (c *AVIFConverter) Verify(ctx context.Context) error {
 		var uri string
 		if err := rows.Scan(&entryID, &uri); err != nil {
 			return err
+		}
+
+		// /images/entry/ 以外の外部URLなどはスキップ
+		if !strings.HasPrefix(uri, "/images/entry/") {
+			continue
 		}
 		imageURICount++
 
