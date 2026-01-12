@@ -140,19 +140,19 @@ make
 ### Backend (Go & Content Pipeline)
 - **Core Logic**
   - `app/`: アプリケーションのコアロジック（ハンドラー、サーバー構成、設定）。
-  - `model/`: データベースモデル。`sqlc` 生成コードと手動定義のロジックを含む。
-  - `db/`: SQL スキーマ (`schema/`) とクエリ定義 (`query/`)。
+  - `db/`, `model/`: SQL スキーマ、クエリ定義、および `sqlc` 生成コード。
+  - `subcommands/`: `hanrangon` メインバイナリに組み込まれるサブコマンド群（`serve`, `reformat`, `backup` 等）。
   - `internal/`: プロジェクト内部でのみ使用される共通ユーティリティ（テストヘルパー等）。
   - `var/`: SQLite データベースファイル、およびキャッシュデータの格納場所。
-  - `main.go`: エントリーポイントおよびサブコマンドのディスパッチ。
+  - `main.go`: メインバイナリのエントリーポイント。
 - **Content Pipeline**
   - `formatter/`: 各種記法（Hatena, tDiary, Markdown）のパーサ。
   - `xatena-go/`: はてな記法パーサの Go 実装（ローカル依存ライブラリ）。
   - `postprocess/`: `Node.js` による HTML ポストプロセス（MathJax, 構文ハイライト）。
   - `tfidf/`: 文字 2-gram による `TF-IDF` 計算と関連記事抽出ロジック。
-- **Background & CLI**
+- **Background & Tools**
   - `jobqueue/` & `jobs/`: ジョブキュー基盤と非同期ジョブの実装。
-  - `subcommands/` & `cmd/`: CLI サブコマンドと運用ツールの実装。
+  - `cmd/`: メインバイナリとは別に、個別にビルドして使用する独立したツール群（検証用、開発用）。
 - **Deployment & Development**
   - `deploy/`: デプロイスクリプト、およびシステム設定ファイル（systemd 等）。
   - `scripts/`: アイコン生成やメンテナンス用の開発スクリプト。

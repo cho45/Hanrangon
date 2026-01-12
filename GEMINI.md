@@ -67,15 +67,18 @@ Code modifications MUST follow this sequence:
 ## Project Structure
 
 *   `app/`: Core application logic, HTTP handlers, and server setup.
-*   `cmd/`: Migration and utility commands.
-*   `db/`: SQL schemas and queries.
+*   `db/` & `model/`: SQL schemas, queries, and `sqlc` generated code.
+*   `subcommands/`: Subcommands integrated into the main `hanrangon` binary (serve, reformat, etc.).
+*   `cmd/`: Independent tools and utilities built separately from the main binary.
 *   `formatter/`: Text format parsers (Markdown, Hatena, etc.).
+*   `xatena-go/`: Hatena notation parser implementation.
 *   `jobqueue/` & `jobs/`: Asynchronous background worker system.
-*   `model/`: Generated database code (`sqlc`).
-*   `view/`: Public-facing HTML templates.
-*   `admin-frontend/`: Svelte 5 admin panel source.
-*   `postprocess/`: Node.js rendering script.
+*   `tfidf/`: TF-IDF calculation and related entries extraction.
+*   `view/`: Public-facing HTML templates (SSR).
+*   `admin-frontend/`: Svelte 5 admin panel source (SPA).
+*   `postprocess/`: Node.js rendering script for MathJax and syntax highlighting.
 *   `static/`: Public static assets (CSS, JS, Images).
+*   `var/`: SQLite databases and cache storage.
 
 ## Configuration
 
