@@ -12,7 +12,7 @@ import (
 func SetupEnvironment() {
 	_, filename, _, _ := runtime.Caller(0)
 	// internal/testutil/root.go から 2 段上がるとルート
-	root := filepath.Join(filepath.Dir(filename), "..", "..")
+	root, _ := filepath.Abs(filepath.Join(filepath.Dir(filename), "..", ".."))
 	os.Setenv("HANRANGON_BASE_DIR", root)
 
 	// Create a persistent temporary file for the duration of the test process

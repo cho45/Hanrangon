@@ -66,19 +66,21 @@ Code modifications MUST follow this sequence:
 
 ## Project Structure
 
-*   `app/`: Core application logic, HTTP handlers, and server setup.
-*   `db/` & `model/`: SQL schemas, queries, and `sqlc` generated code.
-*   `subcommands/`: Subcommands integrated into the main `hanrangon` binary (serve, reformat, etc.).
+*   `backend/app/`: Core application logic, HTTP handlers, and server setup.
+*   `backend/db/` & `backend/model/`: SQL schemas, queries, and `sqlc` generated code.
+*   `backend/subcommands/`: Subcommands integrated into the main `hanrangon` binary.
 *   `cmd/`: Independent tools and utilities built separately from the main binary.
-*   `formatter/`: Text format parsers (Markdown, Hatena, etc.).
-*   `xatena-go/`: Hatena notation parser implementation.
-*   `jobqueue/` & `jobs/`: Asynchronous background worker system.
-*   `tfidf/`: TF-IDF calculation and related entries extraction.
-*   `view/`: Public-facing HTML templates (SSR).
+*   `backend/formatter/`: Text format parsers (Markdown, Hatena, etc.).
+*   `backend/xatena-go/`: Hatena notation parser implementation.
+*   `backend/jobqueue/` & `backend/jobs/`: Asynchronous background worker system.
+*   `backend/tfidf/`: TF-IDF calculation and related entries extraction.
+*   `backend/view/`: Public-facing HTML templates (SSR).
 *   `admin-frontend/`: Svelte 5 admin panel source (SPA).
 *   `postprocess/`: Node.js rendering script for MathJax and syntax highlighting.
 *   `static/`: Public static assets (CSS, JS, Images).
 *   `var/`: SQLite databases and cache storage.
+*   `internal/`: Common internal utilities and test helpers.
+
 
 ## Configuration
 

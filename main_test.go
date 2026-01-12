@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cho45/hanrangon/app"
+	"github.com/cho45/hanrangon/backend/app"
+	"github.com/cho45/hanrangon/backend/jobqueue"
+	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/tfidf"
 	"github.com/cho45/hanrangon/internal/testutil"
-	"github.com/cho45/hanrangon/jobqueue"
-	"github.com/cho45/hanrangon/model"
-	"github.com/cho45/hanrangon/tfidf"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -34,7 +34,7 @@ func TestRunServe_GracefulShutdownOrder(t *testing.T) {
 
 	// Apply schema for workers at least
 	config := app.LoadConfig()
-	schema, err := os.ReadFile(filepath.Join(config.BaseDir, "db/schema/worker.sql"))
+	schema, err := os.ReadFile(filepath.Join(config.BaseDir, "backend/db/schema/worker.sql"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestRunServe_GracefulShutdownOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	// And entries schema
-	entrySchema, err := os.ReadFile(filepath.Join(config.BaseDir, "db/schema/schema.sql"))
+	entrySchema, err := os.ReadFile(filepath.Join(config.BaseDir, "backend/db/schema/schema.sql"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,9 +130,9 @@ func TestRunServe_MultipleListeners(t *testing.T) {
 
 	// Apply necessary schemas
 	config := app.LoadConfig()
-	workerSchema, _ := os.ReadFile(filepath.Join(config.BaseDir, "db/schema/worker.sql"))
+	workerSchema, _ := os.ReadFile(filepath.Join(config.BaseDir, "backend/db/schema/worker.sql"))
 	db.Exec(string(workerSchema))
-	entrySchema, _ := os.ReadFile(filepath.Join(config.BaseDir, "db/schema/schema.sql"))
+	entrySchema, _ := os.ReadFile(filepath.Join(config.BaseDir, "backend/db/schema/schema.sql"))
 	db.Exec(string(entrySchema))
 
 	// Prepare UDS path

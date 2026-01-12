@@ -72,57 +72,46 @@ goimports -w path/to/file.go
 ```
 .
 ├── main.go              # エントリポイント
-├── app/                 # アプリケーションのコアロジック
-│   ├── app.go           # App構造体、認証ミドルウェア
-│   ├── config.go        # 設定読み込み (TOML + 環境変数)
-│   ├── handler_public.go # 公開ページハンドラ
-│   ├── handler_admin.go  # 管理画面ハンドラ
-│   ├── server.go        # Echoサーバー設定
-│   └── template.go      # テンプレート管理
-├── model/               # sqlc生成のDBアクセスコード (編集禁止)
-├── view/                # html/template テンプレート
-│   ├── *.html          # テンプレートファイル
-│   ├── data.go         # テンプレートデータ構造定義
-│   └── helper.go       # テンプレート用ヘルパー関数
-├── formatter/           # テキストフォーマッタ
-│   ├── formatter.go    # フォーマット振り分け
-│   ├── html.go         # HTMLフォーマッタ
-│   ├── markdown.go     # Markdownフォーマッタ
-│   ├── hatena.go       # Hatena記法フォーマッタ
-│   ├── tdiary.go       # tDiary記法フォーマッタ
-│   └── *_test.go       # 各フォーマッタのテスト
-├── db/
-│   ├── schema/         # SQLスキーマ定義
-│   │   ├── schema.sql      # メインDB (entries, images等)
-│   │   ├── tfidf.sql       # TF-IDF検索用DB
-│   │   └── images.sql      # 画像メタデータDB
-│   └── query/          # sqlc用SQLクエリ定義
-│       ├── entries.sql
-│       └── tfidf.sql
-├── cmd/migration-test/  # 旧実装との互換性検証ツール
-├── xatena-go/          # Hatena記法パーサー (gitサブモジュール/ローカル依存)
-├── static/             # 静的ファイル (CSS, JS, images)
-└── var/db/             # 実行時データベースファイル置き場
+├── backend/             # メインバイナリを構成するコアロジック
+│   ├── app/             # アプリケーション設定、HTTPハンドラ
+│   ├── db/              # SQLスキーマとクエリ定義
+│   ├── model/           # sqlc生成コード (編集禁止)
+│   ├── view/            # SSR用 html/template
+│   ├── formatter/       # 各種記法パーサー
+│   ├── tfidf/           # TF-IDF関連記事解析
+│   ├── jobqueue/        # ジョブキュー基盤 (SQLite)
+│   ├── jobs/            # 非同期ジョブ実装
+│   ├── subcommands/     # CLIサブコマンド実装
+│   └── xatena-go/       # はてな記法パーサー
+├── internal/            # プロジェクト共通ユーティリティ (テストヘルパー等)
+├── cmd/                 # 独立したビルド対象ツール群
+├── admin-frontend/      # Svelte 5 管理画面 (SPA)
+├── static/              # 静的ファイル (CSS, JS, images)
+├── postprocess/         # Node.js サイドカー
+└── var/                 # 実行時データ (SQLite DB, キャッシュ)
 ```
 
 ### 主要な設計パターン
 
-#### 1. データベース層 (sqlc)
+#### 1. 堅牢なパス解決 (BaseDir)
 
-- `db/schema/*.sql`: スキーマ定義 → SQLiteデータベース作成に使用
-- `db/query/*.sql`: クエリ定義 → sqlcが型安全なGoコードを生成
-- `model/`: 生成されたコード (手動編集禁止)
-- テストでは `:memory:` SQLiteを使用し、スキーマファイルを読み込んで初期化
+- `app.Config` に `BaseDir` フィールドを持ち、すべてのパス（DB、テンプレート、静的ファイル、外部スクリプト）はこの `BaseDir` を起点とする絶対パスとして構築される。
+- メイン実行時はカレントディレクトリがデフォルトの `BaseDir` となる。
+- テスト実行時は `internal/testutil.SetupEnvironment()` を呼び出すことで、リポジトリルートを自動特定し、環境変数 `HANRANGON_BASE_DIR` を通じて `BaseDir` が設定される。
 
-**重要**: `db/schema/` や `db/query/` を変更した場合は必ず `sqlc generate` を実行
+#### 2. データベース層 (sqlc)
 
-#### 2. テンプレート層 (html/template)
+- `backend/db/schema/*.sql`: スキーマ定義
+- `backend/db/query/*.sql`: クエリ定義
+- `backend/model/`: 生成されたコード (手動編集禁止)
 
-- `view/*.html`: テンプレートファイル
-- `view/data.go`: テンプレートに渡すデータ構造の定義
-- `view/helper.go`: テンプレート用ヘルパー関数
-- `app/template.go`: テンプレート管理（開発モードでの自動リロード対応）
-- Go標準の `html/template` + `Masterminds/sprig` を使用
+**重要**: スキーマやクエリを変更した場合は必ず `make generate` を実行。
+
+#### 3. テンプレート層 (html/template)
+
+- `backend/view/*.html`: テンプレートファイル。
+- `backend/app/template.go`: `BaseDir` を起点にテンプレートをロード。
+- Go標準の `html/template` + `Masterminds/sprig` を使用。
 
 **開発モード**: デフォルトで有効。テンプレートファイルを変更すると、ブラウザリロードで即座に反映される（ビルド不要）
 
@@ -155,36 +144,23 @@ type App struct {
 
 ### テスト戦略
 
-1. **ユニットテスト**: 各パッケージの `*_test.go` でロジック単体をテスト
-2. **統合テスト**: `main_test.go` でHTTPハンドラをエンドツーエンドでテスト
-   - in-memoryデータベースを使用
-   - `internal/testutil` パッケージでDB初期化
-3. **マイグレーションテスト**: `cmd/migration-test/` で旧Perl実装との出力一致性を検証
-   - `var/db/data.db` の実データに対して実行
-   - HTML正規化＋diff比較でフォーマッタの正しさを保証
+1. **TestMainによる環境セットアップ**: 各パッケージの `main_test.go` で `testutil.SetupEnvironment()` を呼び、パス解決とダミー設定ファイルの準備を行う。
+2. **ユニットテスト**: 各パッケージの `*_test.go` でロジック単体をテスト。
+3. **統合テスト**: `main_test.go` で HTTP エンドツーエンドテスト。
 
 #### テストデータベースの初期化
 
-全てのテストで `internal/testutil` パッケージを使用してデータベースを初期化する:
+`internal/testutil` パッケージを使用する:
 
 ```go
 import "github.com/cho45/hanrangon/internal/testutil"
 
-// 全DBが必要な場合（Main, TFIDF, Worker, Images）
-dbs := testutil.SetupAllDBs(t)
-defer dbs.Close()
-
-// 特定のDBのみ使用する場合
-dbs := testutil.SetupAllDBs(t)
-defer dbs.Close()
-db := dbs.Worker          // Worker DBのみ使用
-queries := dbs.WorkerQueries
-
-// Main + TFIDF DBを使用する場合（TF-IDF関連テスト）
-dbs := testutil.SetupAllDBs(t)
-defer dbs.Close()
-dataDB, dataQueries := dbs.Main, dbs.MainQueries
-tfidfDB, tfidfQueries := dbs.TFIDF, dbs.TFIDFQueries
+func TestSomething(t *testing.T) {
+    // TestMain で SetupEnvironment() が呼ばれている前提
+    dbs := testutil.SetupAllDBs(t)
+    defer dbs.Close()
+    // ...
+}
 ```
 
 **重要な特徴**:
@@ -222,26 +198,13 @@ tfidfDB, tfidfQueries := dbs.TFIDF, dbs.TFIDFQueries
    コード修正後は必ず以下の順序で検証を行うこと：
    - **機能検証 (最優先)**: `make test` を実行し、全テストが通ることを確認。
    - **品質検証**: テスト通過後、`make lint` を実行。すべての指摘を解消する。理由なき無視は禁止。
-   - **最終検証**: リンター対応でコードを変更した場合は、再度 `make test` を実行してデグレードがないか確認。
+   - **最終検証**: リンター対応でコードを変更した場合は、再度 `make test` を確認。
 
-2. **生成コードの編集禁止**
-   - `model/*.go` (sqlc生成)
+2. **ディレクトリ移動への配慮**
+   パッケージが `backend/` 下に移動したため、新規ファイル作成やインポート時には常に `github.com/cho45/hanrangon/backend/...` を使用すること。
 
-2. **フォーマッタの変更時**
-   - 必ず対応するテストを追加・更新
-   - `cmd/migration-test` で既存データとの互換性を確認
-   - テストは実装の正しさを保証するためのもので、通すことが目的ではない
+3. **生成コードの編集禁止**
+   - `backend/model/*.go` (sqlc生成)
 
-3. **データベーススキーマ変更時**
-   - `db/schema/*.sql` を編集
-   - `sqlc generate` を実行
-   - 必要に応じてマイグレーションスクリプトを作成
-
-4. **テンプレート変更時**
-   - `view/*.html` を直接編集
-   - 開発モード（デフォルト）では、ブラウザリロードで即座に反映
-   - ビルドやコード生成は不要
-
-5. **インポート管理**
-   - 手動でのインポート文の追加・削除は禁止
-   - 必ず `goimports` を使用してフォーマット
+4. **インポート管理**
+   - 手動編集は避け、常に `make fmt` (goimports) に任せること。

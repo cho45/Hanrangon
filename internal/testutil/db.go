@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/cho45/hanrangon/model"
+	"github.com/cho45/hanrangon/backend/model"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -31,10 +31,10 @@ func getProjectRoot() string {
 
 // schemaFiles maps DB types to their schema file paths relative to project root
 var schemaFiles = map[dbType]string{
-	mainDB:   "db/schema/schema.sql",
-	tfidfDB:  "db/schema/tfidf.sql",
-	workerDB: "db/schema/worker.sql",
-	imagesDB: "db/schema/images.sql",
+	mainDB:   "backend/db/schema/schema.sql",
+	tfidfDB:  "backend/db/schema/tfidf.sql",
+	workerDB: "backend/db/schema/worker.sql",
+	imagesDB: "backend/db/schema/images.sql",
 }
 
 // DBs holds all test databases and their query objects
