@@ -1,6 +1,6 @@
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
+import fs from 'node:fs';
+import path from 'node:path';
+import { execSync } from 'node:child_process';
 
 /**
  * 設定: 環境に合わせて変更してください
@@ -32,16 +32,15 @@ function main() {
         const baseName = path.basename(file, '.avif');
         
         // 対応するJPG/JPEGを探す
-        let jpgFile = baseName + '.jpg';
+        let jpgFile = `${baseName}.jpg`;
         let jpgPath = path.join(JPG_DIR, jpgFile);
         
         if (!fs.existsSync(jpgPath)) {
-            jpgFile = baseName + '.jpeg';
+            jpgFile = `${baseName}.jpeg`;
             jpgPath = path.join(JPG_DIR, jpgFile);
         }
 
         if (!fs.existsSync(jpgPath)) {
-            // console.log(`スキップ: 元ファイルが見つかりません (${file})`);
             continue;
         }
 
