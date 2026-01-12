@@ -190,20 +190,10 @@ func (c *AVIFConverter) ProcessEntries(ctx context.Context) error {
 	for i, e := range entries {
 		log.Printf("[%d/%d] 処理中 エントリID:%d %s", i+1, len(entries), e.id, e.path)
 
-		// 既に変換済みかチェック
-		hasJPG := strings.Contains(e.body, "/images/entry/") && (strings.Contains(e.body, ".jpg") || strings.Contains(e.body, ".jpeg"))
-		hasJPGFormatted := strings.Contains(e.formattedBody, "/images/entry/") && (strings.Contains(e.formattedBody, ".jpg") || strings.Contains(e.formattedBody, ".jpeg"))
-
-		if !hasJPG && !hasJPGFormatted {
-			log.Printf("  スキップ: 既に変換済み")
-			skippedCount++
-			continue
-		}
-
-		// このエントリで参照されている画像ファイルを抽出
+		// このエントリで参照されているローカルの画像ファイルを抽出
 		imageFiles := c.extractImageFiles(e.body, e.formattedBody)
 		if len(imageFiles) == 0 {
-			log.Printf("  スキップ: 画像ファイルが見つかりませんでした")
+			log.Printf("  スキップ: 変換対象の画像（/images/entry/*.jpg）が見つかりませんでした")
 			skippedCount++
 			continue
 		}

@@ -264,9 +264,40 @@ func TestExtractImageFiles(t *testing.T) {
 		},
 		{
 			name:          "Different quote styles",
-			body:          `<img src='/images/entry/test1.jpg'><img src="/images/entry/test2.jpeg">`,
+			body:          `<img src="/images/entry/double.jpg"><img src='/images/entry/single.jpg'><img src=/images/entry/none.jpg>`,
 			formattedBody: ``,
-			expected:      []string{"test1.jpg", "test2.jpeg"},
+			expected:      []string{"double.jpg", "single.jpg", "none.jpg"},
+		},
+		{
+			name:          "Unquoted attribute in complex HTML",
+			body:          ``,
+			formattedBody: `<span itemscope><a href=https://example.com/><img alt=photo src=/images/entry/unquoted.jpg></a></span>`,
+			expected:      []string{"unquoted.jpg"},
+		},
+		{
+			name:          "Unquoted attribute followed by >",
+			body:          ``,
+			formattedBody: `<img alt=photo src=/images/entry/unquoted.jpg>`,
+			expected:      []string{"unquoted.jpg"},
+		},
+		{
+			name: "Entry ID 21516 reproduction",
+
+			body:          ``,
+			formattedBody: `<p> <span itemscope itemtype=http://schema.org/Photograph data-key=AF1QipNYy5wlquXg6_ujNOiBml4ez6iNB6NG4QAc_ft7> <a href=https://picasaweb.google.com/114431815111528304586/6612051930663617713#6612051125872046354 itemprop=url class=picasa><img alt=photo itemprop=image src=/images/entry/IMG_20181013_021451.jpg></a> </span>`,
+			expected:      []string{"IMG_20181013_021451.jpg"},
+		},
+		{
+			name:          "Lowercase jpg (just check)",
+			body:          ``,
+			formattedBody: `<img src="/images/entry/test.jpg">`,
+			expected:      []string{"test.jpg"},
+		},
+		{
+			name:          "Uppercase JPG (check extraction)",
+			body:          ``,
+			formattedBody: `<img src="/images/entry/TEST.JPG">`,
+			expected:      []string{"TEST.JPG"},
 		},
 		{
 			name:          "Uppercase extensions",
@@ -981,6 +1012,50 @@ func TestAVIFConverter_ProcessEntriesWithEntryID(t *testing.T) {
 		if !jpgExists[i] {
 			t.Errorf("test-%d.jpg should still exist (not processed)", i)
 		}
+	}
+}
+
+func TestProcessEntries_SkipLogic(t *testing.T) {
+	converter := &AVIFConverter{}
+	tests := []struct {
+		name     string
+		body     string
+		expected int // expected number of files to extract
+	}{
+		{
+			name:     "Lowercase .jpg",
+			body:     `<img src="/images/entry/test.jpg">`,
+			expected: 1,
+		},
+		{
+			name:     "Uppercase .JPG",
+			body:     `<img src="/images/entry/test.JPG">`,
+			expected: 1,
+		},
+		{
+			name:     "Already converted local, but has external .jpg",
+			body:     `<img src="/images/entry/test.avif"> <img src="https://amazon.com/test.jpg">`,
+			expected: 0,
+		},
+		{
+			name:     "No local images, but has external .jpg",
+			body:     `<img src="https://amazon.com/test.jpg">`,
+			expected: 0,
+		},
+		{
+			name:     "Mixed local and external",
+			body:     `<img src="/images/entry/local.jpg"> <img src="https://amazon.com/external.jpg">`,
+			expected: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			files := converter.extractImageFiles(tt.body, "")
+			if len(files) != tt.expected {
+				t.Errorf("%s: extracted %d files, want %d", tt.name, len(files), tt.expected)
+			}
+		})
 	}
 }
 
