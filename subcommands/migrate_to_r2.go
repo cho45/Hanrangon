@@ -236,8 +236,8 @@ func (m *Migrator) ProcessEntries(ctx context.Context) error {
 				log.Printf("    [dry-run] %s → R2 (%s/entry/%s)", imgFile, strings.TrimSuffix(m.r2PublicURL, "/"), imgFile)
 			}
 			// BaseURL + entries.path でURLを出力
-			baseURL := m.app.Config().BaseURL
-			entryURL := fmt.Sprintf("%s%s", strings.TrimSuffix(baseURL, "/"), e.path)
+			baseURL := strings.TrimSuffix(m.app.Config().BaseURL, "/")
+			entryURL := fmt.Sprintf("%s/%s", baseURL, e.path)
 			log.Printf("  [dry-run] DB更新対象: %s", entryURL)
 			successCount++
 			continue
@@ -299,8 +299,8 @@ func (m *Migrator) ProcessEntries(ctx context.Context) error {
 		}
 
 		// BaseURL + entries.path でURLを出力（確認しやすいように）
-		baseURL := m.app.Config().BaseURL
-		entryURL := fmt.Sprintf("%s%s", strings.TrimSuffix(baseURL, "/"), e.path)
+		baseURL := strings.TrimSuffix(m.app.Config().BaseURL, "/")
+		entryURL := fmt.Sprintf("%s/%s", baseURL, e.path)
 		log.Printf("  完了: %s", entryURL)
 		successCount++
 	}

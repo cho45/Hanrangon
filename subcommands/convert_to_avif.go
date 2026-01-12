@@ -225,8 +225,8 @@ func (c *AVIFConverter) ProcessEntries(ctx context.Context) error {
 				log.Printf("    [dry-run] %s → %s", imgFile, avifFilename)
 			}
 			// BaseURL + entries.path でURLを出力
-			baseURL := c.app.Config().BaseURL
-			entryURL := fmt.Sprintf("%s%s", strings.TrimSuffix(baseURL, "/"), e.path)
+			baseURL := strings.TrimSuffix(c.app.Config().BaseURL, "/")
+			entryURL := fmt.Sprintf("%s/%s", baseURL, e.path)
 			log.Printf("  [dry-run] DB更新対象: %s", entryURL)
 			log.Printf("  [dry-run] 元ファイル削除: %d個", len(imageFiles))
 			successCount++
@@ -287,8 +287,8 @@ func (c *AVIFConverter) ProcessEntries(ctx context.Context) error {
 		}
 
 		// BaseURL + entries.path でURLを出力（確認しやすいように）
-		baseURL := c.app.Config().BaseURL
-		entryURL := fmt.Sprintf("%s%s", strings.TrimSuffix(baseURL, "/"), e.path)
+		baseURL := strings.TrimSuffix(c.app.Config().BaseURL, "/")
+		entryURL := fmt.Sprintf("%s/%s", baseURL, e.path)
 		log.Printf("  完了: %s", entryURL)
 		successCount++
 	}
