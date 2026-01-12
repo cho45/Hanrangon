@@ -106,20 +106,21 @@ func TestRewriteExtensions(t *testing.T) {
 			expected: `<img src="/images/entry/20240101120000-テスト画像.avif">`,
 		},
 		{
-			name: "Complex HTML with multiple images",
-			input: `<div>
-				<img src="/images/entry/img1.jpg" alt="test">
-				<a href="/images/entry/img2.jpeg">link</a>
-				<img src='/images/entry/img3.jpg'/>
-			</div>`,
-			expected: `<div>
-				<img src="/images/entry/img1.avif" alt="test">
-				<a href="/images/entry/img2.avif">link</a>
-				<img src='/images/entry/img3.avif'/>
-			</div>`,
+			name:     "Complex HTML with multiple images",
+			input:    `<div class="photo"><a href="/images/entry/1.jpg"><img src="/images/entry/1.jpg"></a></div><div class="photo"><a href="/images/entry/2.jpeg"><img src="/images/entry/2.jpeg"></a></div>`,
+			expected: `<div class="photo"><a href="/images/entry/1.avif"><img src="/images/entry/1.avif"></a></div><div class="photo"><a href="/images/entry/2.avif"><img src="/images/entry/2.avif"></a></div>`,
+		},
+		{
+			name:     "Uppercase extension (.JPG)",
+			input:    `<img src="/images/entry/DSC08936.JPG">`,
+			expected: `<img src="/images/entry/DSC08936.avif">`,
+		},
+		{
+			name:     "Uppercase extension (.JPEG)",
+			input:    `<img src="/images/entry/DSC08936.JPEG">`,
+			expected: `<img src="/images/entry/DSC08936.avif">`,
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := converter.rewriteExtensions(tt.input)

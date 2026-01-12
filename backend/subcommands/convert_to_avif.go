@@ -440,7 +440,8 @@ func (c *AVIFConverter) convertToAVIF(ctx context.Context, avifencPath, filename
 // /images/entry/ を含むURLのみが対象
 func (c *AVIFConverter) rewriteExtensions(text string) string {
 	// /images/entry/...jpg" → /images/entry/...avif"
-	re1 := regexp.MustCompile(`(/images/entry/[^"'> ]*\.)jpe?g(["'> ])`)
+	// 大文字小文字を区別しない (?i) を追加
+	re1 := regexp.MustCompile(`(?i)(/images/entry/[^"'> ]*\.)jpe?g(["'> ])`)
 	text = re1.ReplaceAllString(text, "${1}avif$2")
 
 	return text
@@ -452,24 +453,19 @@ func (c *AVIFConverter) UpdateImageURIsForEntry(ctx context.Context, entryID int
 		return nil
 	}
 
-	// .jpg → .avif
-	_, err := c.app.ImagesDB().ExecContext(ctx, `
-		UPDATE images
-		SET uri = REPLACE(uri, '.jpg', '.avif')
-		WHERE entry_id = ? AND uri LIKE '%/images/entry/%.jpg'
-	`, entryID)
-	if err != nil {
-		return fmt.Errorf("failed to update .jpg URIs for entry %d: %w", entryID, err)
-	}
-
-	// .jpeg → .avif
-	_, err = c.app.ImagesDB().ExecContext(ctx, `
-		UPDATE images
-		SET uri = REPLACE(uri, '.jpeg', '.avif')
-		WHERE entry_id = ? AND uri LIKE '%/images/entry/%.jpeg'
-	`, entryID)
-	if err != nil {
-		return fmt.Errorf("failed to update .jpeg URIs for entry %d: %w", entryID, err)
+	// .jpg / .JPG → .avif
+	// SQLiteのREPLACEはCase-Sensitiveなので、大文字小文字両方を個別に、または正規表現置換があればそれを使う
+	// ここでは単純に.jpgと.JPG、.jpegと.JPEGを個別に置換する（より確実）
+	replacements := []string{".jpg", ".JPG", ".jpeg", ".JPEG"}
+	for _, ext := range replacements {
+		_, err := c.app.ImagesDB().ExecContext(ctx, fmt.Sprintf(`
+			UPDATE images
+			SET uri = REPLACE(uri, '%s', '.avif')
+			WHERE entry_id = ? AND uri LIKE '%%/images/entry/%%%s'
+		`, ext, ext), entryID)
+		if err != nil {
+			return fmt.Errorf("failed to update %s URIs for entry %d: %w", ext, entryID, err)
+		}
 	}
 
 	return nil
