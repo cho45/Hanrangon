@@ -21,17 +21,15 @@ function main() {
 
     console.log(`スキャン中: ${AVIF_DIR}...`);
 
-    const files = fs.readdirSync(AVIF_DIR);
-    let processCount = 0;
-    let refinedCount = 0;
+    const allFiles = fs.readdirSync(AVIF_DIR)
+        .filter(file => file.toLowerCase().endsWith('.avif'));
 
-    for (const file of files) {
-        if (!file.toLowerCase().endsWith('.avif')) continue;
-
+    // 最初に改善対象をすべてリストアップする
+    const targets = [];
+    for (const file of allFiles) {
         const avifPath = path.join(AVIF_DIR, file);
         const baseName = path.basename(file, '.avif');
         
-        // 対応するJPG/JPEGを探す
         let jpgFile = `${baseName}.jpg`;
         let jpgPath = path.join(JPG_DIR, jpgFile);
         
@@ -40,40 +38,55 @@ function main() {
             jpgPath = path.join(JPG_DIR, jpgFile);
         }
 
-        if (!fs.existsSync(jpgPath)) {
-            continue;
-        }
+        if (fs.existsSync(jpgPath)) {
+            const avifStat = fs.statSync(avifPath);
+            const jpgStat = fs.statSync(jpgPath);
 
-        processCount++;
-
-        const avifStat = fs.statSync(avifPath);
-        const jpgStat = fs.statSync(jpgPath);
-
-        // ファイルサイズの比較 (AVIF > JPG だったら再エンコード)
-        if (avifStat.size > jpgStat.size) {
-            console.log(`
-[改善対象発見] ${file}`);
-            console.log(`  AVIF: ${(avifStat.size / 1024 / 1024).toFixed(2)} MB`);
-            console.log(`  JPG : ${(jpgStat.size / 1024 / 1024).toFixed(2)} MB`);
-            
-            const cmd = `${AVIFENC_CMD} "${jpgPath}" "${avifPath}"`;
-            console.log(`  実行: ${cmd}`);
-
-            try {
-                execSync(cmd, { stdio: 'inherit' });
-                
-                const newStat = fs.statSync(avifPath);
-                const reduction = ((1 - newStat.size / avifStat.size) * 100).toFixed(1);
-                console.log(`  結果: ${(newStat.size / 1024 / 1024).toFixed(2)} MB (${reduction}% 削減)`);
-                refinedCount++;
-            } catch (err) {
-                console.error(`  エラー: ${file} の処理に失敗しました: ${err.message}`);
+            if (avifStat.size > jpgStat.size) {
+                targets.push({
+                    file,
+                    avifPath,
+                    jpgPath,
+                    avifSize: avifStat.size,
+                    jpgSize: jpgStat.size
+                });
             }
         }
     }
 
-    console.log(`
-完了: ${processCount} 個のファイルをチェックし、${refinedCount} 個を再エンコードしました。`);
+    const total = targets.length;
+    console.log(`スキャン完了: 全 ${allFiles.length} ファイル中、改善対象は ${total} 件です.\n`);
+
+    if (total === 0) {
+        console.log('改善が必要なファイルはありませんでした。');
+        return;
+    }
+
+    let refinedCount = 0;
+
+    for (let i = 0; i < total; i++) {
+        const { file, avifPath, jpgPath, avifSize, jpgSize } = targets[i];
+        const progress = `[${i + 1}/${total}]`;
+
+        console.log(`${progress} 処理中: ${file}`);
+        console.log(`  サイズ比較: AVIF(${(avifSize / 1024 / 1024).toFixed(2)}MB) > JPG(${(jpgSize / 1024 / 1024).toFixed(2)}MB)`);
+        
+        const cmd = `${AVIFENC_CMD} "${jpgPath}" "${avifPath}"`;
+        console.log(`  実行: ${cmd}`);
+
+        try {
+            execSync(cmd, { stdio: 'inherit' });
+            
+            const newStat = fs.statSync(avifPath);
+            const reduction = ((1 - newStat.size / avifSize) * 100).toFixed(1);
+            console.log(`  結果: ${(newStat.size / 1024 / 1024).toFixed(2)}MB (${reduction}% 削減)\n`);
+            refinedCount++;
+        } catch (err) {
+            console.error(`  エラー: ${file} の処理に失敗しました: ${err.message}\n`);
+        }
+    }
+
+    console.log(`完了: ${total} 個の対象のうち、${refinedCount} 個を再エンコードしました。`);
 }
 
 main();
