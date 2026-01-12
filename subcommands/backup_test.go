@@ -124,11 +124,12 @@ func TestBackup(t *testing.T) {
 	defer smtpServer.listener.Close()
 
 	// 3. Run Backup
+	config := app.LoadConfig()
+	config.DataDBPath = dbPath
+
 	application := &mockApp{
-		config: &app.Config{
-			DataDBPath: dbPath,
-		},
-		db: db,
+		config: config,
+		db:     db,
 	}
 
 	err = Backup(context.Background(), application, []string{"-smtp", smtpServer.addr})

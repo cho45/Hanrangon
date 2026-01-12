@@ -19,9 +19,8 @@ func setupTestApp(t *testing.T) (app.App, *sql.DB) {
 	dbs := testutil.SetupAllDBs(t)
 	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
-	config := &app.Config{
-		BaseURL: "https://example.com",
-	}
+	config := app.LoadConfig()
+	config.BaseURL = "https://example.com"
 
 	// TF-IDF calculator and similarity calculator
 	tfidfQueries := model.New(tfidfDB)

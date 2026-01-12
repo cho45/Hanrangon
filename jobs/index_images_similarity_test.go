@@ -21,11 +21,10 @@ func TestIndexImagesJob_SimilarityIntegration(t *testing.T) {
 	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	tmpDir := t.TempDir()
-	config := &app.Config{
-		BaseURL:         "http://localhost:5555",
-		UploadURLPrefix: "/images/upload/",
-		UploadDir:       tmpDir,
-	}
+	config := app.LoadConfig()
+	config.BaseURL = "http://localhost:5555"
+	config.UploadURLPrefix = "/images/upload/"
+	config.UploadDir = tmpDir
 
 	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, nil, nil, nil, nil)
 	job := NewIndexImagesJob(application)
@@ -33,8 +32,7 @@ func TestIndexImagesJob_SimilarityIntegration(t *testing.T) {
 
 	// 1. Prepare test fixtures
 	// Copy apple-touch-icon.png to two different paths in uploadDir
-	// Path from 'jobs' directory during test execution
-	srcPath := filepath.Join("..", "static", "images", "apple-touch-icon.png")
+	srcPath := filepath.Join(config.BaseDir, "static", "images", "apple-touch-icon.png")
 
 	image1Rel := "icon1.png"
 	image2Rel := "icon2.png"

@@ -418,10 +418,9 @@ func TestAVIFConverter_ProcessEntries(t *testing.T) {
 
 	// Setup test app
 	tmpDir := t.TempDir()
-	config := &app.Config{
-		BaseURL:   "http://localhost:5555",
-		UploadDir: tmpDir,
-	}
+	config := app.LoadConfig()
+	config.BaseURL = "http://localhost:5555"
+	config.UploadDir = tmpDir
 
 	registry := jobqueue.NewRegistry()
 	workerQueries := model.New(workerDB)
@@ -531,7 +530,7 @@ func TestAVIFConverter_UpdateImageURIs(t *testing.T) {
 	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	// Setup test app
-	config := &app.Config{}
+	config := app.LoadConfig()
 
 	registry := jobqueue.NewRegistry()
 	workerQueries := model.New(workerDB)
@@ -626,10 +625,9 @@ func TestAVIFConverter_ProcessEntriesWithLimit(t *testing.T) {
 
 	// Setup test app
 	tmpDir := t.TempDir()
-	config := &app.Config{
-		BaseURL:   "http://localhost:5555",
-		UploadDir: tmpDir,
-	}
+	config := app.LoadConfig()
+	config.BaseURL = "http://localhost:5555"
+	config.UploadDir = tmpDir
 
 	registry := jobqueue.NewRegistry()
 	workerQueries := model.New(workerDB)
@@ -739,10 +737,9 @@ func TestAVIFConverter_ProcessEntries_DryRun(t *testing.T) {
 
 	// Setup test app
 	tmpDir := t.TempDir()
-	config := &app.Config{
-		BaseURL:   "http://localhost:5555",
-		UploadDir: tmpDir,
-	}
+	config := app.LoadConfig()
+	config.BaseURL = "http://localhost:5555"
+	config.UploadDir = tmpDir
 
 	registry := jobqueue.NewRegistry()
 	workerQueries := model.New(workerDB)
@@ -853,10 +850,9 @@ func TestAVIFConverter_ProcessEntriesWithEntryID(t *testing.T) {
 
 	// Setup test app
 	tmpDir := t.TempDir()
-	config := &app.Config{
-		UploadDir: tmpDir,
-		BaseURL:   "http://localhost:5555",
-	}
+	config := app.LoadConfig()
+	config.UploadDir = tmpDir
+	config.BaseURL = "http://localhost:5555"
 
 	registry := jobqueue.NewRegistry()
 	workerQueries := model.New(workerDB)

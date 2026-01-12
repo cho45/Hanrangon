@@ -67,10 +67,7 @@ func (t *Templates) loadTemplates() (map[string]*template.Template, map[string]*
 	funcMap := buildFuncMap()
 	metadata := make(map[string]*TemplateMetadata)
 
-	basePath := "view/"
-	if _, err := os.Stat(basePath); os.IsNotExist(err) {
-		basePath = "../view/"
-	}
+	basePath := filepath.Join(t.config.BaseDir, "view")
 
 	err := filepath.Walk(basePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {

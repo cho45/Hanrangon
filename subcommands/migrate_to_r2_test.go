@@ -232,10 +232,9 @@ func TestMigrator_ProcessEntries(t *testing.T) {
 
 	// Setup test app
 	tmpDir := t.TempDir()
-	config := &app.Config{
-		R2PublicURL: "https://assets.lowreal.net",
-		UploadDir:   tmpDir,
-	}
+	config := app.LoadConfig()
+	config.R2PublicURL = "https://assets.lowreal.net"
+	config.UploadDir = tmpDir
 
 	// Create dummy image files
 	testFiles := []string{"test1.jpg", "test3.jpg"}
@@ -446,10 +445,9 @@ func TestMigrator_ProcessEntries_BodyField(t *testing.T) {
 
 	// Setup test app
 	tmpDir := t.TempDir()
-	config := &app.Config{
-		R2PublicURL: "https://assets.lowreal.net",
-		UploadDir:   tmpDir,
-	}
+	config := app.LoadConfig()
+	config.R2PublicURL = "https://assets.lowreal.net"
+	config.UploadDir = tmpDir
 
 	// Create dummy image file
 	if err := os.WriteFile(filepath.Join(tmpDir, "test.jpg"), []byte("test"), 0644); err != nil {
@@ -537,9 +535,8 @@ func TestMigrator_UpdateImageURIs(t *testing.T) {
 	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	// Setup test app
-	config := &app.Config{
-		R2PublicURL: "https://assets.lowreal.net",
-	}
+	config := app.LoadConfig()
+	config.R2PublicURL = "https://assets.lowreal.net"
 
 	registry := jobqueue.NewRegistry()
 	workerQueries := model.New(workerDB)
@@ -624,10 +621,9 @@ func TestMigrator_Idempotency(t *testing.T) {
 
 	// Setup test app
 	tmpDir := t.TempDir()
-	config := &app.Config{
-		R2PublicURL: "https://assets.lowreal.net",
-		UploadDir:   tmpDir,
-	}
+	config := app.LoadConfig()
+	config.R2PublicURL = "https://assets.lowreal.net"
+	config.UploadDir = tmpDir
 
 	// Create dummy image file
 	if err := os.WriteFile(filepath.Join(tmpDir, "test.jpg"), []byte("test"), 0644); err != nil {
@@ -749,10 +745,9 @@ func TestMigrator_ProcessEntries_UploadError(t *testing.T) {
 
 	// Setup test app
 	tmpDir := t.TempDir()
-	config := &app.Config{
-		R2PublicURL: "https://assets.lowreal.net",
-		UploadDir:   tmpDir,
-	}
+	config := app.LoadConfig()
+	config.R2PublicURL = "https://assets.lowreal.net"
+	config.UploadDir = tmpDir
 
 	// Create dummy image files
 	if err := os.WriteFile(filepath.Join(tmpDir, "test1.jpg"), []byte("test1"), 0644); err != nil {
@@ -1087,11 +1082,10 @@ func TestMigrator_ProcessEntriesWithLimit(t *testing.T) {
 
 	// Setup test app
 	tmpDir := t.TempDir()
-	config := &app.Config{
-		R2PublicURL: "https://assets.lowreal.net",
-		UploadDir:   tmpDir,
-		BaseURL:     "http://localhost:5555",
-	}
+	config := app.LoadConfig()
+	config.R2PublicURL = "https://assets.lowreal.net"
+	config.UploadDir = tmpDir
+	config.BaseURL = "http://localhost:5555"
 
 	registry := jobqueue.NewRegistry()
 	workerQueries := model.New(workerDB)
@@ -1211,12 +1205,11 @@ func TestMigrator_ProcessEntries_DryRun(t *testing.T) {
 
 	// Setup test app
 	tmpDir := t.TempDir()
-	config := &app.Config{
-		BaseURL:      "http://localhost:5555",
-		UploadDir:    tmpDir,
-		R2PublicURL:  "https://assets.lowreal.net",
-		R2BucketName: "test-bucket",
-	}
+	config := app.LoadConfig()
+	config.BaseURL = "http://localhost:5555"
+	config.UploadDir = tmpDir
+	config.R2PublicURL = "https://assets.lowreal.net"
+	config.R2BucketName = "test-bucket"
 
 	registry := jobqueue.NewRegistry()
 	workerQueries := model.New(workerDB)
@@ -1322,11 +1315,10 @@ func TestMigrator_ProcessEntriesWithEntryID(t *testing.T) {
 
 	// Setup test app
 	tmpDir := t.TempDir()
-	config := &app.Config{
-		R2PublicURL: "https://assets.lowreal.net",
-		UploadDir:   tmpDir,
-		BaseURL:     "http://localhost:5555",
-	}
+	config := app.LoadConfig()
+	config.BaseURL = "http://localhost:5555"
+	config.R2PublicURL = "https://assets.lowreal.net"
+	config.UploadDir = tmpDir
 
 	registry := jobqueue.NewRegistry()
 	workerQueries := model.New(workerDB)
@@ -1424,10 +1416,9 @@ func TestMigrator_UpdateImageURIs_DryRun(t *testing.T) {
 	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	// Setup test app
-	config := &app.Config{
-		R2PublicURL:  "https://assets.lowreal.net",
-		R2BucketName: "test-bucket",
-	}
+	config := app.LoadConfig()
+	config.R2PublicURL = "https://assets.lowreal.net"
+	config.R2BucketName = "test-bucket"
 
 	registry := jobqueue.NewRegistry()
 	workerQueries := model.New(workerDB)

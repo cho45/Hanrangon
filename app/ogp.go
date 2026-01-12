@@ -77,7 +77,8 @@ func getOGPPalette() color.Palette {
 func (app *AppImpl) loadOGPAssets() {
 	ogpAssetOnce.Do(func() {
 		// ディレクトリを事前に作成
-		if err := os.MkdirAll("var/cache/ogp", 0755); err != nil {
+		cacheDir := filepath.Join(app.config.BaseDir, "var", "cache", "ogp")
+		if err := os.MkdirAll(cacheDir, 0755); err != nil {
 			log.Printf("Error creating OGP cache directory: %v", err)
 		}
 
@@ -121,7 +122,7 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid ID")
 	}
 
-	cachePath := filepath.Join("var", "cache", "ogp", fmt.Sprintf("%d.png", id))
+	cachePath := filepath.Join(app.config.BaseDir, "var", "cache", "ogp", fmt.Sprintf("%d.png", id))
 	cc := c.Request().Header.Get("Cache-Control")
 	pragma := c.Request().Header.Get("Pragma")
 	noCache := (cc == "no-cache" || pragma == "no-cache") && app.config.IsDevelopment()
@@ -346,7 +347,7 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 }
 
 func (app *AppImpl) InvalidateOGPCache(id int64) error {
-	cachePath := filepath.Join("var", "cache", "ogp", fmt.Sprintf("%d.png", id))
+	cachePath := filepath.Join(app.config.BaseDir, "var", "cache", "ogp", fmt.Sprintf("%d.png", id))
 	if err := os.Remove(cachePath); err != nil && !os.IsNotExist(err) {
 		return err
 	}

@@ -22,6 +22,8 @@ import (
 
 func setupTest(t *testing.T) *testEnv {
 	t.Helper()
+	testutil.SetupEnvironment() // これを追加
+
 	dbs := testutil.SetupAllDBs(t)
 	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
@@ -32,14 +34,13 @@ func setupTest(t *testing.T) *testEnv {
 
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("testpass"), bcrypt.DefaultCost)
 
-	config := &Config{
-		StaticDir:     "../static",
-		UploadDir:     tmpDir,
-		Username:      "testuser",
-		Password:      string(hashedPassword),
-		SessionSecret: "testsecret",
-		BaseURL:       "http://localhost:5555",
-	}
+	// デフォルト設定をロードしてからテスト用にオーバーライド
+	config := LoadConfig()
+	config.UploadDir = tmpDir
+	config.Username = "testuser"
+	config.Password = string(hashedPassword)
+	config.SessionSecret = "testsecret"
+	config.BaseURL = "http://localhost:5555"
 
 	// TF-IDF calculator and similarity calculator
 	tfidfQueries := model.New(tfidfDB)

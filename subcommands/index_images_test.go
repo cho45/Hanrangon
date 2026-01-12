@@ -23,11 +23,10 @@ func TestIndexImages_Missing(t *testing.T) {
 	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	tmpDir := t.TempDir()
-	config := &app.Config{
-		BaseURL:         "http://localhost:5555",
-		UploadURLPrefix: "/images/entry/",
-		UploadDir:       tmpDir,
-	}
+	config := app.LoadConfig()
+	config.BaseURL = "http://localhost:5555"
+	config.UploadURLPrefix = "/images/entry/"
+	config.UploadDir = tmpDir
 
 	// Setup app
 	tfidfQueries := model.New(tfidfDB)

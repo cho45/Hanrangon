@@ -24,11 +24,10 @@ func TestIndexImagesJob_UniqueConstraintError(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "hanrangon-index-test")
 	defer os.RemoveAll(tmpDir)
 
-	config := &app.Config{
-		BaseURL:         "http://localhost:5555",
-		UploadURLPrefix: "/images/entry/",
-		UploadDir:       tmpDir,
-	}
+	config := app.LoadConfig()
+	config.BaseURL = "http://localhost:5555"
+	config.UploadURLPrefix = "/images/entry/"
+	config.UploadDir = tmpDir
 
 	tfidfQueries := model.New(tfidfDB)
 	calc, err := tfidf.NewCalculator(tfidfDB, model.New(tfidfDB), db, model.New(db))

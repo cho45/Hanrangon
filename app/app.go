@@ -183,7 +183,8 @@ func (app *AppImpl) Postprocess(ctx context.Context, html string) (string, error
 
 	// Node.js スクリプトのパス（プロジェクトルートからの相対パス）
 	// Node.js スクリプトのパス（プロジェクトルートからの相対パス）
-	scriptPath := filepath.Join(app.config.StaticDir, "../postprocess/main.js")
+	// Node.js スクリプトのパス（プロジェクトルートからの相対パス）
+	scriptPath := filepath.Join(app.config.BaseDir, "postprocess", "main.js")
 
 	cmd := exec.CommandContext(ctx, nodePath, scriptPath, "--base-url", app.config.BaseURL)
 	cmd.Stdin = bytes.NewReader([]byte(html))
@@ -236,7 +237,8 @@ func (app *AppImpl) PostprocessWithProgress(ctx context.Context, html string, se
 
 	// Node.js スクリプトのパス
 	// Node.js スクリプトのパス（プロジェクトルートからの相対パス）
-	scriptPath := filepath.Join(app.config.StaticDir, "../postprocess/main.js")
+	// Node.js スクリプトのパス（プロジェクトルートからの相対パス）
+	scriptPath := filepath.Join(app.config.BaseDir, "postprocess", "main.js")
 
 	cmd := exec.CommandContext(ctx, nodePath, scriptPath, "--base-url", app.config.BaseURL)
 	cmd.Stdin = bytes.NewReader([]byte(html))
@@ -339,7 +341,8 @@ func (app *AppImpl) PostprocessBatch(ctx context.Context) (*BatchProcessor, erro
 		}
 	}
 
-	scriptPath := filepath.Join(app.config.StaticDir, "../postprocess/main.js")
+	// Node.js スクリプトのパス（プロジェクトルートからの相対パス）
+	scriptPath := filepath.Join(app.config.BaseDir, "postprocess", "main.js")
 	ctx, cancel := context.WithCancel(ctx)
 
 	cmd := exec.CommandContext(ctx, nodePath, scriptPath, "--base-url", app.config.BaseURL, "--batch")

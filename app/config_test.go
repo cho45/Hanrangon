@@ -2,12 +2,18 @@ package app
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/cho45/hanrangon/internal/testutil"
 )
 
 func TestLoadConfig(t *testing.T) {
+	testutil.SetupEnvironment()
+	baseDir := os.Getenv("HANRANGON_BASE_DIR")
+
 	// Create a temporary TOML file for testing
-	tomlPath := "test_config.toml"
+	tomlPath := filepath.Join(baseDir, "test_config.toml")
 	tomlContent := `
 	data_db_path = "from_toml_data"
 	static_dir = "from_toml_static"

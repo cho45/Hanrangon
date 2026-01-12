@@ -55,11 +55,10 @@ func TestIndexImagesJob_Execute(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "hanrangon-index-test")
 	defer os.RemoveAll(tmpDir)
 
-	config := &app.Config{
-		BaseURL:         "http://localhost:5555",
-		UploadURLPrefix: "/images/entry/",
-		UploadDir:       tmpDir,
-	}
+	config := app.LoadConfig()
+	config.BaseURL = "http://localhost:5555"
+	config.UploadURLPrefix = "/images/entry/"
+	config.UploadDir = tmpDir
 
 	// TF-IDF calculator and similarity calculator
 	tfidfQueries := model.New(tfidfDB)
@@ -138,11 +137,10 @@ func TestIndexImagesJob_HandleLoadFailure(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "hanrangon-index-test")
 	defer os.RemoveAll(tmpDir)
 
-	config := &app.Config{
-		BaseURL:         "http://localhost:5555",
-		UploadURLPrefix: "/images/entry/",
-		UploadDir:       tmpDir,
-	}
+	config := app.LoadConfig()
+	config.BaseURL = "http://localhost:5555"
+	config.UploadURLPrefix = "/images/entry/"
+	config.UploadDir = tmpDir
 
 	tfidfQueries := model.New(tfidfDB)
 	calc, _ := tfidf.NewCalculator(tfidfDB, model.New(tfidfDB), db, model.New(db))
@@ -195,11 +193,10 @@ func TestIndexImagesJob_TwoPhase(t *testing.T) {
 	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	tmpDir := t.TempDir()
-	config := &app.Config{
-		BaseURL:         "http://localhost:5555",
-		UploadURLPrefix: "/images/entry/",
-		UploadDir:       tmpDir,
-	}
+	config := app.LoadConfig()
+	config.BaseURL = "http://localhost:5555"
+	config.UploadURLPrefix = "/images/entry/"
+	config.UploadDir = tmpDir
 
 	tfidfQueries := model.New(tfidfDB)
 	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, model.New(db))
@@ -309,7 +306,8 @@ func TestIndexImagesJob_SyncRobustness(t *testing.T) {
 	defer dbs.Close()
 	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
-	application := app.NewApp(&app.Config{}, db, tfidfDB, workerDB, imagesDB, nil, nil, nil, nil)
+	config := app.LoadConfig()
+	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, nil, nil, nil, nil)
 	job := NewIndexImagesJob(application)
 
 	ctx := context.Background()
@@ -416,11 +414,10 @@ func TestIndexImagesJob_CorruptImage(t *testing.T) {
 	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	tmpDir := t.TempDir()
-	config := &app.Config{
-		BaseURL:         "http://localhost:5555",
-		UploadURLPrefix: "/images/entry/",
-		UploadDir:       tmpDir,
-	}
+	config := app.LoadConfig()
+	config.BaseURL = "http://localhost:5555"
+	config.UploadURLPrefix = "/images/entry/"
+	config.UploadDir = tmpDir
 
 	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, nil, nil, nil, nil)
 	job := NewIndexImagesJob(application)
@@ -463,11 +460,10 @@ func TestIndexImagesJob_Rollback(t *testing.T) {
 	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	tmpDir := t.TempDir()
-	config := &app.Config{
-		BaseURL:         "http://localhost:5555",
-		UploadURLPrefix: "/images/entry/",
-		UploadDir:       tmpDir,
-	}
+	config := app.LoadConfig()
+	config.BaseURL = "http://localhost:5555"
+	config.UploadURLPrefix = "/images/entry/"
+	config.UploadDir = tmpDir
 
 	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, nil, nil, nil, nil)
 	job := NewIndexImagesJob(application)
@@ -557,11 +553,10 @@ func TestIndexImagesJob_Overwrite(t *testing.T) {
 	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	tmpDir := t.TempDir()
-	config := &app.Config{
-		BaseURL:         "http://localhost:5555",
-		UploadURLPrefix: "/images/entry/",
-		UploadDir:       tmpDir,
-	}
+	config := app.LoadConfig()
+	config.BaseURL = "http://localhost:5555"
+	config.UploadURLPrefix = "/images/entry/"
+	config.UploadDir = tmpDir
 
 	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, nil, nil, nil, nil)
 	job := NewIndexImagesJob(application)

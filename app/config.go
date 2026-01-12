@@ -10,6 +10,7 @@ import (
 )
 
 type Config struct {
+	BaseDir         string   `toml:"base_dir"`
 	DataDBPath      string   `toml:"data_db_path"`
 	ImagesDBPath    string   `toml:"images_db_path"`
 	TFIDFDBPath     string   `toml:"tfidf_db_path"`
@@ -44,12 +45,19 @@ type Config struct {
 }
 
 func LoadConfig() *Config {
+	// 0. Determine BaseDir
+	baseDir := os.Getenv("HANRANGON_BASE_DIR")
+	if baseDir == "" {
+		baseDir, _ = os.Getwd()
+	}
+	baseDir, _ = filepath.Abs(baseDir)
+
 	// Default values
-	wd, _ := os.Getwd()
-	varDir := filepath.Join(wd, "var")
-	staticDir := filepath.Join(wd, "static")
+	varDir := filepath.Join(baseDir, "var")
+	staticDir := filepath.Join(baseDir, "static")
 
 	cfg := &Config{
+		BaseDir:         baseDir,
 		DataDBPath:      filepath.Join(varDir, "db", "data.db"),
 		ImagesDBPath:    filepath.Join(varDir, "db", "images.db"),
 		TFIDFDBPath:     filepath.Join(varDir, "db", "tfidf.db"),
@@ -64,11 +72,18 @@ func LoadConfig() *Config {
 	// 1. Load from TOML (mandatory)
 	configPath := os.Getenv("HANRANGON_CONFIG")
 	if configPath == "" {
-		configPath = "config.toml"
+		configPath = filepath.Join(baseDir, "config.toml")
+	} else if !filepath.IsAbs(configPath) {
+		configPath = filepath.Join(baseDir, configPath)
 	}
 
 	if _, err := toml.DecodeFile(configPath, cfg); err != nil {
 		log.Fatalf("Fatal: failed to load config from %s: %v", configPath, err)
+	}
+
+	// Ensure BaseDir from config is absolute if provided
+	if !filepath.IsAbs(cfg.BaseDir) {
+		cfg.BaseDir, _ = filepath.Abs(filepath.Join(baseDir, cfg.BaseDir))
 	}
 
 	// 2. Override with individual environment variables (for backward compatibility)

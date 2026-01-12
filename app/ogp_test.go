@@ -37,8 +37,8 @@ func TestHandleOGP(t *testing.T) {
 			t.Errorf("want image/png, got %s", rec.Header().Get("Content-Type"))
 		}
 
-		// キャッシュファイルが生成されているか確認
-		cachePath := filepath.Join("var", "cache", "ogp", fmt.Sprintf("%d.png", id))
+		// Check if cache file exists
+		cachePath := filepath.Join(env.app.Config().BaseDir, "var", "cache", "ogp", "1.png")
 		if _, err := os.Stat(cachePath); os.IsNotExist(err) {
 			t.Errorf("cache file was not created at %s", cachePath)
 		}
@@ -51,7 +51,7 @@ func TestHandleOGP(t *testing.T) {
 			t.Errorf("failed to invalidate cache: %v", err)
 		}
 
-		cachePath := filepath.Join("var", "cache", "ogp", fmt.Sprintf("%d.png", id))
+		cachePath := filepath.Join(env.app.Config().BaseDir, "var", "cache", "ogp", fmt.Sprintf("%d.png", id))
 		if _, err := os.Stat(cachePath); err == nil {
 			t.Errorf("cache file still exists after invalidation")
 		}
