@@ -27,6 +27,10 @@ describe('App Routing', () => {
               top_terms: [],
               avg_score: 0
             },
+            image_stats: {
+              total_images: 0,
+              unindexed_images: 0
+            },
             debug_info: {
               go_version: 'go1.x',
               num_goroutine: 0,

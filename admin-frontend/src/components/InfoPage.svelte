@@ -67,18 +67,18 @@
         <div class="table-container">
           <table>
             <tbody>
-              <tr><th>総語彙数 (Terms)</th><td>{info.tfidf_stats.total_terms}</td></tr>
-              <tr><th>インデックス済みエントリ</th><td>{info.tfidf_stats.indexed_entries}</td></tr>
-              <tr><th>関連エントリ計算済み</th><td>{info.tfidf_stats.entries_with_related}</td></tr>
-              <tr><th>総関連ペア数</th><td>{info.tfidf_stats.total_related_pairs}</td></tr>
-              <tr><th>平均類似度スコア</th><td>{info.tfidf_stats.avg_score.toFixed(4)}</td></tr>
+              <tr><th>総語彙数 (Terms)</th><td>{info.tfidf_stats?.total_terms ?? 0}</td></tr>
+              <tr><th>インデックス済みエントリ</th><td>{info.tfidf_stats?.indexed_entries ?? 0}</td></tr>
+              <tr><th>関連エントリ計算済み</th><td>{info.tfidf_stats?.entries_with_related ?? 0}</td></tr>
+              <tr><th>総関連ペア数</th><td>{info.tfidf_stats?.total_related_pairs ?? 0}</td></tr>
+              <tr><th>平均類似度スコア</th><td>{info.tfidf_stats?.avg_score?.toFixed(4) ?? '0.0000'}</td></tr>
             </tbody>
           </table>
         </div>
         <div style="margin-top: 10px;">
           <h4>頻出単語 (Top 20 DF)</h4>
           <div class="top-terms">
-            {#each info.tfidf_stats.top_terms as item}
+            {#each info.tfidf_stats?.top_terms ?? [] as item}
               <span class="term-badge" title="DF: {item.df}">{item.term}</span>
             {/each}
           </div>
@@ -90,8 +90,8 @@
         <div class="table-container">
           <table>
             <tbody>
-              <tr><th>総画像数</th><td>{info.image_stats.total_images}</td></tr>
-              <tr><th>未インデックス画像数</th><td>{info.image_stats.unindexed_images}</td></tr>
+              <tr><th>総画像数</th><td>{info.image_stats?.total_images ?? 0}</td></tr>
+              <tr><th>未インデックス画像数</th><td>{info.image_stats?.unindexed_images ?? 0}</td></tr>
             </tbody>
           </table>
         </div>
