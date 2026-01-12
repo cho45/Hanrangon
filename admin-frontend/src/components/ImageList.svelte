@@ -75,24 +75,31 @@ let total = $state(0);
   {#if api.loading && images.length === 0}
     <div class="loading">読み込み中...</div>
   {:else}
-    <div class="grid">
-      {#each images as image}
-        <div class="image-item">
-          <div class="img-container">
-            <img src={image.uri} alt="" loading="lazy" />
-            {#if image.sig?.length > 0}
-              <button class="indexed-icon" title="類似画像を検索" onclick={() => fetchSimilarImages(image)}>🔍</button>
-            {/if}
-          </div>
-          <div class="info">
-            <ColorBitmask sig={image.sig} />
-            <div class="entry-link">
-              <a href="/admin/edit?id={image.entry_id}">Entry: <strong>{image.entry_id}</strong></a>
+    <div class="grid-container">
+      <div class="grid" class:is-loading={api.loading}>
+        {#each images as image (image.id)}
+          <div class="image-item">
+            <div class="img-container">
+              <img src={image.uri} alt="" loading="lazy" />
+              {#if image.sig?.length > 0}
+                <button class="indexed-icon" title="類似画像を検索" onclick={() => fetchSimilarImages(image)}>🔍</button>
+              {/if}
             </div>
-            <div class="id">ID: {image.id}</div>
+            <div class="info">
+              <ColorBitmask sig={image.sig} />
+              <div class="entry-link">
+                <a href="/admin/edit?id={image.entry_id}">Entry: <strong>{image.entry_id}</strong></a>
+              </div>
+              <div class="id">ID: {image.id}</div>
+            </div>
           </div>
+        {/each}
+      </div>
+      {#if api.loading}
+        <div class="overlay">
+          <div class="loading-spinner"></div>
         </div>
-      {/each}
+      {/if}
     </div>
   {/if}
 </div>
@@ -123,8 +130,8 @@ let total = $state(0);
     {:else if similarImages.length === 0}
       <p>類似画像は見つかりませんでした。</p>
     {:else}
-      <div class="grid similar-grid">
-        {#each similarImages as image}
+      <div class="grid similar-grid" class:is-loading={api.loading}>
+        {#each similarImages as image (image.id)}
           <div class="image-item">
             <div class="img-container">
               <img src={image.uri} alt="" loading="lazy" />
@@ -161,10 +168,48 @@ let total = $state(0);
     gap: 10px;
   }
 
+  .grid-container {
+    position: relative;
+    min-height: 200px;
+  }
+
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 20px;
+    transition: opacity 0.2s;
+  }
+
+  .grid.is-loading {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.3);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1;
+  }
+
+  .loading-spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #00acc1;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    animation: spin 2s linear infinite;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
   }
 
   .image-item {
