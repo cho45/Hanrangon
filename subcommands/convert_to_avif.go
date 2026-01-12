@@ -74,21 +74,6 @@ func ConvertToAVIF(ctx context.Context, application app.App, args []string) erro
 		return fmt.Errorf("entry processing failed: %w", err)
 	}
 
-	// images.uriを一括更新
-	// 理由: すべてのエントリ処理が完了した後に、画像DBも同期する
-	// ただし、dry-run、limit、entry-id指定時は部分的な処理なので一括更新をスキップ
-	if !opts.DryRun && opts.Limit == 0 && opts.EntryID == 0 {
-		if err := converter.UpdateImageURIs(ctx); err != nil {
-			log.Printf("警告: 画像URI更新に失敗しました: %v", err)
-		}
-	} else if opts.DryRun {
-		log.Printf("ドライランモードのため画像URI更新をスキップします")
-	} else if opts.Limit > 0 {
-		log.Printf("--limit指定のため画像URI更新をスキップします（部分的な処理のみ実行）")
-	} else if opts.EntryID > 0 {
-		log.Printf("--entry-id指定のため画像URI更新をスキップします（単一エントリのみ処理）")
-	}
-
 	// 検証
 	// 理由: すべての変換が完了した後に、残っている未変換データがないか確認
 	// ただし、dry-run、limit、entry-id指定時は部分的な処理なので検証をスキップ
@@ -286,6 +271,13 @@ func (c *AVIFConverter) ProcessEntries(ctx context.Context) error {
 			}
 		}
 
+		// ステップ4: 画像URIを更新
+		if err := c.UpdateImageURIsForEntry(ctx, e.id); err != nil {
+			log.Printf("  画像URI更新エラー: %v", err)
+			errorCount++
+			continue
+		}
+
 		// BaseURL + entries.path でURLを出力（確認しやすいように）
 		baseURL := strings.TrimSuffix(c.app.Config().BaseURL, "/")
 		entryURL := fmt.Sprintf("%s/%s", baseURL, e.path)
@@ -365,93 +357,6 @@ func (c *AVIFConverter) removeCommentsAndCDATA(html string) string {
 	return html
 }
 
-// ConvertFiles はJPG/JPEGファイルをAVIFに変換する（未使用、後方互換性のため残す）
-func (c *AVIFConverter) ConvertFiles(ctx context.Context) error {
-	// JPG/JPEGファイル一覧を取得
-	files, err := c.listJPGFiles()
-	if err != nil {
-		return fmt.Errorf("failed to list JPG files: %w", err)
-	}
-
-	if len(files) == 0 {
-		log.Printf("変換するJPG/JPEGファイルがありません")
-		return nil
-	}
-
-	log.Printf("%d個のJPG/JPEGファイルを発見しました", len(files))
-
-	if c.opts.DryRun {
-		log.Printf("ドライラン: %d個のファイルをAVIFに変換します（実際には変換しません）", len(files))
-		return nil
-	}
-
-	// avifencコマンドのパスを取得
-	avifencPath, err := c.findAVIFEnc()
-	if err != nil {
-		return fmt.Errorf("avifenc not found: %w", err)
-	}
-
-	successCount := 0
-	skipCount := 0
-	errorCount := 0
-
-	for i, filename := range files {
-		log.Printf("[%d/%d] 変換中 %s...", i+1, len(files), filename)
-
-		// 既にAVIFファイルが存在するかチェック
-		avifFilename := c.getAVIFFilename(filename)
-		avifPath := filepath.Join(c.uploadDir, avifFilename)
-		if _, err := os.Stat(avifPath); err == nil {
-			log.Printf("  スキップ: 既に存在します")
-			skipCount++
-			continue
-		}
-
-		// AVIF変換（元ファイルは削除しない）
-		if err := c.convertToAVIF(ctx, avifencPath, filename); err != nil {
-			log.Printf("  エラー: %v", err)
-			errorCount++
-			continue
-		}
-
-		log.Printf("  完了")
-		successCount++
-	}
-
-	log.Printf("変換完了: %d成功, %dスキップ, %d失敗", successCount, skipCount, errorCount)
-
-	if errorCount > 0 {
-		return fmt.Errorf("%d conversion errors occurred", errorCount)
-	}
-
-	return nil
-}
-
-// listJPGFiles はアップロードディレクトリ内のJPG/JPEGファイルをリストする
-func (c *AVIFConverter) listJPGFiles() ([]string, error) {
-	var files []string
-	err := filepath.Walk(c.uploadDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			ext := strings.ToLower(filepath.Ext(path))
-			if ext == ".jpg" || ext == ".jpeg" {
-				relPath, err := filepath.Rel(c.uploadDir, path)
-				if err != nil {
-					return err
-				}
-				files = append(files, relPath)
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return files, nil
-}
-
 // findAVIFEnc はavifencコマンドのパスを取得する
 func (c *AVIFConverter) findAVIFEnc() (string, error) {
 	// config.tomlのavifenc_pathを優先
@@ -502,97 +407,6 @@ func (c *AVIFConverter) convertToAVIF(ctx context.Context, avifencPath, filename
 	return nil
 }
 
-// RewriteEntries はエントリのbodyとformatted_bodyを書き換える
-func (c *AVIFConverter) RewriteEntries(ctx context.Context) error {
-	// .jpg または .jpeg を含むエントリをクエリ
-	rows, err := c.app.DB().QueryContext(ctx, `
-		SELECT id, path, body, formatted_body
-		FROM entries
-		WHERE body LIKE '%/images/entry/%.jpg%'
-		   OR body LIKE '%/images/entry/%.jpeg%'
-		   OR formatted_body LIKE '%/images/entry/%.jpg%'
-		   OR formatted_body LIKE '%/images/entry/%.jpeg%'
-		ORDER BY id
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to query entries: %w", err)
-	}
-	defer rows.Close()
-
-	type entry struct {
-		id            int64
-		path          string
-		body          string
-		formattedBody string
-	}
-
-	var entries []entry
-	for rows.Next() {
-		var e entry
-		if err := rows.Scan(&e.id, &e.path, &e.body, &e.formattedBody); err != nil {
-			return fmt.Errorf("failed to scan entry: %w", err)
-		}
-		entries = append(entries, e)
-	}
-
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("failed to iterate entries: %w", err)
-	}
-
-	log.Printf("%d個の書き換え対象エントリを発見しました", len(entries))
-
-	if c.opts.DryRun {
-		log.Printf("ドライラン: %d個のエントリを書き換えます（実際には書き換えません）", len(entries))
-		return nil
-	}
-
-	successCount := 0
-	errorCount := 0
-	skippedCount := 0
-
-	for i, e := range entries {
-		log.Printf("[%d/%d] 処理中 エントリID:%d %s", i+1, len(entries), e.id, e.path)
-
-		// 既に変換済みかチェック
-		hasJPG := strings.Contains(e.body, "/images/entry/") && (strings.Contains(e.body, ".jpg") || strings.Contains(e.body, ".jpeg"))
-		hasJPGFormatted := strings.Contains(e.formattedBody, "/images/entry/") && (strings.Contains(e.formattedBody, ".jpg") || strings.Contains(e.formattedBody, ".jpeg"))
-
-		if !hasJPG && !hasJPGFormatted {
-			log.Printf("  スキップ: 既に変換済み")
-			skippedCount++
-			continue
-		}
-
-		// bodyを書き換え（拡張子のみ変更）
-		newBody := c.rewriteExtensions(e.body)
-
-		// formatted_bodyを書き換え（拡張子のみ変更）
-		newHTML := c.rewriteExtensions(e.formattedBody)
-
-		// データベースを更新（bodyとformatted_bodyの両方）
-		_, err = c.app.DB().ExecContext(ctx, `
-			UPDATE entries
-			SET body = ?, formatted_body = ?
-			WHERE id = ?
-		`, newBody, newHTML, e.id)
-		if err != nil {
-			log.Printf("  データベース更新エラー: %v", err)
-			errorCount++
-			continue
-		}
-
-		successCount++
-	}
-
-	log.Printf("書き換え完了: %d成功, %d失敗, %dスキップ", successCount, errorCount, skippedCount)
-
-	if errorCount > 0 {
-		return fmt.Errorf("%d rewrite errors occurred", errorCount)
-	}
-
-	return nil
-}
-
 // rewriteExtensions は画像の拡張子を.jpg/.jpeg → .avifに書き換える
 // /images/entry/ を含むURLのみが対象
 func (c *AVIFConverter) rewriteExtensions(text string) string {
@@ -603,94 +417,30 @@ func (c *AVIFConverter) rewriteExtensions(text string) string {
 	return text
 }
 
-// UpdateImageURIs はimagesデータベースのimages.uriを更新する
-func (c *AVIFConverter) UpdateImageURIs(ctx context.Context) error {
-	log.Printf("画像URIを更新中...")
-
+// UpdateImageURIsForEntry は特定の画像データベースのエントリのimages.uriを更新する
+func (c *AVIFConverter) UpdateImageURIsForEntry(ctx context.Context, entryID int64) error {
 	if c.opts.DryRun {
-		log.Printf("ドライラン: 画像URIを更新します（実際には更新しません）")
 		return nil
 	}
 
 	// .jpg → .avif
-	result, err := c.app.ImagesDB().ExecContext(ctx, `
+	_, err := c.app.ImagesDB().ExecContext(ctx, `
 		UPDATE images
 		SET uri = REPLACE(uri, '.jpg', '.avif')
-		WHERE uri LIKE '%/images/entry/%.jpg'
-	`)
+		WHERE entry_id = ? AND uri LIKE '%/images/entry/%.jpg'
+	`, entryID)
 	if err != nil {
-		return fmt.Errorf("failed to update .jpg URIs: %w", err)
+		return fmt.Errorf("failed to update .jpg URIs for entry %d: %w", entryID, err)
 	}
-	rowsAffected, _ := result.RowsAffected()
-	log.Printf("%d個の.jpg画像URIを更新しました", rowsAffected)
 
 	// .jpeg → .avif
-	result, err = c.app.ImagesDB().ExecContext(ctx, `
+	_, err = c.app.ImagesDB().ExecContext(ctx, `
 		UPDATE images
 		SET uri = REPLACE(uri, '.jpeg', '.avif')
-		WHERE uri LIKE '%/images/entry/%.jpeg'
-	`)
+		WHERE entry_id = ? AND uri LIKE '%/images/entry/%.jpeg'
+	`, entryID)
 	if err != nil {
-		return fmt.Errorf("failed to update .jpeg URIs: %w", err)
-	}
-	rowsAffected, _ = result.RowsAffected()
-	log.Printf("%d個の.jpeg画像URIを更新しました", rowsAffected)
-
-	return nil
-}
-
-// DeleteOriginalFiles は変換済みの元のJPG/JPEGファイルを削除する
-func (c *AVIFConverter) DeleteOriginalFiles(ctx context.Context) error {
-	// JPG/JPEGファイル一覧を取得
-	files, err := c.listJPGFiles()
-	if err != nil {
-		return fmt.Errorf("failed to list JPG files: %w", err)
-	}
-
-	if len(files) == 0 {
-		log.Printf("削除するJPG/JPEGファイルがありません")
-		return nil
-	}
-
-	log.Printf("%d個のJPG/JPEGファイルを削除します", len(files))
-
-	if c.opts.DryRun {
-		log.Printf("ドライラン: %d個のファイルを削除します（実際には削除しません）", len(files))
-		return nil
-	}
-
-	successCount := 0
-	errorCount := 0
-	skippedCount := 0
-
-	for i, filename := range files {
-		log.Printf("[%d/%d] 削除中 %s...", i+1, len(files), filename)
-
-		// 対応するAVIFファイルが存在するかチェック
-		avifFilename := c.getAVIFFilename(filename)
-		avifPath := filepath.Join(c.uploadDir, avifFilename)
-		if _, err := os.Stat(avifPath); err != nil {
-			log.Printf("  スキップ: 対応するAVIFファイルが存在しません")
-			skippedCount++
-			continue
-		}
-
-		// JPGファイルを削除
-		jpgPath := filepath.Join(c.uploadDir, filename)
-		if err := os.Remove(jpgPath); err != nil {
-			log.Printf("  エラー: %v", err)
-			errorCount++
-			continue
-		}
-
-		log.Printf("  完了")
-		successCount++
-	}
-
-	log.Printf("削除完了: %d成功, %d失敗, %dスキップ", successCount, errorCount, skippedCount)
-
-	if errorCount > 0 {
-		return fmt.Errorf("%d deletion errors occurred", errorCount)
+		return fmt.Errorf("failed to update .jpeg URIs for entry %d: %w", entryID, err)
 	}
 
 	return nil

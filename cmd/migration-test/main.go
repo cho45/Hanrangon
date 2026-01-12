@@ -253,18 +253,6 @@ func canonicalize(n *html.Node, format string) {
 	}
 }
 
-func isCardPlaceholder(n *html.Node) bool {
-	if n == nil || n.Type != html.ElementNode || n.Data != "span" {
-		return false
-	}
-	for _, attr := range n.Attr {
-		if attr.Key == "class" && attr.Val == "card-placeholder" {
-			return true
-		}
-	}
-	return false
-}
-
 func moveCardOutOfP(p *html.Node, card *html.Node) {
 	parent := p.Parent
 	if parent == nil {
@@ -299,19 +287,6 @@ func removeNode(n *html.Node) {
 	if n.Parent != nil {
 		n.Parent.RemoveChild(n)
 	}
-}
-
-func unwrapNode(n *html.Node) {
-	parent := n.Parent
-	if parent == nil {
-		return
-	}
-	for c := n.FirstChild; c != nil; {
-		next := c.NextSibling
-		parent.InsertBefore(c, n)
-		c = next
-	}
-	parent.RemoveChild(n)
 }
 
 func isEmptyOrWhitespaceOnly(n *html.Node) bool {

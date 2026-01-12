@@ -183,32 +183,6 @@ done:
 	return summary, firstImage
 }
 
-func ExtractFirstImage(htmlContent string) string {
-	tokenizer := html.NewTokenizer(strings.NewReader(htmlContent))
-	for {
-		tokenType := tokenizer.Next()
-		if tokenType == html.ErrorToken {
-			break
-		}
-
-		if tokenType == html.StartTagToken || tokenType == html.SelfClosingTagToken {
-			name, hasAttr := tokenizer.TagName()
-			if string(name) == "img" && hasAttr {
-				for {
-					key, val, more := tokenizer.TagAttr()
-					if string(key) == "src" {
-						return string(val)
-					}
-					if !more {
-						break
-					}
-				}
-			}
-		}
-	}
-	return ""
-}
-
 type ArchiveYear struct {
 	Year   string
 	Months []ArchiveMonth

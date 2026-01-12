@@ -168,13 +168,6 @@ func (c *Calculator) isSkipRune(r rune) bool {
 	return false
 }
 
-// removeHTMLTags はテキストから HTML タグを除去
-func (c *Calculator) removeHTMLTags(text string) string {
-	// 単純な HTML タグ除去（必要に応じて適切な HTML パーサーに変更可能）
-	re := regexp.MustCompile(`<[^>]*>`)
-	return re.ReplaceAllString(text, "")
-}
-
 // UpdateTFIDF は指定された単一エントリの TF-IDF データを更新
 func (c *Calculator) UpdateTFIDF(ctx context.Context, entryID int64, title, body string) error {
 	return c.UpdateTFIDFs(ctx, []UpdateEntry{{ID: entryID, Title: title, Body: body}})

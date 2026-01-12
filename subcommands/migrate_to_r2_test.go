@@ -576,10 +576,13 @@ func TestMigrator_UpdateImageURIs(t *testing.T) {
 		},
 	}
 
-	// Execute UpdateImageURIs
+	// Execute UpdateImageURIsForEntry
 	ctx := context.Background()
-	if err := migrator.UpdateImageURIs(ctx); err != nil {
-		t.Fatalf("UpdateImageURIs failed: %v", err)
+	if err := migrator.UpdateImageURIsForEntry(ctx, 1); err != nil {
+		t.Fatalf("UpdateImageURIsForEntry failed: %v", err)
+	}
+	if err := migrator.UpdateImageURIsForEntry(ctx, 2); err != nil {
+		t.Fatalf("UpdateImageURIsForEntry failed: %v", err)
 	}
 
 	// Verify images were updated
@@ -1463,11 +1466,11 @@ func TestMigrator_UpdateImageURIs_DryRun(t *testing.T) {
 		},
 	}
 
-	// Run UpdateImageURIs in dry-run mode
+	// Run UpdateImageURIsForEntry in dry-run mode
 	ctx := context.Background()
-	err = migrator.UpdateImageURIs(ctx)
+	err = migrator.UpdateImageURIsForEntry(ctx, 1)
 	if err != nil {
-		t.Fatalf("UpdateImageURIs failed: %v", err)
+		t.Fatalf("UpdateImageURIsForEntry failed: %v", err)
 	}
 
 	// Verify database was NOT modified

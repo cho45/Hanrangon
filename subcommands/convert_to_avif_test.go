@@ -565,10 +565,13 @@ func TestAVIFConverter_UpdateImageURIs(t *testing.T) {
 		},
 	}
 
-	// Execute UpdateImageURIs
+	// Execute UpdateImageURIsForEntry
 	ctx := context.Background()
-	if err := converter.UpdateImageURIs(ctx); err != nil {
-		t.Fatalf("UpdateImageURIs failed: %v", err)
+	if err := converter.UpdateImageURIsForEntry(ctx, 1); err != nil {
+		t.Fatalf("UpdateImageURIsForEntry failed: %v", err)
+	}
+	if err := converter.UpdateImageURIsForEntry(ctx, 2); err != nil {
+		t.Fatalf("UpdateImageURIsForEntry failed: %v", err)
 	}
 
 	// Verify local image URIs were updated

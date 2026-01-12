@@ -1,9 +1,12 @@
 BINARY_NAME=hanrangon
 GO_TAGS=sqlite_math_functions
 
-.PHONY: all build test generate generate-icons fmt clean postprocess-test setup watch run
+.PHONY: all build test generate generate-icons fmt clean postprocess-test setup watch run deadcode
 
 all: build
+
+deadcode:
+	deadcode ./... | grep -v "internal/testutil" || true
 
 setup:
 	go install github.com/air-verse/air@latest

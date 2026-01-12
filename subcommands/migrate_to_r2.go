@@ -103,22 +103,6 @@ func MigrateToR2(ctx context.Context, application app.App, args []string) error 
 		return fmt.Errorf("entry processing failed: %w", err)
 	}
 
-	// images.uriを一括更新
-	// 理由: エントリ本文の書き換えが完了した後に、画像DBも同期する
-	//       REPLACEによる一括更新なので高速
-	// ただし、dry-run、limit、entry-id指定時は部分的な処理なので一括更新をスキップ
-	if !opts.DryRun && opts.Limit == 0 && opts.EntryID == 0 {
-		if err := migrator.UpdateImageURIs(ctx); err != nil {
-			return fmt.Errorf("image URI update failed: %w", err)
-		}
-	} else if opts.DryRun {
-		log.Printf("ドライランモードのため画像URI更新をスキップします")
-	} else if opts.Limit > 0 {
-		log.Printf("--limit指定のため画像URI更新をスキップします（部分的な処理のみ実行）")
-	} else if opts.EntryID > 0 {
-		log.Printf("--entry-id指定のため画像URI更新をスキップします（単一エントリのみ処理）")
-	}
-
 	// 検証
 	// 理由: すべての移行が完了した後に、残っている未移行データがないか確認
 	// ただし、dry-run、limit、entry-id指定時は部分的な処理なので検証をスキップ
@@ -294,6 +278,13 @@ func (m *Migrator) ProcessEntries(ctx context.Context) error {
 		`, newBody, newHTML, e.id)
 		if err != nil {
 			log.Printf("  データベース更新エラー: %v", err)
+			errorCount++
+			continue
+		}
+
+		// ステップ3: 画像URIを更新
+		if err := m.UpdateImageURIsForEntry(ctx, e.id); err != nil {
+			log.Printf("  画像URI更新エラー: %v", err)
 			errorCount++
 			continue
 		}
@@ -475,27 +466,22 @@ func (m *Migrator) uploadFile(ctx context.Context, filename string) error {
 	return nil
 }
 
-// UpdateImageURIs はimagesデータベースのimages.uriを更新する
-func (m *Migrator) UpdateImageURIs(ctx context.Context) error {
-	log.Printf("画像URIを更新中...")
-
+// UpdateImageURIsForEntry は特定の画像データベースのエントリのimages.uriを更新する
+func (m *Migrator) UpdateImageURIsForEntry(ctx context.Context, entryID int64) error {
 	if m.opts.DryRun {
-		log.Printf("ドライラン: 画像URIを更新します（実際には更新しません）")
 		return nil
 	}
 
-	result, err := m.app.ImagesDB().ExecContext(ctx, `
+	_, err := m.app.ImagesDB().ExecContext(ctx, `
 		UPDATE images
 		SET uri = REPLACE(uri, ?, ?)
-		WHERE uri LIKE ?
-	`, "/images/entry/", m.r2PublicURL+"/entry/", "/images/entry/%")
+		WHERE entry_id = ? AND uri LIKE ?
+	`, "/images/entry/", m.r2PublicURL+"/entry/", entryID, "/images/entry/%")
 
 	if err != nil {
-		return fmt.Errorf("failed to update image URIs: %w", err)
+		return fmt.Errorf("failed to update image URIs for entry %d: %w", entryID, err)
 	}
 
-	rowsAffected, _ := result.RowsAffected()
-	log.Printf("%d個の画像URIを更新しました", rowsAffected)
 	return nil
 }
 
