@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cho45/hanrangon/internal/testutil"
 	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/internal/testutil"
 	_ "github.com/mattn/go-sqlite3"
 )
 

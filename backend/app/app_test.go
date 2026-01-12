@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cho45/hanrangon/internal/testutil"
 	"github.com/cho45/hanrangon/backend/jobqueue"
 	"github.com/cho45/hanrangon/backend/model"
 	"github.com/cho45/hanrangon/backend/tfidf"
+	"github.com/cho45/hanrangon/internal/testutil"
 	"github.com/labstack/echo/v4"
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"

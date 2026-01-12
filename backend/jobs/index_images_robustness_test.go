@@ -10,10 +10,10 @@ import (
 	"testing"
 
 	"github.com/cho45/hanrangon/backend/app"
-	"github.com/cho45/hanrangon/internal/testutil"
 	"github.com/cho45/hanrangon/backend/jobqueue"
 	"github.com/cho45/hanrangon/backend/model"
 	"github.com/cho45/hanrangon/backend/tfidf"
+	"github.com/cho45/hanrangon/internal/testutil"
 )
 
 func TestIndexImagesJob_UniqueConstraintError(t *testing.T) {
