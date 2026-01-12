@@ -207,7 +207,12 @@ func (c *AVIFConverter) ProcessEntries(ctx context.Context) error {
 		if c.opts.DryRun {
 			for _, imgFile := range imageFiles {
 				avifFilename := c.getAVIFFilename(imgFile)
-				log.Printf("    [dry-run] %s → %s", imgFile, avifFilename)
+				jpgPath := filepath.Join(c.uploadDir, imgFile)
+				var oldSize int64
+				if info, err := os.Stat(jpgPath); err == nil {
+					oldSize = info.Size()
+				}
+				log.Printf("    [dry-run] %s (%s) → %s", imgFile, humanSize(oldSize), avifFilename)
 			}
 			// BaseURL + entries.path でURLを出力
 			baseURL := strings.TrimSuffix(c.app.Config().BaseURL, "/")
@@ -223,6 +228,12 @@ func (c *AVIFConverter) ProcessEntries(ctx context.Context) error {
 		for _, imgFile := range imageFiles {
 			avifFilename := c.getAVIFFilename(imgFile)
 			avifPath := filepath.Join(c.uploadDir, avifFilename)
+			jpgPath := filepath.Join(c.uploadDir, imgFile)
+
+			var oldSize int64
+			if info, err := os.Stat(jpgPath); err == nil {
+				oldSize = info.Size()
+			}
 
 			// 既にAVIFが存在する場合はスキップ
 			if _, err := os.Stat(avifPath); err == nil {
@@ -236,7 +247,18 @@ func (c *AVIFConverter) ProcessEntries(ctx context.Context) error {
 				convertSuccess = false
 				break
 			}
-			log.Printf("    %s → %s", imgFile, avifFilename)
+
+			var newSize int64
+			if info, err := os.Stat(avifPath); err == nil {
+				newSize = info.Size()
+			}
+
+			reduction := 0.0
+			if oldSize > 0 {
+				reduction = float64(newSize) / float64(oldSize) * 100
+			}
+
+			log.Printf("    %s → %s (%s → %s, %.1f%%)", imgFile, avifFilename, humanSize(oldSize), humanSize(newSize), reduction)
 		}
 
 		if !convertSuccess {
@@ -484,4 +506,17 @@ func (c *AVIFConverter) Verify(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func humanSize(b int64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }

@@ -982,3 +982,27 @@ func TestAVIFConverter_ProcessEntriesWithEntryID(t *testing.T) {
 		}
 	}
 }
+
+func TestHumanSize(t *testing.T) {
+	tests := []struct {
+		bytes    int64
+		expected string
+	}{
+		{0, "0 B"},
+		{512, "512 B"},
+		{1024, "1.0 KB"},
+		{1536, "1.5 KB"},
+		{1024 * 1024, "1.0 MB"},
+		{1024 * 1024 * 1024, "1.0 GB"},
+		{1024 * 1024 * 1024 * 1024, "1.0 TB"},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%d_bytes", tt.bytes), func(t *testing.T) {
+			got := humanSize(tt.bytes)
+			if got != tt.expected {
+				t.Errorf("humanSize(%d) = %v, want %v", tt.bytes, got, tt.expected)
+			}
+		})
+	}
+}
