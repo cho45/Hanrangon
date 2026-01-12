@@ -42,6 +42,10 @@ type Config struct {
 	R2SecretAccessKey string `toml:"r2_secret_access_key"`
 	R2BucketName      string `toml:"r2_bucket_name"`
 	R2PublicURL       string `toml:"r2_public_url"`
+
+	// Cloudflare API Configuration (for Analytics)
+	CFAPIToken  string `toml:"cf_api_token"`
+	CFAccountID string `toml:"cf_account_id"`
 }
 
 func LoadConfig() *Config {
@@ -139,6 +143,14 @@ func LoadConfig() *Config {
 	}
 	if env := os.Getenv("HANRANGON_JPEGTRAN_PATH"); env != "" {
 		cfg.JpegtranPath = env
+	}
+
+	// Cloudflare API Overrides
+	if env := os.Getenv("HANRANGON_CF_API_TOKEN"); env != "" {
+		cfg.CFAPIToken = env
+	}
+	if env := os.Getenv("HANRANGON_CF_ACCOUNT_ID"); env != "" {
+		cfg.CFAccountID = env
 	}
 
 	// デフォルトは development (開発効率優先)

@@ -49,6 +49,8 @@ type App interface {
 	PublishScheduledEntries(ctx context.Context) error
 	EnqueuePublishedEntryJobs(ctx context.Context, entryID int64) error
 
+	GetR2Usage(ctx context.Context) (*R2UsageStats, error)
+
 	HandleOGP(c echo.Context) error
 	InvalidateOGPCache(id int64) error
 }

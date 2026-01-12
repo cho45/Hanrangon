@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from '../lib/api.svelte';
   import ColorBitmask from './ColorBitmask.svelte';
+  import R2UsageStats from './R2UsageStats.svelte';
 
   interface Image {
     id: number;
@@ -76,6 +77,8 @@ let total = $state(0);
       <button onclick={nextPage} disabled={offset + limit >= total}>次へ</button>
     </div>
   </div>
+
+  <R2UsageStats />
 
   {#if api.loading && images.length === 0}
     <div class="loading">読み込み中...</div>

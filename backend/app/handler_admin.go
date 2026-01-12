@@ -580,6 +580,14 @@ func (app *AppImpl) HandleAdminApiImages(c echo.Context) error {
 	})
 }
 
+func (app *AppImpl) HandleAdminApiR2Usage(c echo.Context) error {
+	stats, err := app.GetR2Usage(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch R2 usage").SetInternal(err)
+	}
+	return c.JSON(http.StatusOK, stats)
+}
+
 func (app *AppImpl) HandleAdminApiSimilarImages(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
