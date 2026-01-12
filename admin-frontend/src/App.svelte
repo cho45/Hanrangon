@@ -84,7 +84,17 @@
 
 <div class="admin-app">
   <header class:is-localhost={isLocalhost}>
-    <h1><a href="/admin/"><img src="/images/hanrangen-icon.svg" alt="Hanrangon" class="logo"></a></h1>
+    <div class="header-left">
+      <h1><a href="/admin/"><img src="/images/hanrangen-icon.svg" alt="Hanrangon" class="logo"></a></h1>
+      <div class="ci-badge">
+        <a href="https://github.com/cho45/Hanrangon/actions/workflows/ci.yml" target="_blank" rel="noopener noreferrer">
+          <img src="https://img.shields.io/github/actions/workflow/status/cho45/Hanrangon/ci.yml?branch=main&label=ci&style=flat-square" alt="CI Status">
+        </a>
+        <a href="https://github.com/cho45/Hanrangon/actions/workflows/lint.yml" target="_blank" rel="noopener noreferrer">
+          <img src="https://img.shields.io/github/actions/workflow/status/cho45/Hanrangon/lint.yml?branch=main&label=lint&style=flat-square" alt="Lint Status">
+        </a>
+      </div>
+    </div>
     <nav class="main-nav">
       <ul>
         <li><a href="/">サイト確認</a></li>
@@ -135,6 +145,34 @@
   header h1 {
     margin: 0;
     font-size: 1.2rem;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+
+  .ci-badge {
+    display: flex;
+    align-items: center;
+    height: 20px;
+    gap: 10px;
+  }
+
+  .ci-badge img {
+    height: 18px;
+    display: block;
+    transition: all 0.2s;
+  }
+
+  .ci-badge img:hover {
+    transform: scale(1.05);
+  }
+
+  .ci-badge img {
+    height: 20px;
+    display: block;
   }
 
   header .logo {

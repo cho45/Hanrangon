@@ -51,7 +51,7 @@ var cfAPIEndpoint = "https://api.cloudflare.com/client/v4/graphql"
 
 func (app *AppImpl) GetR2Usage(ctx context.Context) (*R2UsageStats, error) {
 	if app.config.CFAPIToken == "" || app.config.CFAccountID == "" || app.config.R2BucketName == "" {
-		return nil, fmt.Errorf("Cloudflare API configuration incomplete")
+		return nil, fmt.Errorf("cloudflare API configuration incomplete")
 	}
 
 	// 直近7日間の統計を取得
@@ -126,7 +126,7 @@ func (app *AppImpl) GetR2Usage(ctx context.Context) (*R2UsageStats, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Cloudflare API error: status %d, body: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("cloudflare API error: status %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	var gqlResp cloudflareGraphQLResponse
@@ -135,7 +135,7 @@ func (app *AppImpl) GetR2Usage(ctx context.Context) (*R2UsageStats, error) {
 	}
 
 	if len(gqlResp.Errors) > 0 {
-		return nil, fmt.Errorf("Cloudflare GraphQL error: %s", gqlResp.Errors[0].Message)
+		return nil, fmt.Errorf("cloudflare GraphQL error: %s", gqlResp.Errors[0].Message)
 	}
 
 	if len(gqlResp.Data.Viewer.Accounts) == 0 {
