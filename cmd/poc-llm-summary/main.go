@@ -14,8 +14,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cho45/hanrangon/app"
-	"github.com/cho45/hanrangon/model"
+	"github.com/cho45/hanrangon/backend/app"
+	"github.com/cho45/hanrangon/backend/model"
 	_ "github.com/mattn/go-sqlite3"
 )
 

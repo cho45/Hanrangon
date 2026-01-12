@@ -11,12 +11,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cho45/hanrangon/app"
-	"github.com/cho45/hanrangon/jobqueue"
-	"github.com/cho45/hanrangon/model"
-	"github.com/cho45/hanrangon/tfidf"
+	"github.com/cho45/hanrangon/backend/app"
+	"github.com/cho45/hanrangon/backend/jobqueue"
+	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/tfidf"
+	"github.com/cho45/hanrangon/internal/testutil"
 	_ "github.com/mattn/go-sqlite3"
 )
+
+func TestMain(m *testing.M) {
+	testutil.SetupEnvironment()
+	os.Exit(m.Run())
+}
 
 func TestRunServe_GracefulShutdownOrder(t *testing.T) {
 	// Setup minimal app dependencies
@@ -27,7 +33,8 @@ func TestRunServe_GracefulShutdownOrder(t *testing.T) {
 	defer db.Close()
 
 	// Apply schema for workers at least
-	schema, err := os.ReadFile("db/schema/worker.sql")
+	config := app.LoadConfig()
+	schema, err := os.ReadFile(filepath.Join(config.BaseDir, "backend/db/schema/worker.sql"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +42,7 @@ func TestRunServe_GracefulShutdownOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	// And entries schema
-	entrySchema, err := os.ReadFile("db/schema/schema.sql")
+	entrySchema, err := os.ReadFile(filepath.Join(config.BaseDir, "backend/db/schema/schema.sql"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,11 +50,8 @@ func TestRunServe_GracefulShutdownOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	config := &app.Config{
-		Listen:        []string{"127.0.0.1:0"}, // Random free port
-		SessionSecret: "test",
-		StaticDir:     "static",
-	}
+	config.Listen = []string{"127.0.0.1:0"} // Random free port
+	config.SessionSecret = "test"
 
 	registry := jobqueue.NewRegistry()
 	workerQueries := model.New(db)
@@ -125,19 +129,17 @@ func TestRunServe_MultipleListeners(t *testing.T) {
 	defer db.Close()
 
 	// Apply necessary schemas
-	workerSchema, _ := os.ReadFile("db/schema/worker.sql")
+	config := app.LoadConfig()
+	workerSchema, _ := os.ReadFile(filepath.Join(config.BaseDir, "backend/db/schema/worker.sql"))
 	db.Exec(string(workerSchema))
-	entrySchema, _ := os.ReadFile("db/schema/schema.sql")
+	entrySchema, _ := os.ReadFile(filepath.Join(config.BaseDir, "backend/db/schema/schema.sql"))
 	db.Exec(string(entrySchema))
 
 	// Prepare UDS path
 	tmpSock := filepath.Join(t.TempDir(), "test.sock")
 
-	config := &app.Config{
-		Listen:        []string{"127.0.0.1:0", "unix:" + tmpSock},
-		SessionSecret: "test",
-		StaticDir:     "static",
-	}
+	config.Listen = []string{"127.0.0.1:0", "unix:" + tmpSock}
+	config.SessionSecret = "test"
 
 	registry := jobqueue.NewRegistry()
 	workerQueries := model.New(db)

@@ -1,0 +1,4 @@
+
+	data_db_path = "from_toml_data"
+	static_dir = "from_toml_static"
+	

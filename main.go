@@ -16,12 +16,12 @@ import (
 
 	"runtime/pprof"
 
-	"github.com/cho45/hanrangon/app"
-	"github.com/cho45/hanrangon/jobqueue"
-	"github.com/cho45/hanrangon/jobs"
-	"github.com/cho45/hanrangon/model"
-	"github.com/cho45/hanrangon/subcommands"
-	"github.com/cho45/hanrangon/tfidf"
+	"github.com/cho45/hanrangon/backend/app"
+	"github.com/cho45/hanrangon/backend/jobqueue"
+	"github.com/cho45/hanrangon/backend/jobs"
+	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/subcommands"
+	"github.com/cho45/hanrangon/backend/tfidf"
 	_ "github.com/mattn/go-sqlite3"
 )
 

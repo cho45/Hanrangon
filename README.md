@@ -16,10 +16,10 @@ Perl 版 Nogag (氾濫原) の Go (Golang) によるリライトプロジェク�
 `MathJax` や `Highlight.js` といった成熟した JavaScript ライブラリを活用するため、`Node.js` をサイドカーとして利用している。`jsdom` を用いてブラウザ環境に近い状態でサーバー側レンダリング（事前整形）を行い、静的な HTML として保存することで、閲覧時の高速なコンテンツ表示を可能にしている。
 
 ### 安定した言語解析と関連記事表示
-関連記事抽出のための `TF-IDF` 計算には、文字 2-gram (Bigram) 方式を採用している。形態素解析器（`go-tinysegmenter` や `kagome` 等）と比較してメモリ消費が少なく、辞書のメンテナンスも不要である。日本語における分かち書きの精度に左右されず、安定したターム抽出と検索性を確保している。
+関連記事抽出のための `TF-IDF` 計算には、文字 2-gram (Bigram) 方式を採用している。形態素解析器と比較してメモリ消費が少なく、辞書のメンテナンスも不要である。日本語における分かち書きの精度に左右されず、安定したターム抽出と検索性を確保している。
 
-### 外部依存の排除と運用性の向上
-`Redis` 等の外部ミドルウェアを必要とせず、`SQLite` ベースのジョブキューを内蔵している。Go による単一バイナリとデータベースファイル群のみでシステムが完結するため、環境構築やサーバー移転が容易である。個人のブログシステムという規模において、依存する外部プロセスを最小限に抑えることを優先している。
+### 外部依存の排除によるメンテナンスコストの削減
+`Redis` 等の外部ミドルウェアを必要とせず、`SQLite` ベースのジョブキューを内蔵している。Node.js によるサイドカープロセス等の依存はあるものの、システム全体がプロジェクト内のリソースで完結するように構成されている。外部ミドルウェアへの依存を最小限に抑えることで、依存先のバージョンアップや設定の不整合に伴うトラブルを回避し、長期的な運用におけるメンテナンスコストの削減を優先している。
 
 ### 多様なテキストフォーマットへの対応
 はてな記法、tDiary 記法、`Markdown`、`HTML` に対応している。
@@ -59,25 +59,17 @@ Perl 版 Nogag (氾濫原) の Go (Golang) によるリライトプロジェク�
 make setup
 ```
 
-### 2. フロントエンドとポストプロセスのビルド・セットアップ
+### 2. 各種セットアップ (ビルド・依存関係)
 
 ```bash
-# Admin Frontend (Vite/Svelte 5)
+# Admin Frontend のビルド (Vite/Svelte 5)
 make build-fe
 
-# Node.js 依存関係 (ポストプロセス)
-cd postprocess
-npm install
-cd ..
+# Node.js 依存関係 (ポストプロセス) のインストール
+cd postprocess && npm install
 ```
 
-### 3. コード生成
-
-```bash
-make generate
-```
-
-### 4. 設定
+### 3. 設定
 
 `config.toml.sample` を `config.toml` にコピーして編集。
 
@@ -85,17 +77,25 @@ make generate
 cp config.toml.sample config.toml
 ```
 
-### 5. サーバーの起動
+### 4. サーバーの起動
 
 ```bash
-# ビルドして起動
-make run
-
-# または、開発用 (ホットリロード有効)
+# 開発用 (ホットリロード & フロントエンド HMR 有効) - 推奨
 make watch
+
+# または、通常の起動 (go run)
+make run
 ```
 
 デフォルトで http://localhost:5555 で動作。
+
+## Database & Code Generation
+
+SQL スキーマ (`db/schema/`) やクエリ (`db/query/`) を変更した場合は、`sqlc` を使用して Go のモデルコードを再生成する必要があります。
+
+```bash
+make generate
+```
 
 ## Subcommands
 
@@ -127,8 +127,9 @@ make
 - 技術スタック: `Svelte 5`, `Vite`, `TypeScript`
 - 主な機能:
     - エントリ管理: 記事の作成・編集・削除。オートセーブ、画像アップロード、公開予約に対応。
+    - 画像管理: 記事内画像の検索・一覧表示、およびカラーシグネチャによる類似画像の自動抽出・表示。
     - ジョブ監視: 内蔵ジョブキューの実行状況、エラーログの確認。
-    - システム情報 (Info): アプリケーションのハッシュ、稼働時間、メモリ使用量、構成設定の確認。
+    - システム情報 (Info): TF-IDF 統計、画像インデックス状況、メモリ使用量、構成設定の確認。
 - 開発とビルド:
     - `admin-frontend/` ディレクトリで `npm run dev` を実行することで HMR 有効な開発が可能。
     - `make watch` を使用すると、フロントエンドの開発サーバーと Go のホットリロード (`air`) を同時に起動可能。
@@ -136,18 +137,41 @@ make
 
 ## Project Structure
 
-- `app/`: アプリケーションのコアロジック（ハンドラー、サーバー構成、設定）。
-- `admin-frontend/`: `Svelte 5` による `SPA` 管理画面のソースコード。
-- `model/`: `sqlc` によって生成されたデータベースモデルとクエリ。
-- `view/`: `html/template` による HTML/XML テンプレート。(注: 実際には`app/template.go`で処理されています)
-- `db/`: SQL スキーマ (`schema/`) とクエリ定義 (`query/`)。
-- `formatter/`: 各種記法（Hatena, tDiary 等）のパーサ。
-- `jobqueue/`: ジョブキューの基盤実装（Worker 監視ループ等）。
-- `jobs/`: 具体的なジョブハンドラーの実装。
-- `tfidf/`: `TF-IDF` 計算と 2-gram 抽出ロジック。
-- `postprocess/`: `Node.js` による HTML ポストプロセススクリプト。
-- `static/`: CSS, JS, 画像などの静的アセット。
-- `main.go`: エントリーポイント。
+### Backend (Go & Content Pipeline)
+- **Core Logic**
+  - `backend/app/`: アプリケーションのコアロジック（ハンドラー、サーバー構成、設定）。
+  - `backend/db/`, `backend/model/`: SQL スキーマ、クエリ定義、および `sqlc` 生成コード。
+  - `backend/subcommands/`: `hanrangon` メインバイナリに組み込まれるサブコマンド群（`serve`, `reformat`, `backup` 等）。
+  - `internal/`: プロジェクト全体で使用される共通ユーティリティ（テストヘルパー等）。
+  - `var/`: SQLite データベースファイル、およびキャッシュデータの格納場所。
+  - `main.go`: メインバイナリのエントリーポイント。
+- **Content Pipeline**
+  - `backend/formatter/`: 各種記法（Hatena, tDiary, Markdown）のパーサ。
+  - `backend/xatena-go/`: はてな記法パーサの Go 実装（ローカル依存ライブラリ）。
+  - `postprocess/`: `Node.js` による HTML ポストプロセス（MathJax, 構文ハイライト）。
+  - `backend/tfidf/`: 文字 2-gram による `TF-IDF` 計算と関連記事抽出ロジック。
+- **Background & Tools**
+  - `backend/jobqueue/` & `backend/jobs/`: ジョブキュー基盤と非同期ジョブの実装。
+  - `cmd/`: メインバイナリとは別に、個別にビルドして使用する独立したツール群。
+- **Deployment & Development**
+  - `deploy/`: デプロイスクリプト、およびシステム設定ファイル（systemd 等）。
+  - `scripts/`: アイコン生成やメンテナンス用の開発スクリプト。
+  - `sketch/`: 検証用および実験的なコード・スクリプト。
+  - `docs/`: 設計ドキュメント、移行手順書、およびアーキテクチャ図。
+- **Frontend (Public)**
+  - `backend/view/`: 公開側の HTML/XML テンプレート。`app/template.go` を介して描画されます。
+  - `static/`: 公開用の静的アセット (CSS, JS, Images)。
+- **Frontend (Admin)**
+  - `admin-frontend/`: `Svelte 5` による管理画面 SPA のソースコード。
+
+
+### Frontend (Public)
+- `view/`: 公開側の HTML/XML テンプレート。`app/template.go` を介して描画されます。
+- `static/`: 公開用の静的アセット (CSS, JS, Images)。
+
+### Frontend (Admin)
+- `admin-frontend/`: `Svelte 5` による管理画面 SPA のソースコード。
+- `static/admin/`: ビルド済みの管理画面アセット。
 
 ## Testing
 
