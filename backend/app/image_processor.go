@@ -118,7 +118,7 @@ func (p *ImageProcessor) processJPEG(ctx context.Context, srcPath string, filena
 	if p.avifencPath != "" {
 		dstPath := srcPath + ".avif"
 		var stderr strings.Builder
-		cmd := exec.CommandContext(ctx, p.avifencPath, "--jobs", "3", "--speed", "8", "--yuv", "420", "-q", "60", srcPath, dstPath)
+		cmd := exec.CommandContext(ctx, p.avifencPath, "--jobs", "3", "--speed", "8", "--yuv", "444", "-q", "60", srcPath, dstPath)
 		cmd.Stderr = &stderr
 		if err := cmd.Run(); err == nil {
 			newFilename := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".avif"

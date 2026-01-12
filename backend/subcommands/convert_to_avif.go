@@ -413,7 +413,7 @@ func (c *AVIFConverter) convertToAVIF(ctx context.Context, avifencPath, filename
 	cmd := exec.CommandContext(ctx, avifencPath,
 		"--jobs", "3",
 		"--speed", "8",
-		"--yuv", "420",
+		"--yuv", "444",
 		"-q", "80",
 		"-a", "tune=ssim",
 		"--nclx", "1/1/1",
