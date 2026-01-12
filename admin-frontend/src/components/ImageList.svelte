@@ -64,7 +64,12 @@ let total = $state(0);
 
 <div class="image-list">
   <div class="header">
-    <h2>画像一覧 ({total})</h2>
+    <div class="title-area">
+      <h2>画像一覧 ({total})</h2>
+      <a href="https://dash.cloudflare.com/d52dc19d3368d36eecf4b48d5eb2dd44/r2/default/buckets/lowreal" target="_blank" rel="noopener noreferrer" class="r2-link">
+        R2 Dashboard ↗
+      </a>
+    </div>
     <div class="pagination">
       <button onclick={prevPage} disabled={offset === 0}>前へ</button>
       <span>{offset + 1} - {Math.min(offset + limit, total)} / {total}</span>
@@ -160,6 +165,31 @@ let total = $state(0);
     justify-content: space-between;
     align-items: center;
     margin-bottom: 20px;
+  }
+
+  .title-area {
+    display: flex;
+    align-items: baseline;
+    gap: 15px;
+  }
+
+  .title-area h2 {
+    margin: 0;
+  }
+
+  .r2-link {
+    font-size: 0.85rem;
+    color: #f38020; /* Cloudflare orange */
+    text-decoration: none;
+    padding: 2px 8px;
+    border: 1px solid #f38020;
+    border-radius: 4px;
+    transition: all 0.2s;
+  }
+
+  .r2-link:hover {
+    background: #f38020;
+    color: #fff;
   }
 
   .pagination {
