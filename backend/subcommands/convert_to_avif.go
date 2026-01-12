@@ -22,6 +22,7 @@ type ConvertToAVIFOptions struct {
 	Backup   bool  // マイグレーション前にバックアップを作成
 	Limit    int   // 処理するエントリ数の上限（0=無制限、ID昇順で古いものから処理）
 	EntryID  int64 // 特定のエントリIDのみを処理（0=無効）
+	Verify   bool  // 検証のみ実行
 }
 
 // ConvertToAVIF はJPG/JPEG画像をAVIFに変換し、データベースのエントリを書き換える
@@ -33,6 +34,7 @@ func ConvertToAVIF(ctx context.Context, application app.App, args []string) erro
 	fs.BoolVar(&opts.Backup, "backup", false, "Create database backup before conversion")
 	fs.IntVar(&opts.Limit, "limit", 0, "Limit number of entries to process (0=unlimited, processes oldest entries first by ID)")
 	fs.Int64Var(&opts.EntryID, "entry-id", 0, "Process only the entry with this ID (0=disabled)")
+	fs.BoolVar(&opts.Verify, "verify", false, "Run only verification to check for missing files or pending conversions")
 	opts.Parallel = 1 // 固定値（avifencが--jobs 3を使用するため）
 	fs.Parse(args)
 
@@ -43,6 +45,11 @@ func ConvertToAVIF(ctx context.Context, application app.App, args []string) erro
 		uploadDir: config.UploadDir,
 		opts:      opts,
 		config:    config,
+	}
+
+	// 検証のみ実行する場合
+	if opts.Verify {
+		return converter.Verify(ctx)
 	}
 
 	// 破壊的な操作には --force または --dry-run が必須
