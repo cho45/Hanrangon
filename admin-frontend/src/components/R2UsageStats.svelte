@@ -47,28 +47,28 @@
 
   const classAStats = $derived.by(() => {
     if (!r2Usage) return 0;
-    return r2Usage.operations
+    return (r2Usage.operations || [])
       .filter(op => classAActions.includes(op.action_type))
       .reduce((sum, op) => sum + op.requests, 0);
   });
 
   const classBStats = $derived.by(() => {
     if (!r2Usage) return 0;
-    return r2Usage.operations
+    return (r2Usage.operations || [])
       .filter(op => classBActions.includes(op.action_type))
       .reduce((sum, op) => sum + op.requests, 0);
   });
 
   const classADetails = $derived.by(() => {
     if (!r2Usage) return [];
-    return r2Usage.operations
+    return (r2Usage.operations || [])
       .filter(op => classAActions.includes(op.action_type))
       .sort((a, b) => b.requests - a.requests);
   });
 
   const classBDetails = $derived.by(() => {
     if (!r2Usage) return [];
-    return r2Usage.operations
+    return (r2Usage.operations || [])
       .filter(op => classBActions.includes(op.action_type))
       .sort((a, b) => b.requests - a.requests);
   });
@@ -78,25 +78,25 @@
   {#if r2Usage}
     <div class="stat-card">
       <div class="stat-label">Storage (Free: 10GB)</div>
-      <div class="stat-value">{formatBytes(r2Usage.storage_usage_bytes)}</div>
-      <div class="stat-sub">{r2Usage.object_count.toLocaleString()} objects</div>
+      <div class="stat-value">{formatBytes(r2Usage.storage_usage_bytes ?? 0)}</div>
+      <div class="stat-sub">{(r2Usage.object_count ?? 0).toLocaleString()} objects</div>
       <div class="stat-progress">
-        <div class="bar" style="width: {Math.min(100, (r2Usage.storage_usage_bytes / (10 * 1024 * 1024 * 1024)) * 100)}%"></div>
+        <div class="bar" style="width: {Math.min(100, ((r2Usage.storage_usage_bytes ?? 0) / (10 * 1024 * 1024 * 1024)) * 100)}%"></div>
       </div>
     </div>
     <div class="stat-card has-tooltip">
       <div class="stat-label">Class A (Free: 1M/mo)</div>
-      <div class="stat-value">{classAStats.toLocaleString()}</div>
+      <div class="stat-value">{(classAStats ?? 0).toLocaleString()}</div>
       <div class="stat-sub">Operations</div>
       <div class="stat-progress">
-        <div class="bar" style="width: {Math.min(100, (classAStats / 1000000) * 100)}%"></div>
+        <div class="bar" style="width: {Math.min(100, ((classAStats ?? 0) / 1000000) * 100)}%"></div>
       </div>
       {#if classADetails.length > 0}
         <div class="tooltip">
           <div class="tooltip-title">Class A Breakdown</div>
           <ul>
             {#each classADetails as detail}
-              <li><span class="action">{detail.action_type}</span>: <span class="count">{detail.requests.toLocaleString()}</span></li>
+              <li><span class="action">{detail.action_type}</span>: <span class="count">{(detail.requests ?? 0).toLocaleString()}</span></li>
             {/each}
           </ul>
         </div>
@@ -104,17 +104,17 @@
     </div>
     <div class="stat-card has-tooltip">
       <div class="stat-label">Class B (Free: 10M/mo)</div>
-      <div class="stat-value">{classBStats.toLocaleString()}</div>
+      <div class="stat-value">{(classBStats ?? 0).toLocaleString()}</div>
       <div class="stat-sub">Operations</div>
       <div class="stat-progress">
-        <div class="bar" style="width: {Math.min(100, (classBStats / 10000000) * 100)}%"></div>
+        <div class="bar" style="width: {Math.min(100, ((classBStats ?? 0) / 10000000) * 100)}%"></div>
       </div>
       {#if classBDetails.length > 0}
         <div class="tooltip">
           <div class="tooltip-title">Class B Breakdown</div>
           <ul>
             {#each classBDetails as detail}
-              <li><span class="action">{detail.action_type}</span>: <span class="count">{detail.requests.toLocaleString()}</span></li>
+              <li><span class="action">{detail.action_type}</span>: <span class="count">{(detail.requests ?? 0).toLocaleString()}</span></li>
             {/each}
           </ul>
         </div>

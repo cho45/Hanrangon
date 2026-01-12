@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/svelte';
+import { render, screen, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ImageList from './ImageList.svelte';
@@ -21,14 +21,32 @@ const mockImages = [
 describe('ImageList', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    
+    // 共通のAPIモック実装
+    (api.get as any).mockImplementation((url: string) => {
+      if (url === '/admin/api/r2/usage') {
+        return Promise.resolve({
+          storage_usage_bytes: 1024 * 1024,
+          object_count: 10,
+          operations: []
+        });
+      }
+      if (url.startsWith('/admin/api/images')) {
+        return Promise.resolve({
+          images: mockImages,
+          total: 100
+        });
+      }
+      if (url.startsWith('/admin/api/image/') && url.endsWith('/similar')) {
+        return Promise.resolve({
+          similar: mockImages.map(img => ({ ...img, score: 0.9 }))
+        });
+      }
+      return Promise.resolve({});
+    });
   });
 
   it('初期表示で画像一覧を取得して表示すること', async () => {
-    (api.get as any).mockResolvedValue({
-      images: mockImages,
-      total: 100
-    });
-
     render(ImageList);
 
     expect(api.get).toHaveBeenCalledWith('/admin/api/images?limit=20&offset=0');
@@ -42,11 +60,6 @@ describe('ImageList', () => {
 
   it('次へボタンでオフセットが更新されること', async () => {
     const user = userEvent.setup();
-    (api.get as any).mockResolvedValue({
-      images: mockImages,
-      total: 100
-    });
-
     render(ImageList);
 
     await waitFor(() => expect(screen.getByText('ID: 1')).toBeTruthy());
@@ -59,10 +72,6 @@ describe('ImageList', () => {
 
   it('類似画像検索ダイアログが開くこと', async () => {
     const user = userEvent.setup();
-    (api.get as any).mockResolvedValueOnce({
-      images: mockImages,
-      total: 100
-    });
     
     // HTMLDialogElement.showModal は jsdom で未実装な場合があるための回避
     if (!HTMLDialogElement.prototype.showModal) {
