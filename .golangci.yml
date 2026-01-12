@@ -1,0 +1,54 @@
+version: "2"
+
+run:
+  # Hanrangon requires sqlite_math_functions build tag for TF-IDF calculations
+  build-tags:
+    - sqlite_math_functions
+  timeout: 5m
+
+linters:
+  # Use standard set of linters as a baseline
+  default: standard
+  enable:
+    - unconvert
+    - misspell
+
+  settings:
+    errcheck:
+      # List of functions to exclude from checking.
+      # Packages are specified by their full import path.
+      exclude-functions:
+        # fmt functions are used for logging or output where errors are non-critical
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Print
+        - fmt.Printf
+        - fmt.Println
+        # database/sql: Close and Rollback are often called in defer and failures are usually non-critical
+        - (*database/sql.DB).Close
+        - (*database/sql.Rows).Close
+        - (*database/sql.Tx).Rollback
+        # io: Closer.Close is often ignored in defer for read-only streams or cleanup
+        - (io.Closer).Close
+        - (*os.File).Close
+        # os: Remove is often used for best-effort cleanup of temporary files
+        - os.Remove
+        - os.RemoveAll
+        # flag: Parse with ExitOnError will exit the process on error, so checking return value is redundant
+        - (*flag.FlagSet).Parse
+
+  exclusions:
+    # testutil contains shared helpers only used by tests
+    paths:
+      - internal/testutil/.*
+
+    rules:
+      # Error checking in tests is often omitted for conciseness unless the error
+      # itself is the subject of the test.
+      - path: _test\.go
+        linters:
+          - errcheck
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

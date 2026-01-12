@@ -137,7 +137,7 @@ func (c *Calculator) ExtractTerms(title, body string) map[string]int {
 	var b [utf8.UTFMax * 2]byte
 	for _, r := range cleanStr {
 		if c.isSkipRune(r) {
-			r1, r2 = 0, 0
+			r1, r2 = 0, 0 //nolint:ineffassign // Intentional reset to prevent 2-grams spanning across skip runes
 			continue
 		}
 

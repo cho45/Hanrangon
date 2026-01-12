@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -76,7 +77,9 @@ func getOGPPalette() color.Palette {
 func (app *AppImpl) loadOGPAssets() {
 	ogpAssetOnce.Do(func() {
 		// ディレクトリを事前に作成
-		os.MkdirAll("var/cache/ogp", 0755)
+		if err := os.MkdirAll("var/cache/ogp", 0755); err != nil {
+			log.Printf("Error creating OGP cache directory: %v", err)
+		}
 
 		p := getOGPPalette()
 		bgPath := filepath.Join(app.config.StaticDir, "images", "ogp_base.png")
@@ -180,13 +183,7 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 	tagWidth := (&font.Drawer{Face: metaFace}).MeasureString(tagStr)
 
 	// フェードアウトの必要判定
-	needsFade := false
-	if tagStr != "" && (fixed.I(1200)-tagWidth)/2 < fixed.I(margin) {
-		needsFade = true
-	}
-	if (fixed.I(1200)-titleWidth)/2 < fixed.I(margin) {
-		needsFade = true
-	}
+	needsFade := (tagStr != "" && (fixed.I(1200)-tagWidth)/2 < fixed.I(margin)) || ((fixed.I(1200)-titleWidth)/2 < fixed.I(margin))
 
 	// 4. 描画実行
 	pixPtr := rgbaPool.Get().(*[]byte)

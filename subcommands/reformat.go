@@ -44,7 +44,7 @@ func Reformat(ctx context.Context, application app.App, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to start postprocess batch: %w", err)
 	}
-	defer processor.Close()
+	defer func() { _ = processor.Close() }()
 
 	count := 0
 	for rows.Next() {

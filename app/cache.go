@@ -42,7 +42,7 @@ func init() {
 
 // CheckCache handles HTTP caching headers (ETag, Last-Modified) and validation.
 // Returns true if the request was handled (i.e., 304 Not Modified sent), false otherwise.
-func (app *AppImpl) CheckCache(c echo.Context, lastMod time.Time, etag string) bool {
+func (app *AppImpl) CheckCache(c echo.Context, lastMod time.Time, etag string) (bool, error) {
 	req := c.Request()
 	res := c.Response()
 
@@ -63,17 +63,17 @@ func (app *AppImpl) CheckCache(c echo.Context, lastMod time.Time, etag string) b
 	// 1. Check If-None-Match (ETag)
 	if match := req.Header.Get("If-None-Match"); match != "" {
 		if match == "*" {
-			c.NoContent(http.StatusNotModified)
-			return true
+			err := c.NoContent(http.StatusNotModified)
+			return true, err
 		}
 		for _, tag := range strings.Split(match, ",") {
 			if strings.TrimSpace(tag) == etag {
-				c.NoContent(http.StatusNotModified)
-				return true
+				err := c.NoContent(http.StatusNotModified)
+				return true, err
 			}
 		}
 		// If ETag is present but doesn't match, do not check Last-Modified
-		return false
+		return false, nil
 	}
 
 	// 2. Check If-Modified-Since (Last-Modified)
@@ -83,13 +83,13 @@ func (app *AppImpl) CheckCache(c echo.Context, lastMod time.Time, etag string) b
 		if err == nil {
 			// Truncate to seconds
 			if !lastMod.Truncate(time.Second).After(t) {
-				c.NoContent(http.StatusNotModified)
-				return true
+				err := c.NoContent(http.StatusNotModified)
+				return true, err
 			}
 		}
 	}
 
-	return false
+	return false, nil
 }
 
 // GenerateListETag generates a strong ETag for a list of items, including AppHash and auth status.

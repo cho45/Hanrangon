@@ -24,11 +24,19 @@ Hanrangon is a modern rewrite of the Nogag CMS (originally Perl) in Go. It is de
 
 ## Development Guidelines
 
+### 0. Strict Mandates for AI Agents
+Code modifications MUST follow this sequence:
+1.  **Verification (Functional):** Run `make test` first. Functional correctness is the highest priority.
+2.  **Linting:** Only after tests pass, run `make lint`. Resolve all issues.
+3.  **Final Verification:** If any changes were made to satisfy the linter, run `make test` again to ensure no regressions were introduced.
+4.  **No Exceptions:** Do not ignore errors without documented justification.
+
 ### 1. Build & Run
 
 *   **Run Server:** `make run` (runs on `http://localhost:5555`)
 *   **Build Binary:** `make build`
 *   **Test:** `make test` (Requires `sqlite_math_functions` build tag, handled by Makefile)
+*   **Lint:** `make lint`
 
 ### 2. Database & SQL
 

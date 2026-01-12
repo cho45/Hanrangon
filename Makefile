@@ -1,12 +1,13 @@
 BINARY_NAME=hanrangon
 GO_TAGS=sqlite_math_functions
 
-.PHONY: all build test generate generate-icons fmt clean postprocess-test setup watch run deadcode
+.PHONY: all build test generate generate-icons fmt clean postprocess-test setup watch run lint
 
 all: build
 
-deadcode:
-	deadcode ./... | grep -v "internal/testutil" || true
+lint:
+	@command -v golangci-lint >/dev/null 2>&1 || { echo "golangci-lint not found. Please install it: https://golangci-lint.run/docs/welcome/install/local/"; exit 1; }
+	golangci-lint run
 
 setup:
 	go install github.com/air-verse/air@latest

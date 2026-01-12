@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -164,7 +165,9 @@ func (p *ImageProcessor) processJPEG(ctx context.Context, srcPath string, filena
 		cmd := exec.CommandContext(ctx, p.jpegtranPath, "-optimize", "-copy", "all", "-outfile", tmpPath, srcPath)
 		cmd.Stderr = &stderr
 		if err := cmd.Run(); err == nil {
-			os.Rename(tmpPath, srcPath)
+			if err := os.Rename(tmpPath, srcPath); err != nil {
+				return srcPath, filename, contentType, fmt.Errorf("failed to move optimized image back: %w", err)
+			}
 			p.logResult("jpegtran", srcPath, originalSize)
 			return srcPath, filename, contentType, nil
 		} else {

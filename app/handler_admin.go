@@ -120,7 +120,9 @@ func (app *AppImpl) HandleLoginPost(c echo.Context) error {
 			HttpOnly: true,
 		}
 		sess.Values["auth"] = true
-		sess.Save(c.Request(), c.Response())
+		if err := sess.Save(c.Request(), c.Response()); err != nil {
+			return err
+		}
 
 		if returnPath == "/" {
 			returnPath = "/admin/edit"
@@ -138,7 +140,9 @@ func (app *AppImpl) HandleLoginPost(c echo.Context) error {
 func (app *AppImpl) HandleLogout(c echo.Context) error {
 	sess, _ := session.Get("session", c)
 	sess.Options.MaxAge = -1
-	sess.Save(c.Request(), c.Response())
+	if err := sess.Save(c.Request(), c.Response()); err != nil {
+		return err
+	}
 	return c.Redirect(http.StatusFound, "/")
 }
 

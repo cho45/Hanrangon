@@ -78,8 +78,8 @@ func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 	if len(entries) > 0 {
 		latest := getLatestModTime(entries)
 		etag := GenerateListETag(latest, len(entries), yyyy+mm+dd, app.IsAuth(c))
-		if app.CheckCache(c, latest, etag) {
-			return nil
+		if ok, err := app.CheckCache(c, latest, etag); ok {
+			return err
 		}
 	}
 
@@ -179,8 +179,8 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 	if len(entries) > 0 {
 		latest := getLatestModTime(entries)
 		etag := GenerateListETag(latest, len(entries), dateStr, app.IsAuth(c))
-		if app.CheckCache(c, latest, etag) {
-			return nil
+		if ok, err := app.CheckCache(c, latest, etag); ok {
+			return err
 		}
 	}
 
@@ -237,8 +237,8 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 	if len(entries) > 0 {
 		latest := getLatestModTime(entries)
 		etag := GenerateListETag(latest, len(entries), category+dateStr, app.IsAuth(c))
-		if app.CheckCache(c, latest, etag) {
-			return nil
+		if ok, err := app.CheckCache(c, latest, etag); ok {
+			return err
 		}
 	}
 
@@ -543,8 +543,8 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 	}
 
 	etag := GenerateEntryETag(entry.ID, entry.ModifiedAt, app.IsAuth(c))
-	if app.CheckCache(c, entry.ModifiedAt, etag) {
-		return nil
+	if ok, err := app.CheckCache(c, entry.ModifiedAt, etag); ok {
+		return err
 	}
 
 	rows, err := app.queries.ListTrackbackEntries(ctx, sql.NullInt64{Int64: entry.ID, Valid: true})

@@ -139,7 +139,7 @@ func NormalizeHTML(input string, format string) string {
 
 	var buf bytes.Buffer
 	for c := body.FirstChild; c != nil; c = c.NextSibling {
-		html.Render(&buf, c)
+		_ = html.Render(&buf, c)
 	}
 	return strings.TrimSpace(buf.String())
 }
@@ -321,8 +321,7 @@ func loadIgnoreMap(path string) map[int64]string {
 		parts := strings.SplitN(line, ":", 2)
 		if len(parts) > 0 {
 			var id int64
-			fmt.Sscanf(parts[0], "%d", &id)
-			if id != 0 {
+			if _, err := fmt.Sscanf(parts[0], "%d", &id); err == nil && id != 0 {
 				m[id] = line
 			}
 		}

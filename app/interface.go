@@ -40,7 +40,7 @@ type App interface {
 	IsAuth(c echo.Context) bool
 
 	// Cache methods
-	CheckCache(c echo.Context, lastMod time.Time, etag string) bool
+	CheckCache(c echo.Context, lastMod time.Time, etag string) (bool, error)
 
 	// Postprocess
 	Postprocess(ctx context.Context, html string) (string, error)

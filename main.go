@@ -232,7 +232,7 @@ func RunServe(ctx context.Context, application *app.AppImpl) error {
 	// 初期化失敗時に既に開いたリスナーを閉じるためのクリーンアップ関数
 	cleanupListeners := func() {
 		for _, l := range listeners {
-			l.Close()
+			_ = l.Close()
 		}
 	}
 
@@ -259,7 +259,7 @@ func RunServe(ctx context.Context, application *app.AppImpl) error {
 
 			// Web サーバー (Nginx等) からアクセスできるようパーミッションを調整
 			if err := os.Chmod(path, 0666); err != nil {
-				l.Close()
+				_ = l.Close()
 				cleanupListeners()
 				return fmt.Errorf("failed to chmod unix socket %s: %w", path, err)
 			}

@@ -84,7 +84,7 @@ func NewServer(app *AppImpl) *echo.Echo {
 						data.Internal = internal.Error()
 					}
 				}
-				app.Templates().RenderWithLayout(c, "layout.html", "error.html", data)
+				_ = app.Templates().RenderWithLayout(c, "layout.html", "error.html", data)
 				return
 			}
 
@@ -95,7 +95,7 @@ func NewServer(app *AppImpl) *echo.Echo {
 					res["internal"] = internal.Error()
 				}
 			}
-			c.JSON(code, res)
+			_ = c.JSON(code, res)
 		}
 	}
 

@@ -81,7 +81,7 @@ func Backup(ctx context.Context, application app.App, args []string) error {
 	textPart, _ := writer.CreatePart(textproto.MIMEHeader{
 		"Content-Type": []string{"text/plain; charset=UTF-8"},
 	})
-	textPart.Write([]byte(fmt.Sprintf("Backup of %s on %s", dbPath, now.Format("2006-01-02 15:04:05"))))
+	fmt.Fprintf(textPart, "Backup of %s on %s", dbPath, now.Format("2006-01-02 15:04:05"))
 	// Attachment part
 	header := make(textproto.MIMEHeader)
 	header.Set("Content-Type", "application/x-xz")
@@ -90,10 +90,16 @@ func Backup(ctx context.Context, application app.App, args []string) error {
 
 	attachmentPart, _ := writer.CreatePart(header)
 	encoder := base64.NewEncoder(base64.StdEncoding, attachmentPart)
-	encoder.Write(content)
-	encoder.Close()
+	if _, err := encoder.Write(content); err != nil {
+		return err
+	}
+	if err := encoder.Close(); err != nil {
+		return err
+	}
 
-	writer.Close()
+	if err := writer.Close(); err != nil {
+		return err
+	}
 
 	// 4. Send Email
 	log.Printf("Sending email to %s via %s...", to, *smtpAddr)
@@ -116,7 +122,7 @@ func sendMail(addr string, a smtp.Auth, from string, to []string, msg []byte, in
 	if err != nil {
 		return err
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	if ok, _ := c.Extension("STARTTLS"); ok {
 		config := &tls.Config{
 			ServerName:         host,
