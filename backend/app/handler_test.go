@@ -87,8 +87,8 @@ func TestHandleIndex_SimilarImagesBulkFallback(t *testing.T) {
 	_, err := env.db.Exec(`
 		INSERT INTO entries (id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at)
 		VALUES
-		(100, 'Entry A', 'Body A', '', '', '', '2025/01/01/a', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
-		(101, 'Entry B', 'Body B', '', '', '', '2025/01/01/b', 'Markdown', '2025-01-01', '2025-01-01 11:00:00', '2025-01-01 11:00:00')
+		(100, '[test] Entry A', 'Body A', '', '', '', '2025/01/01/a', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00'),
+		(101, '[test] Entry B', 'Body B', '', '', '', '2025/01/01/b', 'Markdown', '2025-01-01', '2025-01-01 11:00:00', '2025-01-01 11:00:00')
 	`)
 	if err != nil {
 		t.Fatal(err)

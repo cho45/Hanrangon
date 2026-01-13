@@ -36,6 +36,7 @@ type ViewEntry struct {
 	ModifiedAtRFC3339 string
 	FormattedBodyHTML template.HTML
 	IsDateBoundary    bool // Pre-calculated for template
+	IsShortEntry      bool
 	SimilarEntries    []SimilarEntry
 	SimilarImages     []SimilarImage
 }
@@ -45,6 +46,15 @@ func NewViewEntry(e model.Entry, baseURL string) ViewEntry {
 	if displayTitle == "" {
 		displayTitle = "✖"
 	}
+
+	isShortEntry := false
+	if len(tags) == 0 && strings.TrimSpace(e.ImageUrl) == "" {
+		// タグがなく、画像（ImageUrlカラム）も空の場合、本文の文字数で判定
+		if len([]rune(strings.TrimSpace(e.Body))) < 140 {
+			isShortEntry = true
+		}
+	}
+
 	return ViewEntry{
 		Entry:             e,
 		DisplayTitle:      displayTitle,
@@ -59,6 +69,7 @@ func NewViewEntry(e model.Entry, baseURL string) ViewEntry {
 		CreatedAtRFC3339:  e.CreatedAt.UTC().Format(time.RFC3339),
 		ModifiedAtRFC3339: e.ModifiedAt.UTC().Format(time.RFC3339),
 		FormattedBodyHTML: template.HTML(e.FormattedBody),
+		IsShortEntry:      isShortEntry,
 	}
 }
 

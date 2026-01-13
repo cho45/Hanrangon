@@ -23,6 +23,7 @@
 			id="post-{{$e.CreatedAtUnix}}"
 			class="{{range $e.Tags}}{{.}} {{end}}{{if eq $i 0}}first {{end}}status-{{$e.Status}}"
 			data-id="{{$e.ID}}"
+			data-is-short="{{$e.IsShortEntry}}"
 			{{if not $isDetail}}
 			itemprop="blogPosts"
 			itemscope
@@ -127,6 +128,7 @@
 			</div>
 			{{end}}
 
+			{{if or $isDetail (not $e.IsShortEntry)}}
 			<div class="content similar-entries">
 				{{if $e.SimilarEntries}}
 					<h3>関連エントリー</h3>
@@ -177,6 +179,7 @@
 					<web-share-button title="{{$e.DisplayTitle}}" url="{{$e.CanonicalURL}}"></web-share-button>
 				</p>
 			</div>
+			{{end}}
 		</article>
 	{{end}}
 </div>
