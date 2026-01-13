@@ -40,8 +40,8 @@ export class ApiClient {
         if (body instanceof FormData) {
           body.set('sk', this.sk);
         } else if (body && typeof body === 'object' && !(body instanceof Blob) && !(body instanceof ArrayBuffer)) {
-           // JSON body case if needed in future
-           // For now Hanrangon uses FormData for most POSTs
+          headers.set('Content-Type', 'application/json');
+          body = JSON.stringify(body);
         }
       }
 

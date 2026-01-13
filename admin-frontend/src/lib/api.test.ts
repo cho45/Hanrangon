@@ -66,6 +66,25 @@ describe('ApiClient', () => {
     expect(formData.get('sk')).toBe('test-token');
   });
 
+  it('POSTリクエスト時にJSON bodyが正しく送信されること(skは付与されない)', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({})
+    });
+
+    const api = new ApiClient(mockFetch);
+    const jsonData = { key: 'value' };
+    await api.post('/test', jsonData as any);
+
+    const args = mockFetch.mock.calls[0];
+    const headers = args[1].headers;
+    expect(headers.get('Content-Type')).toBe('application/json');
+    
+    const body = JSON.parse(args[1].body);
+    expect(body.sk).toBeUndefined();
+    expect(body.key).toBe('value');
+  });
+
   it('非OKレスポンスの場合にエラーをスローすること', async () => {
     mockFetch.mockResolvedValue({
       ok: false,
