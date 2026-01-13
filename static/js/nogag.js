@@ -125,6 +125,7 @@ const Nogag = {
 	},
 
 	async initAutoPager() {
+		if (location.pathname !== "/") return;
 		const { AutoPager } = await import('./autopager.js');
 		this.autopager = new AutoPager({
 			onUpdate: () => {
