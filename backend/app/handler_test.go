@@ -508,14 +508,14 @@ func TestHandleApiEdit(t *testing.T) {
 	env := setupTest(t)
 	defer env.close()
 
-	cookie := env.login(t)
+	loginInfo := env.login(t)
 
 	t.Run("Create new entry with auto path", func(t *testing.T) {
 		payload := `{"title":"New Entry", "body":"Hello <![CDATA[<b>world</b>]]>", "format":"HTML"}`
 		req := httptest.NewRequest(http.MethodPost, "/admin/api/edit", strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-Requested-With", "fetch")
-		req.Header.Set("Cookie", cookie)
+		req.Header.Set("Cookie", loginInfo.Cookie)
 		rec := httptest.NewRecorder()
 
 		env.server.ServeHTTP(rec, req)
@@ -539,7 +539,7 @@ func TestHandleApiEdit(t *testing.T) {
 
 		go func() {
 			progReq := httptest.NewRequest(http.MethodGet, "/admin/api/edit/progress?sid="+res.SessionID, nil)
-			progReq.Header.Set("Cookie", cookie)
+			progReq.Header.Set("Cookie", loginInfo.Cookie)
 			progRec := httptest.NewRecorder()
 
 			env.server.ServeHTTP(progRec, progReq)
@@ -610,28 +610,17 @@ func TestHandleAdminApiPreview(t *testing.T) {
 	env := setupTest(t)
 	defer env.close()
 
-	cookie := env.login(t)
-
-	// Extract sk token from cookie
-	parts := strings.Split(cookie, ";")
-	var sk string
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if strings.HasPrefix(p, "sk=") {
-			sk = strings.TrimPrefix(p, "sk=")
-			break
-		}
-	}
+	loginInfo := env.login(t)
 
 	form := url.Values{}
 	form.Add("title", "Preview Title")
 	form.Add("body", "Preview Body content")
 	form.Add("format", "Markdown")
-	form.Add("sk", sk)
+	form.Add("sk", loginInfo.SK)
 
 	req := httptest.NewRequest(http.MethodPost, "/admin/api/preview", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Cookie", loginInfo.Cookie)
 	rec := httptest.NewRecorder()
 
 	env.server.ServeHTTP(rec, req)
@@ -659,7 +648,7 @@ func TestHandleApiEdit_JobFailure(t *testing.T) {
 	env := setupTest(t)
 	defer env.close()
 
-	cookie := env.login(t)
+	loginInfo := env.login(t)
 
 	// 意図的にジョブDBをクローズして投入を失敗させる
 	env.workerDB.Close()
@@ -668,7 +657,7 @@ func TestHandleApiEdit_JobFailure(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/admin/api/edit", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Requested-With", "fetch")
-	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Cookie", loginInfo.Cookie)
 	rec := httptest.NewRecorder()
 
 	env.server.ServeHTTP(rec, req)
@@ -685,7 +674,7 @@ func TestHandleApiEdit_JobFailure(t *testing.T) {
 	// SSEで警告メッセージが届くか確認
 	foundWarning := false
 	progReq := httptest.NewRequest(http.MethodGet, "/admin/api/edit/progress?sid="+res.SessionID, nil)
-	progReq.Header.Set("Cookie", cookie)
+	progReq.Header.Set("Cookie", loginInfo.Cookie)
 	progRec := httptest.NewRecorder()
 
 	env.server.ServeHTTP(progRec, progReq)
@@ -722,9 +711,9 @@ func TestHandleEdit(t *testing.T) {
 	})
 
 	t.Run("Render for authenticated", func(t *testing.T) {
-		cookie := env.login(t)
+		loginInfo := env.login(t)
 		req := httptest.NewRequest(http.MethodGet, "/admin/edit", nil)
-		req.Header.Set("Cookie", cookie)
+		req.Header.Set("Cookie", loginInfo.Cookie)
 		rec := httptest.NewRecorder()
 		env.server.ServeHTTP(rec, req)
 
@@ -743,7 +732,7 @@ func TestHandleApiUploadImage(t *testing.T) {
 	env := setupTest(t)
 	defer env.close()
 
-	cookie := env.login(t)
+	loginInfo := env.login(t)
 
 	// Prepare multipart form file
 	body := &bytes.Buffer{}
@@ -760,7 +749,7 @@ func TestHandleApiUploadImage(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/admin/api/upload/image", body)
 	req.Header.Set(echo.HeaderContentType, writer.FormDataContentType())
 	req.Header.Set("X-Requested-With", "fetch")
-	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Cookie", loginInfo.Cookie)
 	rec := httptest.NewRecorder()
 
 	env.server.ServeHTTP(rec, req)
@@ -967,7 +956,7 @@ func TestUpdateModifiedAt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cookie := env.login(t)
+	loginInfo := env.login(t)
 
 	// 2. Update via handler
 	updateReq := EditRequest{
@@ -981,7 +970,7 @@ func TestUpdateModifiedAt(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/admin/api/edit", strings.NewReader(string(payload)))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Requested-With", "fetch")
-	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Cookie", loginInfo.Cookie)
 	rec := httptest.NewRecorder()
 	env.server.ServeHTTP(rec, req)
 
@@ -996,7 +985,7 @@ func TestUpdateModifiedAt(t *testing.T) {
 
 	// Wait for completion via SSE
 	progReq := httptest.NewRequest(http.MethodGet, "/admin/api/edit/progress?sid="+res.SessionID, nil)
-	progReq.Header.Set("Cookie", cookie)
+	progReq.Header.Set("Cookie", loginInfo.Cookie)
 	progRec := httptest.NewRecorder()
 	env.server.ServeHTTP(progRec, progReq)
 
@@ -1051,11 +1040,11 @@ func TestHandleAdminApiEntries(t *testing.T) {
 		}
 	}
 
-	cookie := env.login(t)
+	loginInfo := env.login(t)
 
 	t.Run("List with limit", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/admin/api/entries?limit=3", nil)
-		req.Header.Set("Cookie", cookie)
+		req.Header.Set("Cookie", loginInfo.Cookie)
 		rec := httptest.NewRecorder()
 		env.server.ServeHTTP(rec, req)
 
@@ -1086,7 +1075,7 @@ func TestHandleAdminApiEntries(t *testing.T) {
 	t.Run("Pagination with cursor", func(t *testing.T) {
 		// First page
 		req1 := httptest.NewRequest(http.MethodGet, "/admin/api/entries?limit=3", nil)
-		req1.Header.Set("Cookie", cookie)
+		req1.Header.Set("Cookie", loginInfo.Cookie)
 		rec1 := httptest.NewRecorder()
 		env.server.ServeHTTP(rec1, req1)
 
@@ -1100,7 +1089,7 @@ func TestHandleAdminApiEntries(t *testing.T) {
 
 		// Second page
 		req2 := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/admin/api/entries?limit=3&cursor_id=%d", lastID), nil)
-		req2.Header.Set("Cookie", cookie)
+		req2.Header.Set("Cookie", loginInfo.Cookie)
 		rec2 := httptest.NewRecorder()
 		env.server.ServeHTTP(rec2, req2)
 
@@ -1120,7 +1109,7 @@ func TestHandleAdminApiEntries(t *testing.T) {
 
 	t.Run("Search by title", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/admin/api/entries?q=Entry+5", nil)
-		req.Header.Set("Cookie", cookie)
+		req.Header.Set("Cookie", loginInfo.Cookie)
 		rec := httptest.NewRecorder()
 		env.server.ServeHTTP(rec, req)
 
@@ -1140,7 +1129,7 @@ func TestHandleAdminApiEntries(t *testing.T) {
 
 	t.Run("Search by body", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/admin/api/entries?q=Body+3", nil)
-		req.Header.Set("Cookie", cookie)
+		req.Header.Set("Cookie", loginInfo.Cookie)
 		rec := httptest.NewRecorder()
 		env.server.ServeHTTP(rec, req)
 

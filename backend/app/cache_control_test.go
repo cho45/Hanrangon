@@ -12,7 +12,7 @@ func TestCacheControlPrivateWhenAuth(t *testing.T) {
 	env := setupTest(t)
 	defer env.close()
 
-	cookie := env.login(t)
+	loginInfo := env.login(t)
 
 	t.Run("Unauthenticated request", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -31,7 +31,7 @@ func TestCacheControlPrivateWhenAuth(t *testing.T) {
 
 	t.Run("Authenticated request", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
-		req.Header.Set("Cookie", cookie)
+		req.Header.Set("Cookie", loginInfo.Cookie)
 		rec := httptest.NewRecorder()
 		env.server.ServeHTTP(rec, req)
 
@@ -53,7 +53,7 @@ func TestCacheControlPrivateWhenAuth(t *testing.T) {
 		})
 
 		req := httptest.NewRequest(http.MethodGet, "/test-cache-control", nil)
-		req.Header.Set("Cookie", cookie)
+		req.Header.Set("Cookie", loginInfo.Cookie)
 		rec := httptest.NewRecorder()
 		env.server.ServeHTTP(rec, req)
 

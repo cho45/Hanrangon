@@ -11,11 +11,11 @@ func TestHandleLogin_RedirectIfAuthenticated(t *testing.T) {
 	env := setupTest(t)
 	defer env.close()
 
-	cookie := env.login(t)
+	loginInfo := env.login(t)
 
 	t.Run("Redirect to /admin/edit if authenticated and no return path", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/login", nil)
-		req.Header.Set("Cookie", cookie)
+		req.Header.Set("Cookie", loginInfo.Cookie)
 		rec := httptest.NewRecorder()
 
 		env.server.ServeHTTP(rec, req)
@@ -32,7 +32,7 @@ func TestHandleLogin_RedirectIfAuthenticated(t *testing.T) {
 	t.Run("Redirect to return path if authenticated", func(t *testing.T) {
 		returnPath := "/admin/edit"
 		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/login?return=%s", returnPath), nil)
-		req.Header.Set("Cookie", cookie)
+		req.Header.Set("Cookie", loginInfo.Cookie)
 		rec := httptest.NewRecorder()
 
 		env.server.ServeHTTP(rec, req)

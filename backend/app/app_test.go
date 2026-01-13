@@ -109,7 +109,12 @@ func (env *testEnv) close() {
 	os.RemoveAll(env.uploadDir)
 }
 
-func (env *testEnv) login(t *testing.T) string {
+type LoginInfo struct {
+	Cookie string
+	SK     string
+}
+
+func (env *testEnv) login(t *testing.T) *LoginInfo {
 	t.Helper()
 
 	// 1. Get login page to get CSRF cookie
@@ -154,7 +159,10 @@ func (env *testEnv) login(t *testing.T) string {
 		finalCookies = append(finalCookies, CSRFCookieName+"="+sk)
 	}
 
-	return strings.Join(finalCookies, "; ")
+	return &LoginInfo{
+		Cookie: strings.Join(finalCookies, "; "),
+		SK:     sk,
+	}
 }
 
 func TestPublishScheduledEntries(t *testing.T) {
