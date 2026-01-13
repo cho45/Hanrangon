@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -603,6 +604,55 @@ func TestHandleApiEdit(t *testing.T) {
 			t.Errorf("unexpected path format: %s", path)
 		}
 	})
+}
+
+func TestHandleAdminApiPreview(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	cookie := env.login(t)
+
+	// Extract sk token from cookie
+	parts := strings.Split(cookie, ";")
+	var sk string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if strings.HasPrefix(p, "sk=") {
+			sk = strings.TrimPrefix(p, "sk=")
+			break
+		}
+	}
+
+	form := url.Values{}
+	form.Add("title", "Preview Title")
+	form.Add("body", "Preview Body content")
+	form.Add("format", "Markdown")
+	form.Add("sk", sk)
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/api/preview", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Cookie", cookie)
+	rec := httptest.NewRecorder()
+
+	env.server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	body := rec.Body.String()
+	checkCompleteHTML(t, body)
+
+	if !strings.Contains(body, "Preview Title") {
+		t.Errorf("body does not contain preview title")
+	}
+	if !strings.Contains(body, "Preview Body content") {
+		t.Errorf("body does not contain preview body content")
+	}
+	// Check if it's using the layout
+	if !strings.Contains(body, "<title>Preview Title - 氾濫原</title>") {
+		t.Errorf("body does not seem to use the layout template correctly")
+	}
 }
 
 func TestHandleApiEdit_JobFailure(t *testing.T) {

@@ -26,6 +26,7 @@
   let bodyTextArea = $state<HTMLTextAreaElement>(null!);
   let tagDialog = $state<HTMLDialogElement>(null!);
   let restoreDialog = $state<HTMLDialogElement>(null!);
+  let previewDialog = $state<HTMLDialogElement>(null!);
   let tagListContainer = $state<HTMLDivElement>(null!);
 
   const tags = ['tech', 'photo', 'redeveloped', 'stablediffusion', 'photoshopped'];
@@ -242,6 +243,34 @@
       e.stopPropagation();
     }
   }
+
+  function openPreview() {
+    previewDialog.showModal();
+
+    const formEl = document.createElement('form');
+    formEl.method = 'POST';
+    formEl.action = '/admin/api/preview';
+    formEl.target = 'preview-iframe';
+
+    const fields = {
+      title: form.title,
+      body: form.body,
+      format: form.format,
+      sk: api.skValue
+    };
+
+    for (const [name, value] of Object.entries(fields)) {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = name;
+      input.value = value;
+      formEl.appendChild(input);
+    }
+
+    document.body.appendChild(formEl);
+    formEl.submit();
+    document.body.removeChild(formEl);
+  }
 </script>
 
 {#if api.loading && !entry.id}
@@ -303,6 +332,14 @@
       >
         {saving ? (progress || 'リクエスト中') : (id ? '更新' : '作成')}
       </button>
+      <button
+        type="button"
+        class="submit-button preview-button"
+        onclick={openPreview}
+        disabled={saving}
+      >
+        プレビュー
+      </button>
       {#if draft.exists}
         <button id="restore" type="button" class="submit-button" onclick={() => restoreDialog.showModal()}>
           復元...
@@ -351,6 +388,16 @@
   <div style="display: flex; gap: 8px; justify-content: flex-end;">
     <button type="button" onclick={() => restoreDialog.close()}>キャンセル</button>
     <button type="button" class="submit-button" onclick={restoreBackup}>復元</button>
+  </div>
+</dialog>
+
+<dialog bind:this={previewDialog} id="previewDialog">
+  <div class="preview-header">
+    <h3>プレビュー</h3>
+    <button type="button" class="close-button" onclick={() => previewDialog.close()}>閉じる</button>
+  </div>
+  <div class="preview-body">
+    <iframe name="preview-iframe" title="Preview"></iframe>
   </div>
 </dialog>
 {/if}
@@ -461,6 +508,11 @@
     cursor: not-allowed;
   }
 
+  .preview-button {
+    background: #757575;
+    margin-left: 8px;
+  }
+
   #restore {
     background: #757575;
     margin-left: 8px;
@@ -473,6 +525,54 @@
     padding: 20px;
     max-width: 600px;
     width: 90%;
+  }
+
+  #previewDialog {
+    max-width: 1000px;
+    width: 95%;
+    height: 90vh;
+    padding: 0;
+    flex-direction: column;
+  }
+
+  #previewDialog[open] {
+    display: flex;
+  }
+
+  .preview-header {
+    padding: 10px 20px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f7f8f9;
+  }
+
+  .preview-header h3 {
+    margin: 0;
+  }
+
+  .close-button {
+    background: #fff;
+    border: 1px solid #dfe5e7;
+    border-radius: 3px;
+    padding: 4px 12px;
+    cursor: pointer;
+  }
+
+  .close-button:hover {
+    background: #eee;
+  }
+
+  .preview-body {
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .preview-body iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
   }
 
   dialog::backdrop {

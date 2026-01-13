@@ -415,6 +415,61 @@ func (app *AppImpl) HandleAdminApiEdit(c echo.Context) error {
 	})
 }
 
+func (app *AppImpl) HandleAdminApiPreview(c echo.Context) error {
+	req := new(EditRequest)
+	if err := c.Bind(req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request payload").SetInternal(err)
+	}
+
+	if req.Format == "" {
+		req.Format = "Hatena"
+	}
+
+	ctx := c.Request().Context()
+
+	// 1. Format
+	formattedBody, err := formatter.Format(req.Body, req.Format)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Format error: %v", err)).SetInternal(err)
+	}
+
+	// 2. Postprocess
+	processedBody, err := app.Postprocess(ctx, formattedBody)
+	if err != nil {
+		// Postprocess failed, but we can still show the formatted body
+		processedBody = formattedBody
+	}
+
+	// 3. Render using public templates
+	summary, imageURL := view.ExtractSummaryAndFirstImage(processedBody, 70)
+	now := time.Now()
+	entry := model.Entry{
+		ID:            0,
+		Title:         req.Title,
+		Body:          req.Body,
+		FormattedBody: processedBody,
+		Summary:       summary,
+		ImageUrl:      imageURL,
+		Path:          "preview",
+		Format:        req.Format,
+		Date:          now.Format("2006-01-02"),
+		CreatedAt:     now,
+		ModifiedAt:    now,
+		Status:        "public",
+	}
+
+	viewEntry := view.NewViewEntry(entry, app.config.BaseURL)
+	data := &view.IndexData{
+		LayoutData: app.newLayoutData(c, entry.DisplayTitle()),
+		Entries:    []view.ViewEntry{viewEntry},
+		IsDetail:   true,
+	}
+	data.Description = viewEntry.Summary
+	data.OGType = "article"
+
+	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
+}
+
 func (app *AppImpl) HandleAdminApiUploadImage(c echo.Context) error {
 	file, err := c.FormFile("file")
 	if err != nil {

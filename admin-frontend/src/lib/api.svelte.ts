@@ -68,6 +68,10 @@ export class ApiClient {
   post<T>(path: string, body?: BodyInit | FormData) {
     return this.request<T>(path, { method: 'POST', body });
   }
+
+  get skValue() {
+    return this.sk;
+  }
 }
 
 export const api = new ApiClient();

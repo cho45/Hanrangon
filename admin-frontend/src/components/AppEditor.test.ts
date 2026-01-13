@@ -9,7 +9,8 @@ vi.mock('../lib/api.svelte', () => ({
   api: {
     get: vi.fn(),
     post: vi.fn(),
-    get loading() { return false; }
+    get loading() { return false; },
+    get skValue() { return 'test-token'; }
   }
 }));
 
@@ -189,5 +190,33 @@ describe('AppEditor', () => {
       expect(saveButton.textContent).toBe('作成');
       expect(onSave).toHaveBeenCalledWith('/admin/done');
     });
+  });
+
+  it('プレビューボタンを押すと form.submit が呼ばれ、ダイアログが開き、「閉じる」ボタンで閉じられること', async () => {
+    const user = userEvent.setup();
+    const submitSpy = vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(() => {});
+
+    render(AppEditor, { id: null, onSave: () => {} });
+
+    const previewButton = screen.getByRole('button', { name: 'プレビュー' });
+    await user.click(previewButton);
+
+    expect(submitSpy).toHaveBeenCalled();
+    
+    // dialog が開いていることを確認
+    const dialog = document.getElementById('previewDialog') as HTMLDialogElement;
+    expect(dialog.open).toBe(true);
+
+    // 「閉じる」ボタンが存在し、スタイル用のクラスを持っていることを確認
+    const closeButton = screen.getByRole('button', { name: '閉じる' });
+    expect(closeButton.className).toContain('close-button');
+
+    // 「閉じる」ボタンをクリック
+    await user.click(closeButton);
+
+    // dialog が閉じていることを確認
+    expect(dialog.open).toBe(false);
+
+    submitSpy.mockRestore();
   });
 });
