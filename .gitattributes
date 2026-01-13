@@ -1,0 +1,9 @@
+static/admin/admin-front.js -diff
+static/admin/admin-frontend.css -diff
+
+package-lock.json -diff
+yarn.lock -diff
+*.min.js -diff
+*.js.map -diff
+generated/**/* -diff
+

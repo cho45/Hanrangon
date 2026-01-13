@@ -1,24 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from '../lib/api.svelte';
+  import type { R2UsageStats, OperationStat } from '../lib/types/models';
 
-  interface R2Operation {
-    action_type: string;
-    requests: number;
-  }
-
-  interface R2Usage {
-    storage_usage_bytes: number;
-    object_count: number;
-    operations: R2Operation[];
-  }
-
-  let r2Usage = $state<R2Usage | null>(null);
+  let r2Usage = $state<R2UsageStats | null>(null);
   let error = $state<string | null>(null);
 
   async function fetchR2Usage() {
     try {
-      r2Usage = await api.get<R2Usage>('/admin/api/r2/usage');
+      r2Usage = await api.get<R2UsageStats>('/admin/api/r2/usage');
     } catch (e) {
       console.error('Failed to fetch R2 usage:', e);
       error = 'Failed to load R2 usage data';
@@ -36,41 +26,41 @@
   }
 
   const classAActions = [
-    'PutObject', 'CopyObject', 'ListObjects', 'CompleteMultipartUpload', 
-    'CreateMultipartUpload', 'UploadPart', 'UploadPartCopy', 'ListBuckets', 
+    'PutObject', 'CopyObject', 'ListObjects', 'CompleteMultipartUpload',
+    'CreateMultipartUpload', 'UploadPart', 'UploadPartCopy', 'ListBuckets',
     'PutBucket', 'DeleteObject', 'DeleteObjects'
   ];
   const classBActions = [
-    'HeadObject', 'GetObject', 'HeadBucket', 'GetBucketEncryption', 
+    'HeadObject', 'GetObject', 'HeadBucket', 'GetBucketEncryption',
     'GetBucketLocation', 'GetBucketPolicy'
   ];
 
   const classAStats = $derived.by(() => {
     if (!r2Usage) return 0;
     return (r2Usage.operations || [])
-      .filter(op => classAActions.includes(op.action_type))
-      .reduce((sum, op) => sum + op.requests, 0);
+      .filter((op: OperationStat) => classAActions.includes(op.action_type))
+      .reduce((sum: number, op: OperationStat) => sum + op.requests, 0);
   });
 
   const classBStats = $derived.by(() => {
     if (!r2Usage) return 0;
     return (r2Usage.operations || [])
-      .filter(op => classBActions.includes(op.action_type))
-      .reduce((sum, op) => sum + op.requests, 0);
+      .filter((op: OperationStat) => classBActions.includes(op.action_type))
+      .reduce((sum: number, op: OperationStat) => sum + op.requests, 0);
   });
 
   const classADetails = $derived.by(() => {
     if (!r2Usage) return [];
     return (r2Usage.operations || [])
-      .filter(op => classAActions.includes(op.action_type))
-      .sort((a, b) => b.requests - a.requests);
+      .filter((op: OperationStat) => classAActions.includes(op.action_type))
+      .sort((a: OperationStat, b: OperationStat) => b.requests - a.requests);
   });
 
   const classBDetails = $derived.by(() => {
     if (!r2Usage) return [];
     return (r2Usage.operations || [])
-      .filter(op => classBActions.includes(op.action_type))
-      .sort((a, b) => b.requests - a.requests);
+      .filter((op: OperationStat) => classBActions.includes(op.action_type))
+      .sort((a: OperationStat, b: OperationStat) => b.requests - a.requests);
   });
 </script>
 

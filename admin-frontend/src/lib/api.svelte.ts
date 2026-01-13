@@ -39,7 +39,7 @@ export class ApiClient {
       if (options.method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(options.method.toUpperCase())) {
         if (body instanceof FormData) {
           body.set('sk', this.sk);
-        } else if (!(body instanceof BodyInit) && typeof body === 'object') {
+        } else if (body && typeof body === 'object' && !(body instanceof Blob) && !(body instanceof ArrayBuffer)) {
            // JSON body case if needed in future
            // For now Hanrangon uses FormData for most POSTs
         }

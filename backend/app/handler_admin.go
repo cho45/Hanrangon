@@ -40,6 +40,40 @@ type EditResponse struct {
 	SessionID string `json:"session_id"` // session_id のみに簡略化
 }
 
+type InfoData struct {
+	IsDevelopment bool                   `json:"is_development"`
+	AppHash       string                 `json:"app_hash"`
+	Config        map[string]interface{} `json:"config"`
+	TFIDFStats    TFIDFStats             `json:"tfidf_stats"`
+	ImageStats    ImageStats             `json:"image_stats"`
+	DebugInfo     DebugInfo              `json:"debug_info"`
+}
+
+type TFIDFStats struct {
+	TotalTerms         int64                      `json:"total_terms"`
+	IndexedEntries     int64                      `json:"indexed_entries"`
+	TotalRelatedPairs  int64                      `json:"total_related_pairs"`
+	EntriesWithRelated int64                      `json:"entries_with_related"`
+	TopTerms           []model.GetTopTermsByDFRow `json:"top_terms"`
+	AvgScore           float64                    `json:"avg_score"`
+}
+
+type ImageStats struct {
+	TotalImages     int64 `json:"total_images"`
+	UnindexedImages int64 `json:"unindexed_images"`
+}
+
+type DebugInfo struct {
+	GoVersion     string `json:"go_version"`
+	NumGoroutine  int    `json:"num_goroutine"`
+	StartTime     string `json:"start_time"`
+	Uptime        string `json:"uptime"`
+	MemAlloc      uint64 `json:"mem_alloc"`
+	MemTotalAlloc uint64 `json:"mem_total_alloc"`
+	MemSys        uint64 `json:"mem_sys"`
+	NumGC         uint32 `json:"num_gc"`
+}
+
 func (app *AppImpl) HandleAdminEdit(c echo.Context) error {
 	cookie, _ := c.Cookie(CSRFCookieName)
 	sk := ""
@@ -656,31 +690,31 @@ func (app *AppImpl) HandleAdminApiInfo(c echo.Context) error {
 	totalImages, _ := app.imagesQueries.CountImages(c.Request().Context())
 	unindexedImages, _ := app.imagesQueries.CountUnindexedImages(c.Request().Context())
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"is_development": app.config.IsDevelopment(),
-		"app_hash":       AppHash,
-		"config":         configMap,
-		"tfidf_stats": map[string]interface{}{
-			"total_terms":          tfidfStats.TotalTerms,
-			"indexed_entries":      tfidfStats.IndexedEntries,
-			"total_related_pairs":  tfidfStats.TotalRelatedPairs,
-			"entries_with_related": tfidfStats.EntriesWithRelated,
-			"top_terms":            topTerms,
-			"avg_score":            avgScore,
+	return c.JSON(http.StatusOK, InfoData{
+		IsDevelopment: app.config.IsDevelopment(),
+		AppHash:       AppHash,
+		Config:        configMap,
+		TFIDFStats: TFIDFStats{
+			TotalTerms:         tfidfStats.TotalTerms,
+			IndexedEntries:     tfidfStats.IndexedEntries,
+			TotalRelatedPairs:  tfidfStats.TotalRelatedPairs,
+			EntriesWithRelated: tfidfStats.EntriesWithRelated,
+			TopTerms:           topTerms,
+			AvgScore:           avgScore,
 		},
-		"image_stats": map[string]interface{}{
-			"total_images":     totalImages,
-			"unindexed_images": unindexedImages,
+		ImageStats: ImageStats{
+			TotalImages:     totalImages,
+			UnindexedImages: unindexedImages,
 		},
-		"debug_info": map[string]interface{}{
-			"go_version":      runtime.Version(),
-			"num_goroutine":   runtime.NumGoroutine(),
-			"start_time":      startTime.Format(time.RFC3339),
-			"uptime":          time.Since(startTime).String(),
-			"mem_alloc":       m.Alloc,
-			"mem_total_alloc": m.TotalAlloc,
-			"mem_sys":         m.Sys,
-			"num_gc":          m.NumGC,
+		DebugInfo: DebugInfo{
+			GoVersion:     runtime.Version(),
+			NumGoroutine:  runtime.NumGoroutine(),
+			StartTime:     startTime.Format(time.RFC3339),
+			Uptime:        time.Since(startTime).String(),
+			MemAlloc:      m.Alloc,
+			MemTotalAlloc: m.TotalAlloc,
+			MemSys:        m.Sys,
+			NumGC:         m.NumGC,
 		},
 	})
 }

@@ -2,20 +2,9 @@
   import { onMount } from 'svelte';
   import strftime from 'strftime';
   import { api } from '../lib/api.svelte';
+  import type { Entry } from '../lib/types/models';
 
   let { onEdit } = $props<{ onEdit: (id: number) => void }>();
-
-  interface Entry {
-    id: number;
-    title: string;
-    path: string;
-    status: string;
-    date: string;
-    format: string;
-    created_at: string;
-    modified_at: string;
-    publish_at: { Time: string; Valid: boolean };
-  }
 
   let entries = $state<Entry[]>([]);
   let hasMore = $state(false);

@@ -3,19 +3,12 @@
   import strftime from 'strftime';
   import { api } from '../lib/api.svelte';
   import { DraftStore } from '../lib/draft.svelte';
+  import type { Entry } from '../lib/types/models';
 
   let { id = null, onSave } = $props<{ id: string | null, onSave: (location: string) => void }>();
 
-  interface Entry {
-    id: number | null;
-    title: string;
-    body: string;
-    status: string | null;
-    publish_at?: string;
-  }
-
   const draft = new DraftStore();
-  let entry: Entry = $state({ id: null, title: '', body: '', status: null });
+  let entry: Partial<Entry> = $state({ id: undefined, title: '', body: '', status: '' });
   let form = $state({
     id: null as number | null,
     title: '',
@@ -53,7 +46,7 @@
       } else {
         form.publishAt = strftime('%Y-%m-%dT%H:%M', new Date(Date.now() + 86400 * 30 * 1000));
       }
-      draft.check(entry.id, { title: form.title, body: form.body });
+      draft.check(entry.id ?? null, { title: form.title, body: form.body });
     } catch (e) {
       console.error(e);
       alert('エントリの取得に失敗しました');
@@ -65,7 +58,7 @@
       fetchEntry(id);
     } else {
       // New entry
-      entry = { id: null, title: '', body: '', status: 'public' };
+      entry = { id: undefined, title: '', body: '', status: 'public' };
       form.id = null;
       form.title = '';
       form.body = '';
@@ -79,7 +72,7 @@
 
   $effect(() => {
     if (entry.title !== form.title || entry.body !== form.body) {
-      draft.saveDebounced(entry.id, { title: form.title, body: form.body });
+      draft.saveDebounced(entry.id ?? null, { title: form.title, body: form.body });
     }
   });
 
@@ -126,7 +119,7 @@
           progress = mapProgressMessage(msg.message);
           break;
         case 'done':
-          draft.clear(entry.id);
+          draft.clear(entry.id ?? null);
           progress = '完了';
           saving = false;
           eventSource.close();
@@ -194,7 +187,7 @@
     if (draft.data) {
       form.title = draft.data.title;
       form.body = draft.data.body;
-      draft.clear(entry.id);
+      draft.clear(entry.id ?? null);
       restoreDialog.close();
     }
   }

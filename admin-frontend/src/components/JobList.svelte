@@ -2,16 +2,7 @@
   import { onMount } from 'svelte';
   import strftime from 'strftime';
   import { api } from '../lib/api.svelte';
-
-  interface Job {
-    id: number;
-    job_type_name: string;
-    status: string;
-    retry_count: number;
-    created_at: string;
-    run_after: string;
-    error_message: { String: string; Valid: boolean };
-  }
+  import type { Job } from '../lib/types/models';
 
   let jobs = $state<Job[]>([]);
   let total = $state(0);

@@ -1,40 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from '../lib/api.svelte';
-
-  interface InfoData {
-    is_development: boolean;
-    app_hash: string;
-    config: Record<string, any>;
-    tfidf_stats: {
-      total_terms: number;
-      indexed_entries: number;
-      total_related_pairs: number;
-      entries_with_related: number;
-      top_terms: { term: string, df: number }[];
-      avg_score: number;
-    };
-    image_stats: {
-      total_images: number;
-      unindexed_images: number;
-    };
-    debug_info: {
-      go_version: string;
-      num_goroutine: number;
-      start_time: string;
-      uptime: string;
-      mem_alloc: number;
-      mem_total_alloc: number;
-      mem_sys: number;
-      num_gc: number;
-    };
-  }
+  import type { InfoData } from '../lib/types/models';
 
   let info = $state<InfoData | null>(null);
 
   async function fetchInfo() {
     try {
-      info = await api.get('/admin/api/info');
+      info = await api.get<InfoData>('/admin/api/info');
     } catch (e) {
       console.error(e);
     }

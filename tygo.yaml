@@ -1,0 +1,13 @@
+type_mappings:
+  "database/sql.NullString": "string | null"
+  "database/sql.NullInt64": "number | null"
+  "database/sql.NullTime": "{ Time: string, Valid: boolean } | null"
+  "time.Time": "string"
+
+packages:
+  - path: "github.com/cho45/hanrangon/backend/model"
+    output_path: "admin-frontend/src/lib/types/generated/models.ts"
+    indent: "  "
+  - path: "github.com/cho45/hanrangon/backend/app"
+    output_path: "admin-frontend/src/lib/types/generated/api.ts"
+    indent: "  "

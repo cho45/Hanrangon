@@ -208,3 +208,11 @@ func TestSomething(t *testing.T) {
 
 4. **インポート管理**
    - 手動編集は避け、常に `make fmt` (goimports) に任せること。
+
+## 型定義のルール (BE/FE共有)
+
+- バックエンドとの型共有には `tygo` を使用する。
+- 生成された型は `admin-frontend/src/lib/types/generated/` に配置される（編集禁止）。
+- フロントエンドで型を使用する際は、必ず `admin-frontend/src/lib/types/models.ts` からインポートする。
+- 新しい型が必要な場合は、`generated/` から `models.ts` へ re-export の設定を追加する。`models.ts` 内で型を直接定義しない。
+- 不要な内部型（sqlcのクエリパラメータ等）を隠蔽し、フロントエンドの補完候補をクリーンに保つための構成である。

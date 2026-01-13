@@ -13,6 +13,7 @@ setup:
 	go install github.com/air-verse/air@latest
 	go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
 	go install golang.org/x/tools/cmd/goimports@latest
+	go install github.com/gzuidhof/tygo@latest
 
 build-fe:
 	cd admin-frontend && npm install && npm run build
@@ -40,6 +41,7 @@ test-go:
 
 generate:
 	sqlc generate
+	tygo generate
 
 generate-icons:
 	cd scripts && npm install && npm run generate-icons

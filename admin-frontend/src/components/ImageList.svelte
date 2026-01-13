@@ -3,17 +3,7 @@
   import { api } from '../lib/api.svelte';
   import ColorBitmask from './ColorBitmask.svelte';
   import R2UsageStats from './R2UsageStats.svelte';
-
-  interface Image {
-    id: number;
-    uri: string;
-    entry_id: number;
-    sig: string;
-  }
-
-  interface SimilarImage extends Image {
-    score: number;
-  }
+  import type { Image, SimilarImage } from '../lib/types/models';
 
   let images = $state<Image[]>([]);
 let offset = $state(0);
