@@ -123,7 +123,9 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 
 	// ページネーションパラメータの取得
 	dateStr := c.Param("date")
-	limit := 10 // Default limit (days)
+	maxDays := 10
+	minDays := 3
+	threshold := 10
 
 	var targetDate string
 	if dateStr != "" {
@@ -139,21 +141,10 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 	// 1. 表示対象となるユニークな日付を取得 (次ページ判定用に +1)
 	dates, err := app.queries.ListUniqueDates(ctx, model.ListUniqueDatesParams{
 		TargetDate: targetDate,
-		Limit:      int64(limit + 1),
+		Limit:      int64(maxDays + 1),
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch dates").SetInternal(err)
-	}
-
-	var olderPage string
-	if len(dates) > limit {
-		// 次ページがある場合
-		lastDate := dates[len(dates)-1]
-		dates = dates[:limit]
-
-		// 次ページのURLを生成
-		olderDate := strings.ReplaceAll(lastDate, "-", "")
-		olderPage = fmt.Sprintf("/.page/%s/%d", olderDate, limit)
 	}
 
 	var pageTitle string
@@ -170,8 +161,60 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 		}
 		return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 	}
+
 	// 2. 取得した日付に含まれる全記事を取得
 	entries, err := app.queries.ListEntriesByDates(ctx, dates)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
+	}
+
+	// 3. 表示日数をアダプティブに決定
+	// 日付ごとのエントリ数をカウント
+	entryCountByDate := make(map[string]int)
+	for _, e := range entries {
+		entryCountByDate[e.Date]++
+	}
+
+	displayDays := len(dates)
+	if displayDays > maxDays {
+		displayDays = maxDays
+	}
+
+	for d := displayDays; d > minDays; d-- {
+		totalEntries := 0
+		for i := 0; i < d; i++ {
+			totalEntries += entryCountByDate[dates[i]]
+		}
+		if totalEntries <= threshold {
+			displayDays = d
+			break
+		}
+		displayDays = d - 1
+	}
+
+	var olderPage string
+	if len(dates) > displayDays {
+		// 次ページがある場合
+		nextDate := dates[displayDays]
+		// 次ページのURLを生成
+		olderDate := strings.ReplaceAll(nextDate, "-", "")
+		olderPage = fmt.Sprintf("/.page/%s/%d", olderDate, maxDays)
+
+		// 表示対象の日付のみに絞り込み
+		displayDates := dates[:displayDays]
+		displayDateMap := make(map[string]bool)
+		for _, d := range displayDates {
+			displayDateMap[d] = true
+		}
+
+		filteredEntries := make([]model.Entry, 0)
+		for _, e := range entries {
+			if displayDateMap[e.Date] {
+				filteredEntries = append(filteredEntries, e)
+			}
+		}
+		entries = filteredEntries
+	}
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
 	}

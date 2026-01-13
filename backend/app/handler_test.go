@@ -141,6 +141,69 @@ func TestHandleIndex_SimilarImagesBulkFallback(t *testing.T) {
 	}
 }
 
+func TestHandleIndex_Adaptive(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	// 1. 11日分の日付を用意し、最初の日(今日)に12件のエントリを入れる
+	// これにより、アダプティブロジックは最小日数(3日)まで削減しようとするはず
+	now := time.Now()
+	for i := 0; i < 12; i++ {
+		dateStr := now.Format("2006-01-02")
+		path := fmt.Sprintf("entry-%d", i)
+		_, err := env.db.Exec(`
+			INSERT INTO entries (title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, status)
+			VALUES (?, ?, '', '', '', ?, 'Markdown', ?, ?, ?, 'public')
+		`, fmt.Sprintf("Entry %d", i), "Body", path, dateStr, now.Add(time.Duration(i)*time.Second), now, "public")
+		if err != nil {
+			t.Fatalf("failed to insert test data: %v", err)
+		}
+	}
+
+	// 2. さらに10日分、各1件ずつエントリを入れる
+	for i := 1; i <= 10; i++ {
+		date := now.AddDate(0, 0, -i)
+		dateStr := date.Format("2006-01-02")
+		path := fmt.Sprintf("old-entry-%d", i)
+		_, err := env.db.Exec(`
+			INSERT INTO entries (title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, status)
+			VALUES (?, ?, '', '', '', ?, 'Markdown', ?, ?, ?, 'public')
+		`, fmt.Sprintf("Old Entry %d", i), "Body", path, dateStr, date, date, "public")
+		if err != nil {
+			t.Fatalf("failed to insert test data: %v", err)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	env.server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// しきい値10に対して初日だけで12件あるので、
+	// ロジックでは d=10 から減らしていき、totalEntries > 10 なので d は減り続ける。
+	// 最終的に minDays = 3 になるはず。
+
+	// 3日分が表示されているか確認
+	if !strings.Contains(body, "Entry 11") {
+		t.Error("body should contain Entry 11 (from the first day)")
+	}
+
+	// 4日目のエントリが含まれていないことを確認 (Old Entry 3 は 3日前のデータ)
+	if strings.Contains(body, "Old Entry 3") {
+		t.Error("body should NOT contain 'Old Entry 3' due to adaptive reduction")
+	}
+
+	// OlderPage リンクが生成されているか確認
+	if !strings.Contains(body, "/.page/") {
+		t.Error("OlderPage link should be generated")
+	}
+}
+
 func checkCompleteHTML(t *testing.T, body string) {
 	t.Helper()
 	if !strings.Contains(body, "</html>") {
