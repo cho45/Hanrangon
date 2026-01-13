@@ -121,6 +121,16 @@ const Nogag = {
 	init() {
 		// this.initExif();
 		this.initBudouX();
+		this.initAutoPager();
+	},
+
+	async initAutoPager() {
+		const { AutoPager } = await import('./autopager.js');
+		this.autopager = new AutoPager({
+			onUpdate: () => {
+				this.initBudouX();
+			}
+		});
 	},
 
 	async initExif() {
@@ -166,9 +176,11 @@ const Nogag = {
 		
 		const targets = document.querySelectorAll(selector);
 		for (const target of targets) {
+			if (target.hasAttribute('data-budoux-processed') || target.querySelector('budoux-ja')) continue;
 			const wrapper = document.createElement('budoux-ja');
 			wrapper.append(...target.childNodes);
 			target.appendChild(wrapper);
+			target.setAttribute('data-budoux-processed', 'true');
 		}
 	}
 };
