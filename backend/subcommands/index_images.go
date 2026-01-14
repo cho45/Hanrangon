@@ -10,6 +10,14 @@ import (
 	"github.com/cho45/hanrangon/backend/jobs"
 )
 
+func init() {
+	Register(Definition{
+		Name:        "index-images",
+		Description: "Index images in entries and calculate signatures",
+		Run:         IndexImages,
+	})
+}
+
 func IndexImages(ctx context.Context, application app.App, args []string) error {
 	fs := flag.NewFlagSet("index-images", flag.ExitOnError)
 	force := fs.Bool("force", false, "force execution of indexing")

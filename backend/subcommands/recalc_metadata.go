@@ -11,6 +11,14 @@ import (
 	"github.com/cho45/hanrangon/backend/view"
 )
 
+func init() {
+	Register(Definition{
+		Name:        "recalc-metadata",
+		Description: "Recalculate metadata (summary and image_url) for entries",
+		Run:         RecalcMetadata,
+	})
+}
+
 func RecalcMetadata(ctx context.Context, application app.App, args []string) error {
 	fs := flag.NewFlagSet("recalc-metadata", flag.ExitOnError)
 	all := fs.Bool("all", false, "recalculate metadata for all entries")

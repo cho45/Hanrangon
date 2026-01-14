@@ -28,6 +28,14 @@ type MigrateToR2Options struct {
 	EntryID  int64 // 特定のエントリIDのみを処理（0=無効）
 }
 
+func init() {
+	Register(Definition{
+		Name:        "migrate-to-r2",
+		Description: "Migrate local images to Cloudflare R2",
+		Run:         MigrateToR2,
+	})
+}
+
 // MigrateToR2 はローカル画像をR2に移行し、データベースのエントリを書き換える
 func MigrateToR2(ctx context.Context, application app.App, args []string) error {
 	fs := flag.NewFlagSet("migrate-to-r2", flag.ExitOnError)

@@ -25,6 +25,14 @@ type ConvertToAVIFOptions struct {
 	Verify   bool  // 検証のみ実行
 }
 
+func init() {
+	Register(Definition{
+		Name:        "convert-to-avif",
+		Description: "Convert JPG/JPEG images to AVIF and update entries",
+		Run:         ConvertToAVIF,
+	})
+}
+
 // ConvertToAVIF はJPG/JPEG画像をAVIFに変換し、データベースのエントリを書き換える
 func ConvertToAVIF(ctx context.Context, application app.App, args []string) error {
 	fs := flag.NewFlagSet("convert-to-avif", flag.ExitOnError)

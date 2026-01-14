@@ -10,6 +10,14 @@ import (
 	"github.com/cho45/hanrangon/backend/tfidf"
 )
 
+func init() {
+	Register(Definition{
+		Name:        "recalc-tfidf",
+		Description: "Recalculate TF-IDF scores for all entries",
+		Run:         RecalcTFIDF,
+	})
+}
+
 func RecalcTFIDF(ctx context.Context, application app.App, args []string) error {
 	fs := flag.NewFlagSet("recalc-tfidf", flag.ExitOnError)
 	force := fs.Bool("force", false, "force execution of recalculation")

@@ -10,6 +10,14 @@ import (
 	"github.com/cho45/hanrangon/backend/formatter"
 )
 
+func init() {
+	Register(Definition{
+		Name:        "reformat",
+		Description: "Reformat all or specific entries",
+		Run:         Reformat,
+	})
+}
+
 func Reformat(ctx context.Context, application app.App, args []string) error {
 	fs := flag.NewFlagSet("reformat", flag.ExitOnError)
 	all := fs.Bool("all", false, "reformat all entries")
