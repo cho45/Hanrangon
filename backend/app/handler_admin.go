@@ -244,6 +244,10 @@ func (app *AppImpl) HandleAdminApiEditProgress(c echo.Context) error {
 }
 
 func (app *AppImpl) HandleAdminApiEdit(c echo.Context) error {
+	// NOTE: エントリ編集時（保存時）の状態遷移（status, date, path の相関関係）の
+	// 詳細な仕様およびテストは backend/app/edit_test.go に集約されています。
+	// 修正時は必ずそちらのテストをパスすることを確認してください。
+
 	// 1. リクエスト検証
 	req := new(EditRequest)
 	if err := c.Bind(req); err != nil {
@@ -265,6 +269,19 @@ func (app *AppImpl) HandleAdminApiEdit(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, "Invalid publish_at format").SetInternal(err)
 		}
 		publishAt = sql.NullTime{Time: t, Valid: true}
+	}
+
+	// ステータスのバリデーション
+	status := req.Status
+	now := time.Now()
+	if status == string(model.StatusScheduled) || status == string(model.StatusReserved) {
+		if !publishAt.Valid || !publishAt.Time.After(now) {
+			msg := "Scheduled status requires a future publish_at"
+			if status == string(model.StatusReserved) {
+				msg = "Reserved status requires a future publish_at"
+			}
+			return echo.NewHTTPError(http.StatusBadRequest, msg)
+		}
 	}
 
 	// 2. ProgressSession作成
@@ -301,29 +318,79 @@ func (app *AppImpl) HandleAdminApiEdit(c echo.Context) error {
 			app.sendProgressMessage(session, "postprocess完了")
 		}
 
-		// 3-3. DB保存（完全な状態で保存）
+		// 3-3. DB保存
 		app.sendProgressMessage(session, "データベース保存中...")
-		var location string
 
-		now := time.Now()
-		date := now.Format("2006-01-02")
+		tx, err := app.beginImmediate(ctx)
+		if err != nil {
+			app.sendProgressMessage(session, fmt.Sprintf("トランザクション（排他）開始エラー: %v", err))
+			session.Done <- err
+			return
+		}
+		defer tx.Rollback()
+
+		qtx := app.queries.WithTx(tx)
+
 		summary, imageURL := view.ExtractSummaryAndFirstImage(processedBody, 70)
 
+		// 保存用パラメータの決定
+		var date string
+		var path string
+		var existing model.Entry
 		if req.ID != 0 {
-			// 更新
-			existing, err := app.queries.GetEntryById(ctx, req.ID)
+			var err error
+			existing, err = qtx.GetEntryById(ctx, req.ID)
 			if err != nil {
 				app.sendProgressMessage(session, fmt.Sprintf("エントリ取得エラー: %v", err))
 				session.Done <- err
 				return
 			}
+			date = existing.Date
+			path = existing.Path
 
-			path := req.Path
-			if path == "" {
-				path = existing.Path
+			// パスが未確定の状態で public/scheduled になる場合は、date を「今」にする
+			if path == "" && (status == "public" || status == "scheduled") {
+				date = now.Format("2006-01-02")
 			}
 
-			row, err := app.queries.UpdateEntry(ctx, model.UpdateEntryParams{
+			// reserved への変更時は、既存の date/path を維持する（公開時に CalculateNextPath されるため）
+			if status == string(model.StatusReserved) {
+				// 何もしない（既存の date, path を維持）
+			} else if existing.Status == string(model.StatusReserved) {
+				// reserved から public/scheduled になった場合は新規採番対象
+				path = ""
+				if status == string(model.StatusScheduled) || !publishAt.Valid {
+					date = now.Format("2006-01-02")
+				} else {
+					date = publishAt.Time.Format("2006-01-02")
+				}
+			}
+		} else {
+			path = ""
+			if status == string(model.StatusReserved) && publishAt.Valid {
+				date = publishAt.Time.Format("2006-01-02")
+			} else if status == string(model.StatusPublic) && publishAt.Valid {
+				date = publishAt.Time.Format("2006-01-02")
+			} else {
+				date = now.Format("2006-01-02")
+			}
+		}
+
+		// 公開時、または公開予定パス確定時の自動生成:
+		// 公開状態 (public) または 公開遅延状態 (scheduled) かつパスが未確定 (empty) の場合、
+		// その日の既存パスの最大値に基づき採番する。
+		if path == "" && (status == "public" || status == "scheduled") {
+			path, err = app.CalculateNextPath(ctx, qtx, date)
+			if err != nil {
+				app.sendProgressMessage(session, fmt.Sprintf("パス採番エラー: %v", err))
+				session.Done <- err
+				return
+			}
+		}
+
+		var row model.Entry
+		if req.ID != 0 {
+			row, err = qtx.UpdateEntry(ctx, model.UpdateEntryParams{
 				ID:            req.ID,
 				Title:         req.Title,
 				Body:          req.Body,
@@ -332,45 +399,13 @@ func (app *AppImpl) HandleAdminApiEdit(c echo.Context) error {
 				ImageUrl:      imageURL,
 				Path:          path,
 				Format:        req.Format,
-				Date:          existing.Date,
+				Date:          date,
 				ModifiedAt:    now,
 				PublishAt:     publishAt,
-				Status:        req.Status,
+				Status:        status,
 			})
-			if err != nil {
-				app.sendProgressMessage(session, fmt.Sprintf("更新エラー: %v", err))
-				session.Done <- err
-				return
-			}
-			location = "/" + row.Path
-
-			// OGPキャッシュを破棄
-			if err := app.InvalidateOGPCache(row.ID); err != nil {
-				log.Printf("Failed to invalidate OGP cache: %v", err)
-			}
-
-			// ジョブエンキュー
-			if row.Status == "public" {
-				if err := app.EnqueuePublishedEntryJobs(ctx, row.ID); err != nil {
-					log.Printf("Failed to enqueue jobs: %v", err)
-					app.sendProgressMessage(session, fmt.Sprintf("警告: 一部の非同期ジョブの投入に失敗しました: %v", err))
-				}
-			}
 		} else {
-			// 新規作成
-			count, err := app.queries.CountEntriesByDate(ctx, date)
-			if err != nil {
-				app.sendProgressMessage(session, fmt.Sprintf("カウントエラー: %v", err))
-				session.Done <- err
-				return
-			}
-
-			path := req.Path
-			if path == "" {
-				path = fmt.Sprintf("%s/%d", now.Format("2006/01/02"), count+1)
-			}
-
-			row, err := app.queries.CreateEntry(ctx, model.CreateEntryParams{
+			row, err = qtx.CreateEntry(ctx, model.CreateEntryParams{
 				Title:         req.Title,
 				Body:          req.Body,
 				FormattedBody: processedBody,
@@ -382,27 +417,38 @@ func (app *AppImpl) HandleAdminApiEdit(c echo.Context) error {
 				CreatedAt:     now,
 				ModifiedAt:    now,
 				PublishAt:     publishAt,
-				Status:        req.Status,
+				Status:        status,
 			})
-			if err != nil {
-				app.sendProgressMessage(session, fmt.Sprintf("作成エラー: %v", err))
-				session.Done <- err
-				return
-			}
-			location = "/" + row.Path
+		}
 
-			// ジョブエンキュー
-			if row.Status == "public" {
-				if err := app.EnqueuePublishedEntryJobs(ctx, row.ID); err != nil {
-					log.Printf("Failed to enqueue jobs: %v", err)
-					app.sendProgressMessage(session, fmt.Sprintf("警告: 一部の非同期ジョブの投入に失敗しました: %v", err))
-				}
+		if err == nil {
+			err = tx.Commit()
+		}
+
+		if err != nil {
+			app.sendProgressMessage(session, fmt.Sprintf("保存エラー: %v", err))
+			session.Done <- err
+			return
+		}
+
+		// 保存後の共通処理
+		if req.ID != 0 {
+			if err := app.InvalidateOGPCache(row.ID); err != nil {
+				log.Printf("Failed to invalidate OGP cache: %v", err)
+			}
+		}
+
+		if row.Status == "public" {
+			if err := app.EnqueuePublishedEntryJobs(ctx, row.ID); err != nil {
+				log.Printf("Failed to enqueue jobs: %v", err)
+				app.sendProgressMessage(session, fmt.Sprintf("警告: 一部の非同期ジョブの投入に失敗しました: %v", err))
 			}
 		}
 
 		app.sendProgressMessage(session, "保存完了")
 
-		// 3-4. 完了（location を含めて送信）
+		// 3-4. 完了通知
+		location := "/" + row.Path
 		doneMsg := map[string]interface{}{"type": "done", "location": location}
 		doneJSON, _ := json.Marshal(doneMsg)
 		session.Messages <- string(doneJSON)

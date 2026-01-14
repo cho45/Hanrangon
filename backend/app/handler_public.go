@@ -577,11 +577,7 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entry").SetInternal(err)
 	}
 
-	if entry.Status != "public" && !app.IsAuth(c) {
-		return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
-	}
-
-	if entry.PublishAt.Valid && entry.PublishAt.Time.After(time.Now()) && !app.IsAuth(c) {
+	if !entry.IsPubliclyVisible() && !app.IsAuth(c) {
 		return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
 	}
 
@@ -733,7 +729,7 @@ func (app *AppImpl) HandleApiSearch(c echo.Context) error {
 	now := time.Now()
 	for _, e := range entries {
 		// public かつ 公開済みかチェック
-		if e.Status == "public" && (!e.PublishAt.Valid || e.PublishAt.Time.Before(now)) {
+		if e.IsPubliclyVisible() {
 			score := scoreMap[e.ID]
 			// タイトルにクエリが含まれていればブースト
 			if strings.Contains(strings.ToLower(e.Title), strings.ToLower(query)) {

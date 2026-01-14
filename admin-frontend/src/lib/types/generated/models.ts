@@ -54,6 +54,12 @@ export interface ListUniqueDatesParams {
   target_date: string;
   limit: number /* int64 */;
 }
+export interface PublishEntryParams {
+  path: string;
+  date: string;
+  modified_at: string;
+  id: number /* int64 */;
+}
 export interface SearchEntriesAdminParams {
   query: string;
   cursor_id: any /* sql.NullInt64 */;
@@ -73,6 +79,15 @@ export interface UpdateEntryParams {
   status: string;
   id: number /* int64 */;
 }
+
+//////////
+// source: entry.go
+
+export type EntryStatus = string;
+export const StatusPublic: EntryStatus = "public";
+export const StatusDraft: EntryStatus = "draft";
+export const StatusScheduled: EntryStatus = "scheduled";
+export const StatusReserved: EntryStatus = "reserved";
 
 //////////
 // source: images.sql.go

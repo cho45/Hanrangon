@@ -4,6 +4,7 @@
   import { api } from '../lib/api.svelte';
   import { DraftStore } from '../lib/draft.svelte';
   import type { Entry } from '../lib/types/models';
+  import { StatusPublic, StatusDraft, StatusScheduled, StatusReserved } from '../lib/types/models';
 
   let { id = null, onSave } = $props<{ id: string | null, onSave: (location: string) => void }>();
 
@@ -14,8 +15,7 @@
     title: '',
     body: '',
     format: 'Hatena',
-    status: 'public',
-    publishLater: false,
+    status: StatusPublic as string,
     publishAt: ''
   });
   let saving = $state(false);
@@ -41,7 +41,6 @@
       form.body = parsed.body;
       form.format = parsed.format || 'Hatena';
       form.status = parsed.status;
-      form.publishLater = parsed.status === 'scheduled';
       if (parsed.publish_at?.Valid) {
         form.publishAt = strftime('%Y-%m-%dT%H:%M', new Date(parsed.publish_at.Time));
       } else {
@@ -59,13 +58,12 @@
       fetchEntry(id);
     } else {
       // New entry
-      entry = { id: undefined, title: '', body: '', status: 'public' };
+      entry = { id: undefined, title: '', body: '', status: StatusPublic };
       form.id = null;
       form.title = '';
       form.body = '';
       form.format = 'Hatena';
-      form.status = 'public';
-      form.publishLater = false;
+      form.status = StatusPublic;
       form.publishAt = strftime('%Y-%m-%dT%H:%M', new Date(Date.now() + 86400 * 30 * 1000));
       draft.check(null, { title: form.title, body: form.body });
     }
@@ -87,13 +85,11 @@
     data.set('body', form.body);
     data.set('format', form.format);
 
-    if (form.publishLater) {
+    if (form.status === StatusScheduled || form.status === StatusReserved) {
       const date = new Date(form.publishAt);
       data.set('publish_at', date.toISOString());
-      data.set('status', 'scheduled');
-    } else {
-      data.set('status', 'public');
     }
+    data.set('status', form.status);
 
     try {
       const resData = await api.post<{ session_id: string }>('/admin/api/edit', data);
@@ -314,37 +310,75 @@
     {#if saving}
       <div class="progress-bar" style="width: 100%"></div>
     {/if}
-    <div class="buttons">
-      <div class="options">
-        <label title="チェックを入れると指定した日時に公開されます（公開済みの記事も予約に戻せます）">
-          <input type="checkbox" bind:checked={form.publishLater}>
-          公開を遅延
+    <div class="buttons footer-container">
+      <div class="status-selector">
+        <label class="status-option" title="非公開のまま保存します">
+          <input type="radio" bind:group={form.status} value={StatusDraft}>
+          <div class="status-content">
+            <span class="label-text">下書き</span>
+          </div>
         </label>
-        {#if form.publishLater}
-          <input type="datetime-local" bind:value={form.publishAt} class="datetime-input">
-        {/if}
+        <label class="status-option" title="今すぐ公開し、URLを確定させます">
+          <input type="radio" bind:group={form.status} value={StatusPublic}>
+          <div class="status-content">
+            <span class="label-text">公開</span>
+          </div>
+        </label>
+        <label class="status-option" title="指定した日時に公開します。URLは今すぐ確定します。">
+          <input type="radio" bind:group={form.status} value={StatusScheduled}>
+          <div class="status-content">
+            <span class="label-text">公開を遅延</span>
+            <span class="description">URL確定</span>
+          </div>
+        </label>
+        <label class="status-option" title="指定した日付を投稿日として予約します。公開されるまでURLは確定しません。">
+          <input type="radio" bind:group={form.status} value={StatusReserved}>
+          <div class="status-content">
+            <span class="label-text">予約投稿</span>
+            <span class="description">URL未定</span>
+          </div>
+        </label>
       </div>
-      <button
-        type="button"
-        class="submit-button"
-        onclick={saveEntry}
-        disabled={saving}
-      >
-        {saving ? (progress || 'リクエスト中') : (id ? '更新' : '作成')}
-      </button>
-      <button
-        type="button"
-        class="submit-button preview-button"
-        onclick={openPreview}
-        disabled={saving}
-      >
-        プレビュー
-      </button>
-      {#if draft.exists}
-        <button id="restore" type="button" class="submit-button" onclick={() => restoreDialog.showModal()}>
-          復元...
-        </button>
-      {/if}
+
+      <div class="action-row-container">
+        <div class="footer-left">
+          <button
+            type="button"
+            class="submit-button"
+            onclick={saveEntry}
+            disabled={saving}
+          >
+            {#if saving}
+              {progress || 'リクエスト中'}
+            {:else if form.status === StatusDraft}
+              下書き保存
+            {:else if form.status === StatusPublic}
+              {id ? '更新する' : '公開する'}
+            {:else}
+              予約する
+            {/if}
+          </button>
+          {#if form.status === StatusScheduled || form.status === StatusReserved}
+            <input type="datetime-local" bind:value={form.publishAt} class="datetime-input">
+          {/if}
+        </div>
+
+        <div class="footer-right">
+          {#if draft.exists}
+            <button id="restore" type="button" class="submit-button restore-button" onclick={() => restoreDialog.showModal()}>
+              復元...
+            </button>
+          {/if}
+          <button
+            type="button"
+            class="submit-button preview-button"
+            onclick={openPreview}
+            disabled={saving}
+          >
+            プレビュー
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -478,11 +512,74 @@
     margin: 0 auto;
   }
 
-  .options {
-    padding-bottom: 16px;
+  .footer-container {
     display: flex;
-    gap: 16px;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .footer-left, .footer-right {
+    display: flex;
     align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .footer-right {
+    justify-content: flex-end;
+  }
+
+  .status-selector {
+    display: flex;
+    gap: 4px;
+  }
+
+  .status-option {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 4px;
+    background: #f0f4f5;
+    border: 1px solid #dfe5e7;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+    white-space: nowrap;
+  }
+
+  .status-option:has(input:checked) {
+    background: #e0f7fa;
+    border-color: #00acc1;
+  }
+
+  .status-option input[type="radio"] {
+    margin-top: 3px;
+  }
+
+  .status-content {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+
+  .label-text {
+    font-weight: bold;
+    font-size: 0.9em;
+  }
+
+  .description {
+    font-size: 0.75em;
+    color: #666;
+  }
+
+  .action-row-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
   }
 
   .datetime-input {
@@ -508,14 +605,8 @@
     cursor: not-allowed;
   }
 
-  .preview-button {
+  .preview-button, .restore-button {
     background: #757575;
-    margin-left: 8px;
-  }
-
-  #restore {
-    background: #757575;
-    margin-left: 8px;
   }
 
   dialog {

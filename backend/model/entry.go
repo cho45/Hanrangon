@@ -3,6 +3,16 @@ package model
 import (
 	"regexp"
 	"strings"
+	"time"
+)
+
+type EntryStatus string
+
+const (
+	StatusPublic    EntryStatus = "public"
+	StatusDraft     EntryStatus = "draft"
+	StatusScheduled EntryStatus = "scheduled"
+	StatusReserved  EntryStatus = "reserved"
 )
 
 var titleTagRegexp = regexp.MustCompile(`\s*\[([^\]]+)\]\s*`)
@@ -36,6 +46,45 @@ func (e Entry) DisplayTitle() string {
 func (e Entry) Tags() []string {
 	_, tags := ParseTitle(e.Title)
 	return tags
+}
+
+// IsReserved は、エントリが「予約投稿」状態（公開待ちだがパスが未確定）かどうかを返します。
+func (e Entry) IsReserved() bool {
+	return e.Status == string(StatusReserved)
+}
+
+// NormalizeStatus は、リクエストされたステータスと公開日時から、最終的な保存ステータスを補正します。
+// 主に、'public' 指定だが日時が未来の場合の 'scheduled' への振り分けや、
+// 未来の日時が指定されていない場合の 'public' への補正を行います。
+func NormalizeStatus(requestedStatus string, publishAt time.Time, hasPublishAt bool) string {
+	if requestedStatus == string(StatusDraft) || requestedStatus == string(StatusReserved) {
+		return requestedStatus
+	}
+
+	// 未来の公開日時が指定されている場合
+	if hasPublishAt && publishAt.After(time.Now()) {
+		// すでに 'scheduled' ならそのまま、'public'（デフォルト）なら 'scheduled' に振り替え
+		return string(StatusScheduled)
+	}
+
+	// 過去または公開日時未指定の場合は強制的に public
+	return string(StatusPublic)
+}
+
+// IsScheduledLater は、エントリが「公開を遅延」状態（パスは確定済みで、指定時間に公開される）かどうかを返します。
+func (e Entry) IsScheduledLater() bool {
+	return e.Status == string(StatusScheduled)
+}
+
+// IsPubliclyVisible は、エントリが一般公開されている（ステータスが public かつ公開時刻を過ぎている）かどうかを返します。
+func (e Entry) IsPubliclyVisible() bool {
+	if e.Status != string(StatusPublic) {
+		return false
+	}
+	if e.PublishAt.Valid && e.PublishAt.Time.After(time.Now()) {
+		return false
+	}
+	return true
 }
 
 // DisplayTitle returns the title without tags, or "✖" if empty.

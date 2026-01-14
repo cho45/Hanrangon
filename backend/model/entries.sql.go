@@ -34,17 +34,6 @@ func (q *Queries) CountEntries(ctx context.Context) (int64, error) {
 	return count, err
 }
 
-const countEntriesByDate = `-- name: CountEntriesByDate :one
-SELECT count(*) FROM entries WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND date = ?1
-`
-
-func (q *Queries) CountEntriesByDate(ctx context.Context, date string) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countEntriesByDate, date)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const createEntry = `-- name: CreateEntry :one
 INSERT INTO entries (
     title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, publish_at, status
@@ -104,7 +93,7 @@ func (q *Queries) CreateEntry(ctx context.Context, arg CreateEntryParams) (Entry
 
 const findScheduledEntriesToPublish = `-- name: FindScheduledEntriesToPublish :many
 SELECT id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, publish_at, status FROM entries
-WHERE status = 'scheduled' AND (publish_at IS NULL OR publish_at <= ?1)
+WHERE status IN ('scheduled', 'reserved') AND (publish_at IS NULL OR publish_at <= ?1)
 ORDER BY publish_at ASC
 `
 
@@ -672,6 +661,33 @@ func (q *Queries) ListEntriesByYearMonthDay(ctx context.Context, arg ListEntries
 	return items, nil
 }
 
+const listPathsByDate = `-- name: ListPathsByDate :many
+SELECT path FROM entries WHERE date = ?1
+`
+
+func (q *Queries) ListPathsByDate(ctx context.Context, date string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listPathsByDate, date)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var path string
+		if err := rows.Scan(&path); err != nil {
+			return nil, err
+		}
+		items = append(items, path)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUniqueDates = `-- name: ListUniqueDates :many
 SELECT DISTINCT date FROM entries
 WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND date <= ?1
@@ -707,24 +723,29 @@ func (q *Queries) ListUniqueDates(ctx context.Context, arg ListUniqueDatesParams
 	return items, nil
 }
 
-const publishEntries = `-- name: PublishEntries :exec
+const publishEntry = `-- name: PublishEntry :exec
 UPDATE entries
-SET status = 'public'
-WHERE id IN (/*SLICE:ids*/?)
+SET status = 'public',
+    path = ?1,
+    date = ?2,
+    modified_at = ?3
+WHERE id = ?4
 `
 
-func (q *Queries) PublishEntries(ctx context.Context, ids []int64) error {
-	query := publishEntries
-	var queryParams []interface{}
-	if len(ids) > 0 {
-		for _, v := range ids {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
-	}
-	_, err := q.db.ExecContext(ctx, query, queryParams...)
+type PublishEntryParams struct {
+	Path       string    `json:"path"`
+	Date       string    `json:"date"`
+	ModifiedAt time.Time `json:"modified_at"`
+	ID         int64     `json:"id"`
+}
+
+func (q *Queries) PublishEntry(ctx context.Context, arg PublishEntryParams) error {
+	_, err := q.db.ExecContext(ctx, publishEntry,
+		arg.Path,
+		arg.Date,
+		arg.ModifiedAt,
+		arg.ID,
+	)
 	return err
 }
 

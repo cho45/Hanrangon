@@ -57,8 +57,8 @@
   }
 </script>
 
-{#snippet statusBadge(status: string)}
-  <span class="status status-{status}">{status}</span>
+{#snippet statusBadge(entry: Entry)}
+  <span class="status status-{entry.status}">{entry.status}</span>
 {/snippet}
 
 {#snippet time(iso: string, valid: boolean = true)}
@@ -104,7 +104,7 @@
               <td>{entry.id}</td>
               <td class="date">{entry.date}</td>
               <td>
-                {@render statusBadge(entry.status)}
+                {@render statusBadge(entry)}
               </td>
               <td>
                 <div class="title">{entry.title}</div>
@@ -236,6 +236,7 @@
 
   .status-public { background: #e3f2fd; color: #1976d2; }
   .status-scheduled { background: #fff3e0; color: #f57c00; }
+  .status-reserved { background: #e8f5e9; color: #2e7d32; }
   .status-draft { background: #eee; color: #666; }
 
   .edit-btn {

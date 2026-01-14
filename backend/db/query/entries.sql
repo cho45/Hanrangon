@@ -9,8 +9,8 @@ LIMIT sqlc.arg('limit');
 -- name: CountEntries :one
 SELECT count(*) FROM entries WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP);
 
--- name: CountEntriesByDate :one
-SELECT count(*) FROM entries WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND date = sqlc.arg(date);
+-- name: ListPathsByDate :many
+SELECT path FROM entries WHERE date = sqlc.arg(date);
 
 -- name: GetEntryByPath :one
 SELECT * FROM entries
@@ -118,10 +118,13 @@ SELECT count(*) FROM entries;
 
 -- name: FindScheduledEntriesToPublish :many
 SELECT * FROM entries
-WHERE status = 'scheduled' AND (publish_at IS NULL OR publish_at <= sqlc.arg(now))
+WHERE status IN ('scheduled', 'reserved') AND (publish_at IS NULL OR publish_at <= sqlc.arg(now))
 ORDER BY publish_at ASC;
 
--- name: PublishEntries :exec
+-- name: PublishEntry :exec
 UPDATE entries
-SET status = 'public'
-WHERE id IN (sqlc.slice('ids'));
+SET status = 'public',
+    path = sqlc.arg(path),
+    date = sqlc.arg(date),
+    modified_at = sqlc.arg(modified_at)
+WHERE id = sqlc.arg(id);

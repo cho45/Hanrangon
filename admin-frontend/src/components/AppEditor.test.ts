@@ -36,7 +36,7 @@ describe('AppEditor', () => {
     expect((screen.getByPlaceholderText('タイトル') as HTMLInputElement).value).toBe('');
     expect((screen.getByPlaceholderText('本文') as HTMLTextAreaElement).value).toBe('');
     expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('Hatena');
-    expect(screen.getByRole('button', { name: '作成' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '公開する' })).toBeTruthy();
   });
 
   it('既存エントリの取得と表示ができること', async () => {
@@ -53,7 +53,7 @@ describe('AppEditor', () => {
     await waitFor(() => {
       expect((screen.getByPlaceholderText('タイトル') as HTMLInputElement).value).toBe('既存のタイトル');
       expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('Markdown');
-      expect(screen.getByRole('button', { name: '更新' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: '更新する' })).toBeTruthy();
     });
   });
 
@@ -102,9 +102,9 @@ describe('AppEditor', () => {
 
     render(AppEditor, { id: null, onSave: () => {} });
     
-    // 「公開を遅延」を有効化
-    const checkbox = screen.getByLabelText(/公開を遅延/);
-    await user.click(checkbox);
+    // 「公開を遅延」を選択
+    const radio = screen.getByLabelText(/公開を遅延/);
+    await user.click(radio);
 
     // 日時を入力
     const dateInput = document.querySelector('.datetime-input') as HTMLInputElement;
@@ -112,7 +112,7 @@ describe('AppEditor', () => {
     await user.clear(dateInput);
     await user.type(dateInput, inputDateTime);
 
-    await user.click(screen.getByText('作成'));
+    await user.click(screen.getByText('予約する'));
 
     await waitFor(() => {
       expect(api.post).toHaveBeenCalled();
@@ -140,7 +140,7 @@ describe('AppEditor', () => {
     await user.type(titleInput, '新記事');
     await user.type(bodyInput, '内容');
 
-    const saveButton = screen.getByText('作成');
+    const saveButton = screen.getByText('公開する');
     await user.click(saveButton);
 
     await waitFor(() => {
@@ -169,7 +169,7 @@ describe('AppEditor', () => {
 
     render(AppEditor, { id: null, onSave });
     
-    const saveButton = screen.getByRole('button', { name: '作成' });
+    const saveButton = screen.getByRole('button', { name: '公開する' });
     await user.click(saveButton);
 
     // 1. EventSource がインスタンス化され、ハンドラが設定されるのを待つ
@@ -186,8 +186,8 @@ describe('AppEditor', () => {
     
     // 4. 完了後の挙動を検証
     await waitFor(() => {
-      // 保存完了後は「作成」に戻る
-      expect(saveButton.textContent).toBe('作成');
+      // 保存完了後は元の「公開する」に戻る
+      expect(saveButton.textContent).toBe('公開する');
       expect(onSave).toHaveBeenCalledWith('/admin/done');
     });
   });

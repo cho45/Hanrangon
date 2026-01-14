@@ -13,7 +13,6 @@ import (
 type Querier interface {
 	CountAllEntries(ctx context.Context) (int64, error)
 	CountEntries(ctx context.Context) (int64, error)
-	CountEntriesByDate(ctx context.Context, date string) (int64, error)
 	CountImages(ctx context.Context) (int64, error)
 	CountJobs(ctx context.Context) (int64, error)
 	CountPendingJobs(ctx context.Context) (int64, error)
@@ -66,6 +65,7 @@ type Querier interface {
 	ListImagesByEntryID(ctx context.Context, entryID int64) ([]Image, error)
 	ListImagesByEntryIDs(ctx context.Context, entryIds []int64) ([]Image, error)
 	ListJobs(ctx context.Context, arg ListJobsParams) ([]ListJobsRow, error)
+	ListPathsByDate(ctx context.Context, date string) ([]string, error)
 	ListRelatedEntries(ctx context.Context, entryID int64) ([]ListRelatedEntriesRow, error)
 	ListRelatedEntriesByEntryIDs(ctx context.Context, entryIds []int64) ([]ListRelatedEntriesByEntryIDsRow, error)
 	ListSimilarImagesByImageIDs(ctx context.Context, imageIds []int64) ([]ListSimilarImagesByImageIDsRow, error)
@@ -73,7 +73,7 @@ type Querier interface {
 	ListUniqueDates(ctx context.Context, arg ListUniqueDatesParams) ([]string, error)
 	MarkJobCompleted(ctx context.Context, id int64) error
 	MarkJobFailed(ctx context.Context, arg MarkJobFailedParams) error
-	PublishEntries(ctx context.Context, ids []int64) error
+	PublishEntry(ctx context.Context, arg PublishEntryParams) error
 	RecoverStuckJobs(ctx context.Context) error
 	SearchEntriesAdmin(ctx context.Context, arg SearchEntriesAdminParams) ([]Entry, error)
 	UpdateEntry(ctx context.Context, arg UpdateEntryParams) (Entry, error)

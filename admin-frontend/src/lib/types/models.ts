@@ -13,6 +13,12 @@ import * as Api from './generated/api';
 /**
  * Models from backend/model
  */
+export type EntryStatus = Models.EntryStatus;
+export const StatusPublic = Models.StatusPublic;
+export const StatusDraft = Models.StatusDraft;
+export const StatusScheduled = Models.StatusScheduled;
+export const StatusReserved = Models.StatusReserved;
+
 export type Entry = Models.Entry;
 export type Image = Models.Image;
 export type SimilarImage = Models.ListSimilarImagesByImageIDsRow;
