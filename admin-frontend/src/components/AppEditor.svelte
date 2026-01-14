@@ -22,6 +22,7 @@
   let saving = $state(false);
   let progress = $state('');
   let uploading = $state(false);
+  let isInitialLoading = $state(true);
 
   let titleInput = $state<HTMLInputElement>(null!);
   let bodyTextArea = $state<HTMLTextAreaElement>(null!);
@@ -42,6 +43,7 @@
 
   async function fetchEntry(id: string) {
     try {
+      isInitialLoading = true;
       const parsed = await api.get<Entry>(`/admin/api/entry/${id}`);
       entry = parsed;
       form.id = parsed.id;
@@ -58,6 +60,8 @@
     } catch (e) {
       console.error(e);
       alert('エントリの取得に失敗しました');
+    } finally {
+      isInitialLoading = false;
     }
   }
 
@@ -74,6 +78,7 @@
       form.status = StatusPublic;
       form.publishAt = strftime('%Y-%m-%dT%H:%M', new Date(Date.now() + 86400 * 30 * 1000));
       draft.check(null, { title: form.title, body: form.body });
+      isInitialLoading = false;
     }
   });
 
@@ -196,7 +201,12 @@
     setTimeout(() => searchInput?.focus(), 0);
   }
 
-  async function handleSearchInput() {
+  async function handleSearchInput(e: Event) {
+    // 変換確定時の Enter キーなどで勝手に閉じないようにする
+    if (e instanceof KeyboardEvent && e.key === 'Enter') {
+      return;
+    }
+
     if (searchQuery.length < 2) {
       searchResults = [];
       return;
@@ -381,7 +391,7 @@
   }
 </script>
 
-{#if api.loading && !entry.id}
+{#if isInitialLoading}
   <div class="loading-spinner-container">
     <div class="loading-spinner"></div>
   </div>
@@ -559,7 +569,7 @@
       placeholder="キーワードを入力..."
       bind:this={searchInput}
       bind:value={searchQuery}
-      oninput={handleSearchInput}
+      oninput={(e) => handleSearchInput(e)}
       onkeydown={handleSearchKeyDown}
       class="search-input"
     />
