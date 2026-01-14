@@ -367,6 +367,7 @@ func (app *AppImpl) HandleAdminApiPreview(c echo.Context) error {
 	}
 
 	viewEntry := view.NewViewEntry(entry, app.config.BaseURL)
+	viewEntry.IsDateBoundary = true
 	data := &view.IndexData{
 		LayoutData: app.newLayoutData(c, entry.DisplayTitle()),
 		Entries:    []view.ViewEntry{viewEntry},

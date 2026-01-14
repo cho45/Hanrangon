@@ -613,6 +613,7 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 	}
 
 	viewEntry := view.NewViewEntry(entry, app.config.BaseURL)
+	viewEntry.IsDateBoundary = true
 	viewEntries := []view.ViewEntry{viewEntry}
 	app.populateSimilarEntries(ctx, viewEntries)
 

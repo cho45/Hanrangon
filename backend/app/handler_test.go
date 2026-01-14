@@ -355,6 +355,37 @@ func TestHandleEntry(t *testing.T) {
 	})
 }
 
+func TestHandleEntry_DateHeader(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	// テストデータの挿入
+	_, err := env.db.Exec(`
+		INSERT INTO entries (title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at)
+		VALUES
+		('Test Entry Date Header', 'Body', '<p>Formatted Body</p>', 'Summary', '', '2025/01/01/date-header-test', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00')
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test data: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/2025/01/01/date-header-test", nil)
+	rec := httptest.NewRecorder()
+	env.server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+	// 日付見出し (class="date") が含まれているか確認
+	// view/helper.go の FormatDate("2025-01-01") は "2025年 01月 01日" を返す
+	expectedDateHeader := `<div class="date"><a href="/2025/01/01/">2025年 01月 01日</a></div>`
+	if !strings.Contains(body, expectedDateHeader) {
+		t.Errorf("body does not contain expected date header")
+	}
+}
+
 func TestHandleArchive(t *testing.T) {
 	env := setupTest(t)
 	defer env.close()
