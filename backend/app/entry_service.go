@@ -38,6 +38,17 @@ func (s *EntryService) SaveEntry(ctx context.Context, params SaveEntryParams) (*
 	now := time.Now()
 	status := params.Status
 
+	// 0. Validation
+	if status == string(model.StatusScheduled) || status == string(model.StatusReserved) {
+		if !params.PublishAt.Valid || !params.PublishAt.Time.After(now) {
+			msg := "Scheduled status requires a future publish_at"
+			if status == string(model.StatusReserved) {
+				msg = "Reserved status requires a future publish_at"
+			}
+			return nil, fmt.Errorf("%s", msg)
+		}
+	}
+
 	// 1. Format
 	if params.Reporter != nil {
 		params.Reporter.Report("フォーマット処理中...")

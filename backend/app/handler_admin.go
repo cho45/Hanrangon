@@ -280,19 +280,6 @@ func (app *AppImpl) HandleAdminApiEdit(c echo.Context) error {
 		publishAt = sql.NullTime{Time: t, Valid: true}
 	}
 
-	// ステータスのバリデーション
-	status := req.Status
-	now := time.Now()
-	if status == string(model.StatusScheduled) || status == string(model.StatusReserved) {
-		if !publishAt.Valid || !publishAt.Time.After(now) {
-			msg := "Scheduled status requires a future publish_at"
-			if status == string(model.StatusReserved) {
-				msg = "Reserved status requires a future publish_at"
-			}
-			return echo.NewHTTPError(http.StatusBadRequest, msg)
-		}
-	}
-
 	// 2. ProgressSession作成
 	session := app.createProgressSession()
 
