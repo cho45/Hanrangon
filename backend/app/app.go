@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -53,6 +52,7 @@ type AppImpl struct {
 	progressSessions     sync.Map // map[sessionID]*ProgressSession
 	storage              StorageClient
 	imageProcessor       *ImageProcessor
+	entryService         *EntryService
 }
 
 // NewApp creates a new App instance
@@ -95,7 +95,7 @@ func NewApp(
 		storage = NewLocalStorage(config.UploadDir, "/images/entry/")
 	}
 
-	return &AppImpl{
+	app := &AppImpl{
 		queries:              model.New(db),
 		db:                   db,
 		tfidfQueries:         model.New(tfidfDB),
@@ -113,6 +113,8 @@ func NewApp(
 		storage:              storage,
 		imageProcessor:       NewImageProcessor(config),
 	}
+	app.entryService = NewEntryService(app)
+	return app
 }
 
 // Getter implementations
@@ -130,6 +132,7 @@ func (a *AppImpl) Searcher() *tfidf.Searcher                         { return a.
 func (a *AppImpl) JobQueue() *jobqueue.Worker                        { return a.jobQueue }
 func (a *AppImpl) Config() *Config                                   { return a.config }
 func (a *AppImpl) Templates() *Templates                             { return a.templates }
+func (a *AppImpl) EntryService() *EntryService                       { return a.entryService }
 
 func (a *AppImpl) newLayoutData(c echo.Context, pageTitle string) view.LayoutData {
 	baseURL := strings.TrimSuffix(a.config.BaseURL, "/")
@@ -335,7 +338,7 @@ func (p *BatchProcessor) Close() error {
 // beginImmediate は SQLite において BEGIN IMMEDIATE を発行し、即座に書き込みロックを取得する。
 // 標準の BeginTx では SQLite の BEGIN IMMEDIATE を制御できないため、
 // 一旦 Begin してから明示的にコマンドを発行する。
-func (app *AppImpl) beginImmediate(ctx context.Context) (*sql.Tx, error) {
+func (app *AppImpl) BeginImmediate(ctx context.Context) (*sql.Tx, error) {
 	tx, err := app.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -345,30 +348,6 @@ func (app *AppImpl) beginImmediate(ctx context.Context) (*sql.Tx, error) {
 		return nil, err
 	}
 	return tx, nil
-}
-
-// CalculateNextPath は指定日の既存パスの中から最大の N を探し、N+1 のパスを生成する
-func (app *AppImpl) CalculateNextPath(ctx context.Context, qtx *model.Queries, date string) (string, error) {
-	paths, err := qtx.ListPathsByDate(ctx, date)
-	if err != nil {
-		return "", err
-	}
-
-	prefix := strings.ReplaceAll(date, "-", "/") + "/"
-	maxN := 0
-
-	for _, p := range paths {
-		if strings.HasPrefix(p, prefix) {
-			nStr := strings.TrimPrefix(p, prefix)
-			if n, err := strconv.Atoi(nStr); err == nil {
-				if n > maxN {
-					maxN = n
-				}
-			}
-		}
-	}
-
-	return fmt.Sprintf("%s/%d", strings.ReplaceAll(date, "-", "/"), maxN+1), nil
 }
 
 func (app *AppImpl) PostprocessBatch(ctx context.Context) (*BatchProcessor, error) {
@@ -422,82 +401,6 @@ func (app *AppImpl) PostprocessBatch(ctx context.Context) (*BatchProcessor, erro
 		stdout: bufio.NewScanner(stdout),
 		cancel: cancel,
 	}, nil
-}
-
-func (app *AppImpl) PublishScheduledEntries(ctx context.Context) error {
-	now := time.Now()
-	entries, err := app.queries.FindScheduledEntriesToPublish(ctx, sql.NullTime{Time: now, Valid: true})
-	if err != nil {
-		return fmt.Errorf("failed to find scheduled entries: %w", err)
-	}
-
-	if len(entries) == 0 {
-		return nil
-	}
-
-	for _, e := range entries {
-		err := func() error {
-			// SQLite において、読み取りから書き込みまでの間に他者が割り込まないよう
-			// トランザクション開始時に即座に書き込みロックを取得する
-			tx, err := app.beginImmediate(ctx)
-			if err != nil {
-				return err
-			}
-			defer tx.Rollback()
-
-			qtx := app.queries.WithTx(tx)
-
-			// パスが確定していない「予約投稿 (Reserve)」かどうかを判定する
-			if e.IsReserved() {
-				// 予約投稿 (Reserve):
-				// 保存時に既存パスがあれば維持されるが、それは無視される。
-				// 公開タイミングで、公開予定日の記事数に基づき YYYY/MM/DD/N 形式でパスを強制的に採番・確定させる。
-				date := e.PublishAt.Time.Format("2006-01-02")
-				// パスを生成 (最大値+1)
-				path, err := app.CalculateNextPath(ctx, qtx, date)
-				if err != nil {
-					return fmt.Errorf("failed to calculate next path for date %s: %w", date, err)
-				}
-				err = qtx.PublishEntry(ctx, model.PublishEntryParams{
-					ID:         e.ID,
-					Path:       path,
-					Date:       date,
-					ModifiedAt: now,
-				})
-				if err != nil {
-					return fmt.Errorf("failed to update entry path %d: %w", e.ID, err)
-				}
-				log.Printf("Published reserved entry %d with path %s", e.ID, path)
-			} else {
-				// 公開を遅延 (PublishLater):
-				// 保存時に既にパスが確定している状態 (IsScheduledLater)。
-				// 既存のパスと日付をそのまま渡して公開状態にする。
-				err = qtx.PublishEntry(ctx, model.PublishEntryParams{
-					ID:         e.ID,
-					Path:       e.Path,
-					Date:       e.Date,
-					ModifiedAt: now,
-				})
-				if err != nil {
-					return fmt.Errorf("failed to publish entry %d: %w", e.ID, err)
-				}
-				log.Printf("Published scheduled entry %d", e.ID)
-			}
-
-			return tx.Commit()
-		}()
-
-		if err != nil {
-			log.Printf("Error publishing entry %d: %v", e.ID, err)
-			continue
-		}
-
-		if err := app.EnqueuePublishedEntryJobs(ctx, e.ID); err != nil {
-			log.Printf("Failed to enqueue jobs for entry %d: %v", e.ID, err)
-		}
-	}
-
-	return nil
 }
 
 func (app *AppImpl) EnqueuePublishedEntryJobs(ctx context.Context, entryID int64) error {

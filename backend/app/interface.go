@@ -9,6 +9,11 @@ import (
 	"github.com/cho45/hanrangon/backend/tfidf"
 )
 
+// ProgressReporter は進捗状況を報告するためのインターフェース
+type ProgressReporter interface {
+	Report(message string)
+}
+
 // App はアプリケーションの主要なインターフェース
 type App interface {
 	// Database accessors
@@ -32,11 +37,16 @@ type App interface {
 	// Config accessor
 	Config() *Config
 
+	// EntryService accessor
+	EntryService() *EntryService
+
 	// Postprocess
 	Postprocess(ctx context.Context, html string) (string, error)
 	PostprocessBatch(ctx context.Context) (*BatchProcessor, error)
 
-	PublishScheduledEntries(ctx context.Context) error
+	// Utils for Service
+	BeginImmediate(ctx context.Context) (*sql.Tx, error)
+
 	EnqueuePublishedEntryJobs(ctx context.Context, entryID int64) error
 
 	GetR2Usage(ctx context.Context) (*R2UsageStats, error)

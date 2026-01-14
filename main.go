@@ -216,7 +216,7 @@ func RunServe(ctx context.Context, application *app.AppImpl) error {
 				log.Printf("Periodic task worker stopping...")
 				return
 			case <-ticker.C:
-				if err := application.PublishScheduledEntries(ctx); err != nil {
+				if err := application.EntryService().PublishScheduledEntries(ctx); err != nil {
 					log.Printf("Error publishing scheduled entries: %v", err)
 				}
 			}

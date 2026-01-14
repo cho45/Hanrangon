@@ -317,7 +317,7 @@ func TestHandleAdminApiEdit_StateTransitions(t *testing.T) {
 		d := time.Now().Add(-24 * time.Hour)
 		createEntryInEnv(t, e, PUBLI, d, d.Format("2006/01/02")+"/1")
 		id := createEntryInEnv(t, e, RESER, d, "")
-		err := e.app.PublishScheduledEntries(ctx)
+		err := e.app.EntryService().PublishScheduledEntries(ctx)
 		require.NoError(t, err)
 		en, _ := e.app.Queries().GetEntryById(ctx, id)
 		assert.Equal(t, d.Format("2006/01/02")+"/2", en.Path)
@@ -348,7 +348,7 @@ func TestHandleAdminApiEdit_StateTransitions(t *testing.T) {
 
 		// 3. ジョブ実行による公開
 		// 仕様: 「ただし無視し、公開時にその日の最新番号で採番」
-		err = e.app.PublishScheduledEntries(ctx)
+		err = e.app.EntryService().PublishScheduledEntries(ctx)
 		require.NoError(t, err)
 
 		// 4. パスが今日の日付で再採番されていることを確認

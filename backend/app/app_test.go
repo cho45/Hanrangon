@@ -208,7 +208,7 @@ func TestPublishScheduledEntries(t *testing.T) {
 	}
 
 	// Run publisher
-	if err := env.app.PublishScheduledEntries(ctx); err != nil {
+	if err := env.app.EntryService().PublishScheduledEntries(ctx); err != nil {
 		t.Fatalf("PublishScheduledEntries failed: %v", err)
 	}
 
