@@ -34,10 +34,11 @@ watch:
 	(cd admin-frontend && npm run dev) & \
 	HANRANGON_FE_DEV=true air
 
-test: test-go postprocess-test admin-test
+test:
+	node scripts/test-runner.js test-go postprocess-test admin-test
 
 test-go:
-	go test -tags "$(GO_TAGS)" ./...
+	go test -v -tags "$(GO_TAGS)" ./...
 
 generate:
 	sqlc generate
