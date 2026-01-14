@@ -133,7 +133,7 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 		}
 	}
 
-	entry, err := app.queries.GetEntryById(c.Request().Context(), id)
+	entry, err := app.MainDB().Q.GetEntryById(c.Request().Context(), id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, "Entry not found")

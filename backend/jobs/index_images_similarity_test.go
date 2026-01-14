@@ -11,6 +11,10 @@ import (
 
 	"github.com/cho45/hanrangon/backend/app"
 	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/imagesdb"
+	"github.com/cho45/hanrangon/backend/model/maindb"
+	"github.com/cho45/hanrangon/backend/model/tfidfdb"
+	"github.com/cho45/hanrangon/backend/model/workerdb"
 	"github.com/cho45/hanrangon/internal/testutil"
 )
 
@@ -26,7 +30,13 @@ func TestIndexImagesJob_SimilarityIntegration(t *testing.T) {
 	config.UploadURLPrefix = "/images/upload/"
 	config.UploadDir = tmpDir
 
-	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, nil, nil, nil, nil)
+	// Database wrappers
+	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
+	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
+	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
+	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+
+	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, nil, nil, nil, nil)
 	job := NewIndexImagesJob(application)
 	ctx := context.Background()
 
@@ -68,7 +78,7 @@ func TestIndexImagesJob_SimilarityIntegration(t *testing.T) {
 	img1URI := config.UploadURLPrefix + image1Rel
 	img2URI := config.UploadURLPrefix + image2Rel
 
-	id1, err := application.ImagesQueries().CreateImage(ctx, model.CreateImageParams{
+	id1, err := application.ImagesDB().Q.CreateImage(ctx, imagesdb.CreateImageParams{
 		Uri:     img1URI,
 		EntryID: entryID,
 		Sig:     []byte{},
@@ -77,7 +87,7 @@ func TestIndexImagesJob_SimilarityIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	id2, err := application.ImagesQueries().CreateImage(ctx, model.CreateImageParams{
+	id2, err := application.ImagesDB().Q.CreateImage(ctx, imagesdb.CreateImageParams{
 		Uri:     img2URI,
 		EntryID: entryID,
 		Sig:     []byte{},
@@ -95,9 +105,9 @@ func TestIndexImagesJob_SimilarityIntegration(t *testing.T) {
 	// 4. Verify similarity
 	// In the new color bitmask implementation, we should use Jaccard similarity or bit intersection
 	var sig1, sig2 []byte
-	application.ImagesQueries().GetImage(ctx, id1)
-	img1, _ := application.ImagesQueries().GetImage(ctx, id1)
-	img2, _ := application.ImagesQueries().GetImage(ctx, id2)
+	application.ImagesDB().Q.GetImage(ctx, id1)
+	img1, _ := application.ImagesDB().Q.GetImage(ctx, id1)
+	img2, _ := application.ImagesDB().Q.GetImage(ctx, id2)
 	sig1 = img1.Sig
 	sig2 = img2.Sig
 
@@ -113,7 +123,7 @@ func TestIndexImagesJob_SimilarityIntegration(t *testing.T) {
 	}
 
 	// Check if they are found as similar in the query
-	similar, err := application.ImagesQueries().ListSimilarImagesByImageIDs(ctx, []int64{id1})
+	similar, err := application.ImagesDB().Q.ListSimilarImagesByImageIDs(ctx, []int64{id1})
 	if err != nil {
 		t.Fatal(err)
 	}

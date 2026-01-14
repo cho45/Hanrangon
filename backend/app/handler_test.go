@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/maindb"
 	"github.com/labstack/echo/v4"
 )
 
@@ -983,7 +983,7 @@ func TestDateTimeHandling(t *testing.T) {
 	now := time.Date(2026, 1, 3, 15, 4, 5, 0, jst)
 
 	// 1. Create entry via queries
-	entry, err := env.app.Queries().CreateEntry(ctx, model.CreateEntryParams{
+	entry, err := env.app.MainDB().Q.CreateEntry(ctx, maindb.CreateEntryParams{
 		Title:         "TZ Test",
 		Body:          "Body",
 		FormattedBody: "<p>Body</p>",
@@ -1012,7 +1012,7 @@ func TestDateTimeHandling(t *testing.T) {
 	}
 
 	// 3. Read back and check time.Time Location
-	readEntry, err := env.app.Queries().GetEntryById(ctx, entry.ID)
+	readEntry, err := env.app.MainDB().Q.GetEntryById(ctx, entry.ID)
 	if err != nil {
 		t.Fatalf("Failed to get entry: %v", err)
 	}
@@ -1035,7 +1035,7 @@ func TestUpdateModifiedAt(t *testing.T) {
 	oldTime := time.Date(2025, 1, 1, 12, 0, 0, 0, time.Local)
 
 	// 1. Create entry
-	entry, err := env.app.Queries().CreateEntry(ctx, model.CreateEntryParams{
+	entry, err := env.app.MainDB().Q.CreateEntry(ctx, maindb.CreateEntryParams{
 		Title:         "Old Title",
 		Body:          "Old Body",
 		FormattedBody: "<p>Old Body</p>",
@@ -1103,7 +1103,7 @@ func TestUpdateModifiedAt(t *testing.T) {
 	}
 
 	// 3. Verify modified_at has changed
-	updated, err := env.app.Queries().GetEntryById(ctx, entry.ID)
+	updated, err := env.app.MainDB().Q.GetEntryById(ctx, entry.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1147,8 +1147,8 @@ func TestHandleAdminApiEntries(t *testing.T) {
 		}
 
 		var res struct {
-			Entries []model.Entry `json:"entries"`
-			HasMore bool          `json:"has_more"`
+			Entries []maindb.Entry `json:"entries"`
+			HasMore bool           `json:"has_more"`
 		}
 		if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
 			t.Fatal(err)
@@ -1174,8 +1174,8 @@ func TestHandleAdminApiEntries(t *testing.T) {
 		env.server.ServeHTTP(rec1, req1)
 
 		var res1 struct {
-			Entries []model.Entry `json:"entries"`
-			HasMore bool          `json:"has_more"`
+			Entries []maindb.Entry `json:"entries"`
+			HasMore bool           `json:"has_more"`
 		}
 		json.NewDecoder(rec1.Body).Decode(&res1)
 
@@ -1188,8 +1188,8 @@ func TestHandleAdminApiEntries(t *testing.T) {
 		env.server.ServeHTTP(rec2, req2)
 
 		var res2 struct {
-			Entries []model.Entry `json:"entries"`
-			HasMore bool          `json:"has_more"`
+			Entries []maindb.Entry `json:"entries"`
+			HasMore bool           `json:"has_more"`
 		}
 		json.NewDecoder(rec2.Body).Decode(&res2)
 
@@ -1208,8 +1208,8 @@ func TestHandleAdminApiEntries(t *testing.T) {
 		env.server.ServeHTTP(rec, req)
 
 		var res struct {
-			Entries []model.Entry `json:"entries"`
-			HasMore bool          `json:"has_more"`
+			Entries []maindb.Entry `json:"entries"`
+			HasMore bool           `json:"has_more"`
 		}
 		json.NewDecoder(rec.Body).Decode(&res)
 
@@ -1228,8 +1228,8 @@ func TestHandleAdminApiEntries(t *testing.T) {
 		env.server.ServeHTTP(rec, req)
 
 		var res struct {
-			Entries []model.Entry `json:"entries"`
-			HasMore bool          `json:"has_more"`
+			Entries []maindb.Entry `json:"entries"`
+			HasMore bool           `json:"has_more"`
 		}
 		json.NewDecoder(rec.Body).Decode(&res)
 
@@ -1261,7 +1261,7 @@ func TestSqlcDateOverride(t *testing.T) {
 
 	// 2. sqlc の生成したクエリ (ListEntries) で取得
 	// CAST(date AS TEXT) が効いていることを確認する
-	rows, err := env.app.Queries().ListEntries(ctx, model.ListEntriesParams{
+	rows, err := env.app.MainDB().Q.ListEntries(ctx, maindb.ListEntriesParams{
 		TargetDate: "9999-12-31",
 		Limit:      1,
 	})

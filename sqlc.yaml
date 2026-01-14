@@ -1,15 +1,52 @@
 version: "2"
 sql:
-  - schema: "backend/db/schema"
-    queries: "backend/db/query"
+  - name: "maindb"
+    schema: "backend/db/schema/schema.sql"
+    queries: ["backend/db/query/entries.sql", "backend/db/query/trackbacks.sql"]
     engine: "sqlite"
     gen:
       go:
-        package: "model"
-        out: "backend/model"
+        package: "maindb"
+        out: "backend/model/maindb"
         sql_package: "database/sql"
         emit_json_tags: true
         emit_interface: true
         overrides:
           - db_type: "DATE"
             go_type: "string"
+
+  - name: "tfidfdb"
+    schema: ["backend/db/schema/schema.sql", "backend/db/schema/tfidf.sql"]
+    queries: ["backend/db/query/tfidf.sql"]
+    engine: "sqlite"
+    gen:
+      go:
+        package: "tfidfdb"
+        out: "backend/model/tfidfdb"
+        sql_package: "database/sql"
+        emit_json_tags: true
+        emit_interface: true
+
+  - name: "workerdb"
+    schema: "backend/db/schema/worker.sql"
+    queries: ["backend/db/query/worker.sql"]
+    engine: "sqlite"
+    gen:
+      go:
+        package: "workerdb"
+        out: "backend/model/workerdb"
+        sql_package: "database/sql"
+        emit_json_tags: true
+        emit_interface: true
+
+  - name: "imagesdb"
+    schema: ["backend/db/schema/schema.sql", "backend/db/schema/images.sql"]
+    queries: ["backend/db/query/images.sql"]
+    engine: "sqlite"
+    gen:
+      go:
+        package: "imagesdb"
+        out: "backend/model/imagesdb"
+        sql_package: "database/sql"
+        emit_json_tags: true
+        emit_interface: true

@@ -39,7 +39,7 @@ func RecalcTFIDF(ctx context.Context, application app.App, args []string) error 
 
 	// Get total count for progress reporting
 	var total int
-	err := application.DB().QueryRowContext(ctx, "SELECT COUNT(*) FROM entries").Scan(&total)
+	err := application.MainDB().DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM entries").Scan(&total)
 	if err != nil {
 		return fmt.Errorf("failed to count entries: %w", err)
 	}
@@ -51,7 +51,7 @@ func RecalcTFIDF(ctx context.Context, application app.App, args []string) error 
 		log.Printf("Phase 1: Extracting terms and updating term counts for %d entries...", total)
 
 		query := "SELECT id, title, body FROM entries ORDER BY id ASC"
-		rows, err := application.DB().QueryContext(ctx, query)
+		rows, err := application.MainDB().QueryContext(ctx, query)
 		if err != nil {
 			return fmt.Errorf("failed to query entries: %w", err)
 		}
@@ -100,7 +100,7 @@ func RecalcTFIDF(ctx context.Context, application app.App, args []string) error 
 	} else {
 		log.Println("Skipping Phase 1 as --similarity-only is specified.")
 		// Populate entryIDs for Phase 3
-		rows, err := application.DB().QueryContext(ctx, "SELECT id FROM entries ORDER BY id ASC")
+		rows, err := application.MainDB().QueryContext(ctx, "SELECT id FROM entries ORDER BY id ASC")
 		if err != nil {
 			return fmt.Errorf("failed to query entry IDs: %w", err)
 		}

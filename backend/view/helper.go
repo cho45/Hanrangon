@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/maindb"
 	"golang.org/x/net/html"
 )
 
@@ -190,7 +190,7 @@ type ArchiveMonth struct {
 	Count int64
 }
 
-func ConvertArchives(archives []model.ListArchiveMonthsRow) []ArchiveYear {
+func ConvertArchives(archives []maindb.ListArchiveMonthsRow) []ArchiveYear {
 	var res []ArchiveYear
 	var currentYear *ArchiveYear
 

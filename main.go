@@ -20,6 +20,10 @@ import (
 	"github.com/cho45/hanrangon/backend/jobqueue"
 	"github.com/cho45/hanrangon/backend/jobs"
 	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/imagesdb"
+	"github.com/cho45/hanrangon/backend/model/maindb"
+	"github.com/cho45/hanrangon/backend/model/tfidfdb"
+	"github.com/cho45/hanrangon/backend/model/workerdb"
 	"github.com/cho45/hanrangon/backend/subcommands"
 	"github.com/cho45/hanrangon/backend/tfidf"
 	_ "github.com/mattn/go-sqlite3"
@@ -80,25 +84,38 @@ func main() {
 	imagesDB := mustOpenDB("sqlite3", config.ImagesDBPath)
 	defer imagesDB.Close()
 
-	// 4. TF-IDF Calculator/Similarity初期化
-	tfidfQueries := model.New(tfidfDB)
-	dataQueries := model.New(db)
-	calc, err := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
+	// 4. Database Wrapper初期化
+	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
+	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
+	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
+	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+
+	// 5. TF-IDF Calculator/Similarity初期化
+	calc, err := tfidf.NewCalculator(tfidfDB, tfidfDBWrapper.Q, db, mainDBWrapper.Q)
 	if err != nil {
 		log.Fatalf("failed to create tfidf calculator: %v", err)
 	}
-	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
-	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfDBWrapper.Q)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
 
-	// 5. Registry作成
+	// 6. Registry作成
 	registry := jobqueue.NewRegistry()
 
-	// 6. Worker作成 (まだStartしない)
-	workerQueries := model.New(workerDB)
-	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+	// 7. Worker作成 (まだStartしない)
+	worker := jobqueue.NewWorker(workerDB, workerDBWrapper.Q, registry)
 
-	// 7. App作成
-	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+	// 8. App作成
+	application := app.NewApp(
+		config,
+		mainDBWrapper,
+		tfidfDBWrapper,
+		workerDBWrapper,
+		imagesDBWrapper,
+		calc,
+		sim,
+		searcher,
+		worker,
+	)
 
 	// 8. Execute command
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

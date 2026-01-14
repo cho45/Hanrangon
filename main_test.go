@@ -14,6 +14,10 @@ import (
 	"github.com/cho45/hanrangon/backend/app"
 	"github.com/cho45/hanrangon/backend/jobqueue"
 	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/imagesdb"
+	"github.com/cho45/hanrangon/backend/model/maindb"
+	"github.com/cho45/hanrangon/backend/model/tfidfdb"
+	"github.com/cho45/hanrangon/backend/model/workerdb"
 	"github.com/cho45/hanrangon/backend/tfidf"
 	"github.com/cho45/hanrangon/internal/testutil"
 	_ "github.com/mattn/go-sqlite3"
@@ -54,12 +58,15 @@ func TestRunServe_GracefulShutdownOrder(t *testing.T) {
 	config.SessionSecret = "test"
 
 	registry := jobqueue.NewRegistry()
-	workerQueries := model.New(db)
-	worker := jobqueue.NewWorker(db, workerQueries, registry)
+	mainDB := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
+	tfidfDB := model.NewDatabase[tfidfdb.Querier](db, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
+	workerDB := model.NewDatabase[workerdb.Querier](db, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
+	imagesDB := model.NewDatabase[imagesdb.Querier](db, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+	worker := jobqueue.NewWorker(db, workerDB.Q, registry)
 
 	// Create minimal App
 	// We need to satisfy the App interface. Using app.NewApp with mostly nil/minimal values
-	application := app.NewApp(config, db, db, db, db, &tfidf.Calculator{}, &tfidf.SimilarityCalculator{}, &tfidf.Searcher{}, worker)
+	application := app.NewApp(config, mainDB, tfidfDB, workerDB, imagesDB, &tfidf.Calculator{}, &tfidf.SimilarityCalculator{}, &tfidf.Searcher{}, worker)
 
 	// Capture logs
 	var logBuf bytes.Buffer
@@ -142,9 +149,12 @@ func TestRunServe_MultipleListeners(t *testing.T) {
 	config.SessionSecret = "test"
 
 	registry := jobqueue.NewRegistry()
-	workerQueries := model.New(db)
-	worker := jobqueue.NewWorker(db, workerQueries, registry)
-	application := app.NewApp(config, db, db, db, db, &tfidf.Calculator{}, &tfidf.SimilarityCalculator{}, &tfidf.Searcher{}, worker)
+	mainDB := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
+	tfidfDB := model.NewDatabase[tfidfdb.Querier](db, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
+	workerDB := model.NewDatabase[workerdb.Querier](db, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
+	imagesDB := model.NewDatabase[imagesdb.Querier](db, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+	worker := jobqueue.NewWorker(db, workerDB.Q, registry)
+	application := app.NewApp(config, mainDB, tfidfDB, workerDB, imagesDB, &tfidf.Calculator{}, &tfidf.SimilarityCalculator{}, &tfidf.Searcher{}, worker)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)

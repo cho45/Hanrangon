@@ -13,6 +13,10 @@ import (
 
 	"github.com/cho45/hanrangon/backend/jobqueue"
 	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/imagesdb"
+	"github.com/cho45/hanrangon/backend/model/maindb"
+	"github.com/cho45/hanrangon/backend/model/tfidfdb"
+	"github.com/cho45/hanrangon/backend/model/workerdb"
 	"github.com/cho45/hanrangon/backend/tfidf"
 	"github.com/cho45/hanrangon/internal/testutil"
 	"github.com/labstack/echo/v4"
@@ -42,22 +46,25 @@ func setupTest(t *testing.T) *testEnv {
 	config.SessionSecret = "testsecret"
 	config.BaseURL = "http://localhost:5555"
 
+	// Database wrappers
+	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
+	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
+	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
+	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+
 	// TF-IDF calculator and similarity calculator
-	tfidfQueries := model.New(tfidfDB)
-	dataQueries := model.New(db)
-	calc, err := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
+	calc, err := tfidf.NewCalculator(tfidfDB, tfidfDBWrapper.Q, db, mainDBWrapper.Q)
 	if err != nil {
 		t.Fatalf("failed to create calculator: %v", err)
 	}
-	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
-	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfDBWrapper.Q)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
 
 	// Create job queue for testing
 	registry := jobqueue.NewRegistry()
-	workerQueries := model.New(workerDB)
-	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+	worker := jobqueue.NewWorker(workerDB, workerDBWrapper.Q, registry)
 
-	application := NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+	application := NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, calc, sim, searcher, worker)
 	e := NewServer(application)
 
 	// テスト用のエラーハンドラーを設定（詳細なエラーメッセージを出力）
@@ -173,7 +180,7 @@ func TestPublishScheduledEntries(t *testing.T) {
 	now := time.Now()
 	// Past entry (should be published)
 	past := now.Add(-1 * time.Hour)
-	_, err := env.app.Queries().CreateEntry(ctx, model.CreateEntryParams{
+	_, err := env.app.MainDB().Q.CreateEntry(ctx, maindb.CreateEntryParams{
 		Title:         "Scheduled Past",
 		Body:          "Body",
 		FormattedBody: "Body",
@@ -191,7 +198,7 @@ func TestPublishScheduledEntries(t *testing.T) {
 
 	// Future entry (should NOT be published)
 	future := now.Add(1 * time.Hour)
-	_, err = env.app.Queries().CreateEntry(ctx, model.CreateEntryParams{
+	_, err = env.app.MainDB().Q.CreateEntry(ctx, maindb.CreateEntryParams{
 		Title:         "Scheduled Future",
 		Body:          "Body",
 		FormattedBody: "Body",
@@ -213,7 +220,7 @@ func TestPublishScheduledEntries(t *testing.T) {
 	}
 
 	// Check past entry
-	e, err := env.app.Queries().GetEntryByPath(ctx, "2026/01/01/1")
+	e, err := env.app.MainDB().Q.GetEntryByPath(ctx, "2026/01/01/1")
 	if err != nil {
 		t.Fatalf("failed to get past entry: %v", err)
 	}
@@ -222,7 +229,7 @@ func TestPublishScheduledEntries(t *testing.T) {
 	}
 
 	// Check future entry
-	e, err = env.app.Queries().GetEntryByPath(ctx, "2026/01/01/2")
+	e, err = env.app.MainDB().Q.GetEntryByPath(ctx, "2026/01/01/2")
 	if err != nil {
 		t.Fatalf("failed to get future entry: %v", err)
 	}
@@ -231,7 +238,7 @@ func TestPublishScheduledEntries(t *testing.T) {
 	}
 
 	// Check jobs
-	count, err := model.New(env.workerDB).CountJobs(ctx)
+	count, err := workerdb.New(env.workerDB).CountJobs(ctx)
 	if err != nil {
 		t.Fatalf("failed to count jobs: %v", err)
 	}

@@ -3,7 +3,7 @@
 //   sqlc v1.30.0
 // source: worker.sql
 
-package model
+package workerdb
 
 import (
 	"context"

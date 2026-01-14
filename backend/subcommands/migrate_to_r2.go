@@ -166,7 +166,7 @@ func (m *Migrator) ProcessEntries(ctx context.Context) error {
 		}
 	}
 
-	rows, err := m.app.DB().QueryContext(ctx, query)
+	rows, err := m.app.MainDB().QueryContext(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to query entries: %w", err)
 	}
@@ -279,7 +279,7 @@ func (m *Migrator) ProcessEntries(ctx context.Context) error {
 			}
 		}
 
-		_, err = m.app.DB().ExecContext(ctx, `
+		_, err = m.app.MainDB().ExecContext(ctx, `
 			UPDATE entries
 			SET body = ?, formatted_body = ?
 			WHERE id = ?
@@ -499,7 +499,7 @@ func (m *Migrator) Verify(ctx context.Context) error {
 
 	// エントリに残っている /images/entry/ をチェック
 	var count int
-	err := m.app.DB().QueryRowContext(ctx, `
+	err := m.app.MainDB().DB.QueryRowContext(ctx, `
 		SELECT COUNT(*)
 		FROM entries
 		WHERE formatted_body LIKE '%/images/entry/%'
@@ -511,7 +511,7 @@ func (m *Migrator) Verify(ctx context.Context) error {
 	if count > 0 {
 		log.Printf("警告: %d個のエントリにまだ /images/entry/ が含まれています", count)
 		// リストアップ
-		rows, err := m.app.DB().QueryContext(ctx, `
+		rows, err := m.app.MainDB().QueryContext(ctx, `
 			SELECT id, path
 			FROM entries
 			WHERE formatted_body LIKE '%/images/entry/%'
@@ -536,7 +536,7 @@ func (m *Migrator) Verify(ctx context.Context) error {
 	}
 
 	// images.uriに残っている /images/entry/ をチェック
-	err = m.app.ImagesDB().QueryRowContext(ctx, `
+	err = m.app.ImagesDB().DB.QueryRowContext(ctx, `
 		SELECT COUNT(*)
 		FROM images
 		WHERE uri LIKE '/images/entry/%'

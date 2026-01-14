@@ -13,6 +13,8 @@ import (
 	"testing"
 
 	"github.com/cho45/hanrangon/backend/app"
+	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/maindb"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -84,11 +86,13 @@ func startMockSMTPServer(t *testing.T) *mockSMTPServer {
 type mockApp struct {
 	app.App
 	config *app.Config
-	db     *sql.DB
+	mainDB *model.Database[maindb.Querier]
 }
 
 func (m *mockApp) Config() *app.Config { return m.config }
-func (m *mockApp) DB() *sql.DB         { return m.db }
+func (m *mockApp) MainDB() *model.Database[maindb.Querier] {
+	return m.mainDB
+}
 
 func TestBackup(t *testing.T) {
 	// Check for xz command
@@ -129,7 +133,7 @@ func TestBackup(t *testing.T) {
 
 	application := &mockApp{
 		config: config,
-		db:     db,
+		mainDB: model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) }),
 	}
 
 	err = Backup(context.Background(), application, []string{"-smtp", smtpServer.addr})

@@ -57,7 +57,7 @@ func RecalcMetadata(ctx context.Context, application app.App, args []string) err
 		query = "SELECT id, path, formatted_body FROM entries ORDER BY id DESC"
 	}
 
-	rows, err := application.DB().QueryContext(ctx, query, queryArgs...)
+	rows, err := application.MainDB().QueryContext(ctx, query, queryArgs...)
 	if err != nil {
 		return fmt.Errorf("failed to query entries: %w", err)
 	}
@@ -65,7 +65,7 @@ func RecalcMetadata(ctx context.Context, application app.App, args []string) err
 
 	var tx *sql.Tx
 	if !*dryRun {
-		tx, err = application.DB().BeginTx(ctx, nil)
+		tx, err = application.MainDB().BeginTx(ctx, nil)
 		if err != nil {
 			return fmt.Errorf("failed to begin transaction: %w", err)
 		}
@@ -105,7 +105,7 @@ func RecalcMetadata(ctx context.Context, application app.App, args []string) err
 					return fmt.Errorf("failed to commit batch: %w", err)
 				}
 				log.Printf("Processed %d entries...", updated)
-				tx, err = application.DB().BeginTx(ctx, nil)
+				tx, err = application.MainDB().BeginTx(ctx, nil)
 				if err != nil {
 					return fmt.Errorf("failed to begin next transaction: %w", err)
 				}

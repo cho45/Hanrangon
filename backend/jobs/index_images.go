@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/cho45/hanrangon/backend/app"
-	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/imagesdb"
 	"github.com/nfnt/resize"
 	_ "github.com/vegidio/avif-go"
 	_ "golang.org/x/image/webp"
@@ -108,7 +108,7 @@ func (j *IndexImagesJob) SyncImagesForEntries(ctx context.Context, entryIDs []in
 		return err
 	}
 	defer tx.Rollback()
-	qtx := j.app.ImagesQueries().WithTx(tx)
+	qtx := imagesdb.New(tx)
 
 	for _, entryID := range entryIDs {
 		if err := j.syncInternal(ctx, qtx, entryID); err != nil {
@@ -119,8 +119,8 @@ func (j *IndexImagesJob) SyncImagesForEntries(ctx context.Context, entryIDs []in
 	return tx.Commit()
 }
 
-func (j *IndexImagesJob) syncInternal(ctx context.Context, qtx *model.Queries, entryID int64) error {
-	entry, err := j.app.Queries().GetEntryById(ctx, entryID)
+func (j *IndexImagesJob) syncInternal(ctx context.Context, qtx imagesdb.Querier, entryID int64) error {
+	entry, err := j.app.MainDB().Q.GetEntryById(ctx, entryID)
 	if err != nil {
 		return err
 	}
@@ -171,7 +171,7 @@ func (j *IndexImagesJob) syncInternal(ctx context.Context, qtx *model.Queries, e
 	}
 
 	for _, u := range urlsToAdd {
-		_, err := qtx.CreateImage(ctx, model.CreateImageParams{
+		_, err := qtx.CreateImage(ctx, imagesdb.CreateImageParams{
 			Uri:     u,
 			EntryID: entryID,
 			Sig:     []byte{}, // Empty signature for new images
@@ -194,9 +194,9 @@ func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []in
 	}
 
 	// 1. Get all unindexed images for these entries
-	var allImages []model.Image
+	var allImages []imagesdb.Image
 	for _, entryID := range entryIDs {
-		images, err := j.app.ImagesQueries().ListImagesByEntryID(ctx, entryID)
+		images, err := j.app.ImagesDB().Q.ListImagesByEntryID(ctx, entryID)
 		if err != nil {
 			return err
 		}
@@ -213,7 +213,7 @@ func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []in
 
 	// 2. Process images in parallel
 	type result struct {
-		imgRecord model.Image
+		imgRecord imagesdb.Image
 		sig       uint64
 		success   bool
 	}
@@ -255,7 +255,7 @@ func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []in
 		return err
 	}
 	defer tx.Rollback()
-	qtx := j.app.ImagesQueries().WithTx(tx)
+	qtx := imagesdb.New(tx)
 
 	for _, res := range results {
 		sigBytes := []byte{}
@@ -264,7 +264,7 @@ func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []in
 			binary.BigEndian.PutUint64(sigBytes, res.sig)
 		}
 
-		if err := qtx.UpdateImageSig(ctx, model.UpdateImageSigParams{
+		if err := qtx.UpdateImageSig(ctx, imagesdb.UpdateImageSigParams{
 			Sig: sigBytes,
 			ID:  res.imgRecord.ID,
 		}); err != nil {
@@ -283,7 +283,7 @@ func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []in
 				pattern := int64((res.sig >> i) & 0xFFF)
 				word := (int64(i) << 12) | pattern
 
-				if err := qtx.CreateNgram(ctx, model.CreateNgramParams{
+				if err := qtx.CreateNgram(ctx, imagesdb.CreateNgramParams{
 					ImageID: res.imgRecord.ID,
 					Word:    word,
 				}); err != nil {

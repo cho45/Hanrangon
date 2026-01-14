@@ -7,13 +7,13 @@ import (
 	"math"
 	"strings"
 
-	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/tfidfdb"
 )
 
 // Searcher handles searching using the TF-IDF index
 type Searcher struct {
 	db         *sql.DB
-	queries    *model.Queries
+	queries    tfidfdb.Querier
 	calculator *Calculator
 }
 
@@ -24,7 +24,7 @@ type SearchResult struct {
 }
 
 // NewSearcher creates a new Searcher
-func NewSearcher(db *sql.DB, queries *model.Queries, calculator *Calculator) *Searcher {
+func NewSearcher(db *sql.DB, queries tfidfdb.Querier, calculator *Calculator) *Searcher {
 	return &Searcher{
 		db:         db,
 		queries:    queries,

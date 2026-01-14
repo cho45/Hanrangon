@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,6 +17,10 @@ import (
 
 	"github.com/cho45/hanrangon/backend/jobqueue"
 	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/imagesdb"
+	"github.com/cho45/hanrangon/backend/model/maindb"
+	"github.com/cho45/hanrangon/backend/model/tfidfdb"
+	"github.com/cho45/hanrangon/backend/model/workerdb"
 	"github.com/cho45/hanrangon/backend/tfidf"
 	"github.com/cho45/hanrangon/backend/view"
 	"github.com/google/uuid"
@@ -35,14 +38,10 @@ type ProgressSession struct {
 
 // AppImpl は App インターフェースの具象実装
 type AppImpl struct {
-	queries              *model.Queries
-	db                   *sql.DB
-	tfidfQueries         *model.Queries
-	tfidfDB              *sql.DB
-	workerQueries        *model.Queries
-	workerDB             *sql.DB
-	imagesQueries        *model.Queries
-	imagesDB             *sql.DB
+	mainDB               *model.Database[maindb.Querier]
+	tfidfDB              *model.Database[tfidfdb.Querier]
+	workerDB             *model.Database[workerdb.Querier]
+	imagesDB             *model.Database[imagesdb.Querier]
 	calculator           *tfidf.Calculator
 	similarityCalculator *tfidf.SimilarityCalculator
 	searcher             *tfidf.Searcher
@@ -58,10 +57,10 @@ type AppImpl struct {
 // NewApp creates a new App instance
 func NewApp(
 	config *Config,
-	db *sql.DB,
-	tfidfDB *sql.DB,
-	workerDB *sql.DB,
-	imagesDB *sql.DB,
+	mainDB *model.Database[maindb.Querier],
+	tfidfDB *model.Database[tfidfdb.Querier],
+	workerDB *model.Database[workerdb.Querier],
+	imagesDB *model.Database[imagesdb.Querier],
 	calculator *tfidf.Calculator,
 	similarityCalculator *tfidf.SimilarityCalculator,
 	searcher *tfidf.Searcher,
@@ -96,13 +95,9 @@ func NewApp(
 	}
 
 	app := &AppImpl{
-		queries:              model.New(db),
-		db:                   db,
-		tfidfQueries:         model.New(tfidfDB),
+		mainDB:               mainDB,
 		tfidfDB:              tfidfDB,
-		workerQueries:        model.New(workerDB),
 		workerDB:             workerDB,
-		imagesQueries:        model.New(imagesDB),
 		imagesDB:             imagesDB,
 		calculator:           calculator,
 		similarityCalculator: similarityCalculator,
@@ -118,14 +113,10 @@ func NewApp(
 }
 
 // Getter implementations
-func (a *AppImpl) Queries() *model.Queries                           { return a.queries }
-func (a *AppImpl) DB() *sql.DB                                       { return a.db }
-func (a *AppImpl) TFIDFQueries() *model.Queries                      { return a.tfidfQueries }
-func (a *AppImpl) TFIDFDB() *sql.DB                                  { return a.tfidfDB }
-func (a *AppImpl) WorkerQueries() *model.Queries                     { return a.workerQueries }
-func (a *AppImpl) WorkerDB() *sql.DB                                 { return a.workerDB }
-func (a *AppImpl) ImagesQueries() *model.Queries                     { return a.imagesQueries }
-func (a *AppImpl) ImagesDB() *sql.DB                                 { return a.imagesDB }
+func (a *AppImpl) MainDB() *model.Database[maindb.Querier]           { return a.mainDB }
+func (a *AppImpl) TFIDFDB() *model.Database[tfidfdb.Querier]         { return a.tfidfDB }
+func (a *AppImpl) WorkerDB() *model.Database[workerdb.Querier]       { return a.workerDB }
+func (a *AppImpl) ImagesDB() *model.Database[imagesdb.Querier]       { return a.imagesDB }
 func (a *AppImpl) Calculator() *tfidf.Calculator                     { return a.calculator }
 func (a *AppImpl) SimilarityCalculator() *tfidf.SimilarityCalculator { return a.similarityCalculator }
 func (a *AppImpl) Searcher() *tfidf.Searcher                         { return a.searcher }
@@ -333,21 +324,6 @@ func (p *BatchProcessor) Close() error {
 	err := p.cmd.Wait()
 	p.cancel()
 	return err
-}
-
-// beginImmediate は SQLite において BEGIN IMMEDIATE を発行し、即座に書き込みロックを取得する。
-// 標準の BeginTx では SQLite の BEGIN IMMEDIATE を制御できないため、
-// 一旦 Begin してから明示的にコマンドを発行する。
-func (app *AppImpl) BeginImmediate(ctx context.Context) (*sql.Tx, error) {
-	tx, err := app.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := tx.ExecContext(ctx, "ROLLBACK; BEGIN IMMEDIATE"); err != nil {
-		tx.Rollback()
-		return nil, err
-	}
-	return tx, nil
 }
 
 func (app *AppImpl) PostprocessBatch(ctx context.Context) (*BatchProcessor, error) {

@@ -149,7 +149,7 @@ func (c *AVIFConverter) ProcessEntries(ctx context.Context) error {
 		}
 	}
 
-	rows, err := c.app.DB().QueryContext(ctx, query)
+	rows, err := c.app.MainDB().QueryContext(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to query entries: %w", err)
 	}
@@ -276,7 +276,7 @@ func (c *AVIFConverter) ProcessEntries(ctx context.Context) error {
 		newBody := c.rewriteExtensions(e.body)
 		newHTML := c.rewriteExtensions(e.formattedBody)
 
-		_, err := c.app.DB().ExecContext(ctx, `
+		_, err := c.app.MainDB().ExecContext(ctx, `
 			UPDATE entries
 			SET body = ?, formatted_body = ?
 			WHERE id = ?
@@ -473,7 +473,7 @@ func (c *AVIFConverter) UpdateImageURIsForEntry(ctx context.Context, entryID int
 func (c *AVIFConverter) Verify(ctx context.Context) error {
 	log.Printf("AVIF変換を検証中...")
 
-	rows, err := c.app.DB().QueryContext(ctx, `
+	rows, err := c.app.MainDB().QueryContext(ctx, `
 		SELECT id, path, body, formatted_body
 		FROM entries
 		WHERE (body LIKE '%/images/entry/%.jpg%' OR body LIKE '%/images/entry/%.jpeg%' OR

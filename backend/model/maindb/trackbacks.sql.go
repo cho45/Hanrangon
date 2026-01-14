@@ -3,7 +3,7 @@
 //   sqlc v1.30.0
 // source: trackbacks.sql
 
-package model
+package maindb
 
 import (
 	"context"

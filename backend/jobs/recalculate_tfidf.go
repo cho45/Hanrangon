@@ -48,7 +48,7 @@ func (j *RecalculateTFIDFJob) Execute(ctx context.Context, arg json.RawMessage) 
 	log.Printf("RecalculateTFIDF job started for entry %d", params.EntryID)
 
 	// Get entry from database
-	entry, err := j.app.Queries().GetEntryById(ctx, params.EntryID)
+	entry, err := j.app.MainDB().Q.GetEntryById(ctx, params.EntryID)
 	if err != nil {
 		return fmt.Errorf("failed to get entry: %w", err)
 	}

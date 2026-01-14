@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.30.0
 
-package model
+package tfidfdb
 
 import (
 	"database/sql"
@@ -34,37 +34,6 @@ type Exif struct {
 	Fnumber     sql.NullString `json:"fnumber"`
 	Iso         sql.NullString `json:"iso"`
 	Speed       sql.NullString `json:"speed"`
-}
-
-type Image struct {
-	ID      int64  `json:"id"`
-	Uri     string `json:"uri"`
-	EntryID int64  `json:"entry_id"`
-	Sig     []byte `json:"sig"`
-}
-
-type Job struct {
-	ID           int64          `json:"id"`
-	JobTypeID    int64          `json:"job_type_id"`
-	Arg          string         `json:"arg"`
-	Uniqkey      sql.NullString `json:"uniqkey"`
-	RetryCount   int64          `json:"retry_count"`
-	MaxRetries   int64          `json:"max_retries"`
-	CreatedAt    time.Time      `json:"created_at"`
-	RunAfter     time.Time      `json:"run_after"`
-	GrabbedAt    sql.NullTime   `json:"grabbed_at"`
-	Status       string         `json:"status"`
-	ErrorMessage sql.NullString `json:"error_message"`
-}
-
-type JobType struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
-}
-
-type Ngram struct {
-	Word    int64 `json:"word"`
-	ImageID int64 `json:"image_id"`
 }
 
 type Posting struct {

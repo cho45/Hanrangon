@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/workerdb"
 	"github.com/cho45/hanrangon/internal/testutil"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -498,7 +498,7 @@ func TestWorker_ProcessNextJob_RunAfter(t *testing.T) {
 	}
 
 	futureTime := time.Now().Add(1 * time.Hour)
-	_, err = queries.EnqueueJob(context.Background(), model.EnqueueJobParams{
+	_, err = queries.EnqueueJob(context.Background(), workerdb.EnqueueJobParams{
 		JobTypeID:  jobType.ID,
 		Arg:        "{}",
 		Uniqkey:    sql.NullString{},

@@ -8,7 +8,7 @@ import (
 
 	"strings"
 
-	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/maindb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,7 +19,7 @@ func createEntryForService(t *testing.T, e *testEnv, status string, date time.Ti
 	if status == "scheduled" || status == "reserved" {
 		publishAt = sql.NullTime{Time: date, Valid: true}
 	}
-	entry, err := e.app.Queries().CreateEntry(ctx, model.CreateEntryParams{
+	entry, err := e.app.MainDB().Q.CreateEntry(ctx, maindb.CreateEntryParams{
 		Date:          date.Format("2006-01-02"),
 		Title:         "Title",
 		Body:          "Body",
@@ -44,33 +44,33 @@ func TestEntryService_CalculateNextPath(t *testing.T) {
 	date := "2025-01-01"
 
 	t.Run("first entry of the day", func(t *testing.T) {
-		path, err := service.CalculateNextPath(ctx, e.app.Queries(), date)
+		path, err := service.CalculateNextPath(ctx, e.app.MainDB().Q, date)
 		require.NoError(t, err)
 		assert.Equal(t, "2025/01/01/1", path)
 	})
 
 	t.Run("increment from existing", func(t *testing.T) {
-		_, err := e.app.Queries().CreateEntry(ctx, model.CreateEntryParams{
+		_, err := e.app.MainDB().Q.CreateEntry(ctx, maindb.CreateEntryParams{
 			Date:   date,
 			Path:   "2025/01/01/1",
 			Status: "public",
 		})
 		require.NoError(t, err)
 
-		path, err := service.CalculateNextPath(ctx, e.app.Queries(), date)
+		path, err := service.CalculateNextPath(ctx, e.app.MainDB().Q, date)
 		require.NoError(t, err)
 		assert.Equal(t, "2025/01/01/2", path)
 	})
 
 	t.Run("gap in numbering", func(t *testing.T) {
-		_, err := e.app.Queries().CreateEntry(ctx, model.CreateEntryParams{
+		_, err := e.app.MainDB().Q.CreateEntry(ctx, maindb.CreateEntryParams{
 			Date:   date,
 			Path:   "2025/01/01/5",
 			Status: "public",
 		})
 		require.NoError(t, err)
 
-		path, err := service.CalculateNextPath(ctx, e.app.Queries(), date)
+		path, err := service.CalculateNextPath(ctx, e.app.MainDB().Q, date)
 		require.NoError(t, err)
 		assert.Equal(t, "2025/01/01/6", path)
 	})
@@ -118,7 +118,7 @@ func TestEntryService_PublishScheduledEntries(t *testing.T) {
 	past := time.Now().Add(-1 * time.Hour)
 
 	// 1. Reserved entry (no path yet)
-	reserved, err := e.app.Queries().CreateEntry(ctx, model.CreateEntryParams{
+	reserved, err := e.app.MainDB().Q.CreateEntry(ctx, maindb.CreateEntryParams{
 		Title:      "Reserved",
 		Body:       "Body",
 		Status:     "reserved",
@@ -131,7 +131,7 @@ func TestEntryService_PublishScheduledEntries(t *testing.T) {
 
 	// 2. Scheduled entry (path already determined)
 	scheduledPath := past.Format("2006/01/02") + "/100"
-	scheduled, err := e.app.Queries().CreateEntry(ctx, model.CreateEntryParams{
+	scheduled, err := e.app.MainDB().Q.CreateEntry(ctx, maindb.CreateEntryParams{
 		Title:      "Scheduled",
 		Body:       "Body",
 		Status:     "scheduled",
@@ -147,14 +147,14 @@ func TestEntryService_PublishScheduledEntries(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify reserved
-	res, err := e.app.Queries().GetEntryById(ctx, reserved.ID)
+	res, err := e.app.MainDB().Q.GetEntryById(ctx, reserved.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "public", res.Status)
 	assert.NotEmpty(t, res.Path)
 	assert.NotEqual(t, reserved.Path, res.Path)
 
 	// Verify scheduled
-	sch, err := e.app.Queries().GetEntryById(ctx, scheduled.ID)
+	sch, err := e.app.MainDB().Q.GetEntryById(ctx, scheduled.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "public", sch.Status)
 	assert.Equal(t, scheduledPath, sch.Path)
@@ -388,14 +388,14 @@ func TestEntryService_SaveEntry_StateTransitions(t *testing.T) {
 		assert.Equal(t, "2020/01/01/1", entry.Path)
 
 		// 過去に書き換えてジョブ対象にする
-		_, err = e.app.DB().ExecContext(ctx, "UPDATE entries SET publish_at = ? WHERE id = ?", time.Now().Add(-1*time.Hour), id)
+		_, err = e.app.MainDB().ExecContext(ctx, "UPDATE entries SET publish_at = ? WHERE id = ?", time.Now().Add(-1*time.Hour), id)
 		require.NoError(t, err)
 
 		// 3. ジョブ実行 (再採番)
 		err = service.PublishScheduledEntries(ctx)
 		require.NoError(t, err)
 
-		en, _ := e.app.Queries().GetEntryById(ctx, id)
+		en, _ := e.app.MainDB().Q.GetEntryById(ctx, id)
 		assert.Equal(t, "public", en.Status)
 		assert.Contains(t, en.Path, time.Now().Format("2006/01/02"))
 		assert.NotEqual(t, "2020/01/01/1", en.Path)

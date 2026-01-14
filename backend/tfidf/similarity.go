@@ -6,18 +6,18 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/tfidfdb"
 )
 
 // SimilarityCalculator はエントリ間の類似度計算を処理
 type SimilarityCalculator struct {
 	db            *sql.DB
-	queries       *model.Queries
+	queries       tfidfdb.Querier
 	MinValidTerms int
 }
 
 // NewSimilarityCalculator は新しい SimilarityCalculator を作成
-func NewSimilarityCalculator(db *sql.DB, queries *model.Queries) *SimilarityCalculator {
+func NewSimilarityCalculator(db *sql.DB, queries tfidfdb.Querier) *SimilarityCalculator {
 	return &SimilarityCalculator{
 		db:      db,
 		queries: queries,

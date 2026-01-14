@@ -17,7 +17,10 @@ import (
 	"time"
 
 	"github.com/cho45/hanrangon/backend/formatter"
-	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/imagesdb"
+	"github.com/cho45/hanrangon/backend/model/maindb"
+	"github.com/cho45/hanrangon/backend/model/tfidfdb"
+	"github.com/cho45/hanrangon/backend/model/workerdb"
 	"github.com/cho45/hanrangon/backend/view"
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/session"
@@ -50,12 +53,12 @@ type InfoData struct {
 }
 
 type TFIDFStats struct {
-	TotalTerms         int64                      `json:"total_terms"`
-	IndexedEntries     int64                      `json:"indexed_entries"`
-	TotalRelatedPairs  int64                      `json:"total_related_pairs"`
-	EntriesWithRelated int64                      `json:"entries_with_related"`
-	TopTerms           []model.GetTopTermsByDFRow `json:"top_terms"`
-	AvgScore           float64                    `json:"avg_score"`
+	TotalTerms         int64                        `json:"total_terms"`
+	IndexedEntries     int64                        `json:"indexed_entries"`
+	TotalRelatedPairs  int64                        `json:"total_related_pairs"`
+	EntriesWithRelated int64                        `json:"entries_with_related"`
+	TopTerms           []tfidfdb.GetTopTermsByDFRow `json:"top_terms"`
+	AvgScore           float64                      `json:"avg_score"`
 }
 
 type ImageStats struct {
@@ -351,7 +354,7 @@ func (app *AppImpl) HandleAdminApiPreview(c echo.Context) error {
 	// 3. Render using public templates
 	summary, imageURL := view.ExtractSummaryAndFirstImage(processedBody, 70)
 	now := time.Now()
-	entry := model.Entry{
+	entry := maindb.Entry{
 		ID:            0,
 		Title:         req.Title,
 		Body:          req.Body,
@@ -465,14 +468,14 @@ func (app *AppImpl) HandleAdminApiEntries(c echo.Context) error {
 		cursorId, _ = strconv.ParseInt(cursorIdStr, 10, 64)
 	}
 
-	var entries []model.Entry
+	var entries []maindb.Entry
 	var err error
 	fetchLimit := int64(limit + 1)
 
 	if search != "" {
 		q := "%" + search + "%"
 		var err error
-		entries, err = app.queries.SearchEntriesAdmin(c.Request().Context(), model.SearchEntriesAdminParams{
+		entries, err = app.MainDB().Q.SearchEntriesAdmin(c.Request().Context(), maindb.SearchEntriesAdminParams{
 			Query:    q,
 			CursorID: sql.NullInt64{Int64: cursorId, Valid: cursorId != 0},
 			Limit:    fetchLimit,
@@ -482,7 +485,7 @@ func (app *AppImpl) HandleAdminApiEntries(c echo.Context) error {
 		}
 	} else {
 		var err error
-		entries, err = app.queries.ListEntriesAdmin(c.Request().Context(), model.ListEntriesAdminParams{
+		entries, err = app.MainDB().Q.ListEntriesAdmin(c.Request().Context(), maindb.ListEntriesAdminParams{
 			CursorID: sql.NullInt64{Int64: cursorId, Valid: cursorId != 0},
 			Limit:    fetchLimit,
 		})
@@ -496,7 +499,7 @@ func (app *AppImpl) HandleAdminApiEntries(c echo.Context) error {
 	}
 
 	if entries == nil {
-		entries = []model.Entry{}
+		entries = []maindb.Entry{}
 	}
 
 	hasMore := false
@@ -517,7 +520,7 @@ func (app *AppImpl) HandleAdminApiEntry(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid ID")
 	}
 
-	entry, err := app.queries.GetEntryById(c.Request().Context(), id)
+	entry, err := app.MainDB().Q.GetEntryById(c.Request().Context(), id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
@@ -535,7 +538,7 @@ func (app *AppImpl) HandleAdminApiJobs(c echo.Context) error {
 	}
 	offset, _ := strconv.Atoi(c.QueryParam("offset"))
 
-	jobs, err := app.workerQueries.ListJobs(c.Request().Context(), model.ListJobsParams{
+	jobs, err := app.WorkerDB().Q.ListJobs(c.Request().Context(), workerdb.ListJobsParams{
 		Limit:  int64(limit),
 		Offset: int64(offset),
 	})
@@ -543,7 +546,7 @@ func (app *AppImpl) HandleAdminApiJobs(c echo.Context) error {
 		return err
 	}
 
-	total, _ := app.workerQueries.CountJobs(c.Request().Context())
+	total, _ := app.WorkerDB().Q.CountJobs(c.Request().Context())
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"jobs":  jobs,
@@ -558,7 +561,7 @@ func (app *AppImpl) HandleAdminApiImages(c echo.Context) error {
 	}
 	offset, _ := strconv.Atoi(c.QueryParam("offset"))
 
-	images, err := app.imagesQueries.ListImages(c.Request().Context(), model.ListImagesParams{
+	images, err := app.ImagesDB().Q.ListImages(c.Request().Context(), imagesdb.ListImagesParams{
 		Limit:  int64(limit),
 		Offset: int64(offset),
 	})
@@ -567,10 +570,10 @@ func (app *AppImpl) HandleAdminApiImages(c echo.Context) error {
 	}
 
 	if images == nil {
-		images = []model.Image{}
+		images = []imagesdb.Image{}
 	}
 
-	total, _ := app.imagesQueries.CountImages(c.Request().Context())
+	total, _ := app.ImagesDB().Q.CountImages(c.Request().Context())
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"images": images,
@@ -593,7 +596,7 @@ func (app *AppImpl) HandleAdminApiSimilarImages(c echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	targetImg, err := app.imagesQueries.GetImage(ctx, id)
+	targetImg, err := app.ImagesDB().Q.GetImage(ctx, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, "Image not found")
@@ -610,7 +613,7 @@ func (app *AppImpl) HandleAdminApiSimilarImages(c echo.Context) error {
 	targetSig := binary.BigEndian.Uint64(targetImg.Sig)
 	_ = targetSig
 
-	similarMap, err := app.findSimilarImagesBulk(ctx, []model.Image{targetImg})
+	similarMap, err := app.findSimilarImagesBulk(ctx, []imagesdb.Image{targetImg})
 	if err != nil {
 		return err
 	}
@@ -647,12 +650,12 @@ func (app *AppImpl) HandleAdminApiInfo(c echo.Context) error {
 		"node_path":         app.config.NodePath,
 	}
 
-	tfidfStats, _ := app.tfidfQueries.GetTFIDFStats(c.Request().Context())
-	topTerms, _ := app.tfidfQueries.GetTopTermsByDF(c.Request().Context(), 20)
-	avgScore, _ := app.tfidfQueries.GetAverageSimilarityScore(c.Request().Context())
+	tfidfStats, _ := app.TFIDFDB().Q.GetTFIDFStats(c.Request().Context())
+	topTerms, _ := app.TFIDFDB().Q.GetTopTermsByDF(c.Request().Context(), 20)
+	avgScore, _ := app.TFIDFDB().Q.GetAverageSimilarityScore(c.Request().Context())
 
-	totalImages, _ := app.imagesQueries.CountImages(c.Request().Context())
-	unindexedImages, _ := app.imagesQueries.CountUnindexedImages(c.Request().Context())
+	totalImages, _ := app.ImagesDB().Q.CountImages(c.Request().Context())
+	unindexedImages, _ := app.ImagesDB().Q.CountUnindexedImages(c.Request().Context())
 
 	return c.JSON(http.StatusOK, InfoData{
 		IsDevelopment: app.config.IsDevelopment(),
