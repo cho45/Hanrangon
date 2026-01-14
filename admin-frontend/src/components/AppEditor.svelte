@@ -5,6 +5,7 @@
   import { DraftStore } from '../lib/draft.svelte';
   import type { Entry } from '../lib/types/models';
   import { StatusPublic, StatusDraft, StatusScheduled, StatusReserved } from '../lib/types/models';
+  import type { SearchEntryResponse } from '../lib/types/generated/api';
 
   let { id = null, onSave } = $props<{ id: string | null, onSave: (location: string) => void }>();
 
@@ -27,10 +28,17 @@
   let tagDialog = $state<HTMLDialogElement>(null!);
   let restoreDialog = $state<HTMLDialogElement>(null!);
   let previewDialog = $state<HTMLDialogElement>(null!);
+  let searchDialog = $state<HTMLDialogElement>(null!);
   let tagListContainer = $state<HTMLDivElement>(null!);
 
   const tags = ['tech', 'photo', 'redeveloped', 'stablediffusion', 'photoshopped'];
   let selectedIndex = $state(0);
+
+  let searchQuery = $state('');
+  let searchResults = $state<SearchEntryResponse[]>([]);
+  let searchSelectedIndex = $state(0);
+  let searchInput = $state<HTMLInputElement>(null!);
+  let searchResultItems = $state<HTMLDivElement[]>([]);
 
   async function fetchEntry(id: string) {
     try {
@@ -180,6 +188,82 @@
     titleInput.focus();
   }
 
+  function openSearchDialog() {
+    searchQuery = '';
+    searchResults = [];
+    searchSelectedIndex = 0;
+    searchDialog.showModal();
+    setTimeout(() => searchInput?.focus(), 0);
+  }
+
+  async function handleSearchInput() {
+    if (searchQuery.length < 2) {
+      searchResults = [];
+      return;
+    }
+    try {
+      const data = await api.get<{ results: SearchEntryResponse[] }>('/api/search', { q: searchQuery });
+      searchResults = data.results || [];
+      searchSelectedIndex = 0;
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  function handleSearchKeyDown(e: KeyboardEvent) {
+    if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'n')) {
+      e.preventDefault();
+      searchSelectedIndex = (searchSelectedIndex + 1) % searchResults.length;
+      searchResultItems[searchSelectedIndex]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'p')) {
+      e.preventDefault();
+      searchSelectedIndex = (searchSelectedIndex - 1 + searchResults.length) % searchResults.length;
+      searchResultItems[searchSelectedIndex]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (searchResults[searchSelectedIndex]) {
+        if (e.shiftKey || e.metaKey || e.ctrlKey) {
+          openSearchResult(searchResults[searchSelectedIndex]);
+        } else {
+          selectSearchResult(searchResults[searchSelectedIndex]);
+        }
+      }
+    } else if (e.key === 'Escape') {
+      searchDialog.close();
+    }
+  }
+
+  function openSearchResult(result: SearchEntryResponse) {
+    const url = result.path.startsWith('http') ? result.path : `${location.origin}/${result.path}`;
+    window.open(url, '_blank');
+  }
+
+  function selectSearchResult(result: SearchEntryResponse) {
+    const url = result.path.startsWith('http') ? result.path : `${location.origin}/${result.path}`;
+    let link = '';
+
+    switch (form.format) {
+      case 'Hatena':
+        link = `[${url}:title=${result.title}]`;
+        break;
+      case 'Markdown':
+        link = `[${result.title}](${url})`;
+        break;
+      case 'HTML':
+        link = `<a href="${url}">${result.title}</a>`;
+        break;
+      case 'tDiary':
+        link = `[[${result.title}|${url}]]`;
+        break;
+      default:
+        link = url;
+    }
+
+    insertText(link);
+    searchDialog.close();
+    bodyTextArea.focus();
+  }
+
   function restoreBackup() {
     if (draft.data) {
       form.title = draft.data.title;
@@ -237,6 +321,10 @@
       insertText('\\(  \\)', 3);
       e.preventDefault();
       e.stopPropagation();
+    } else if (key === 'Control-l' || key === 'Meta-l') {
+      openSearchDialog();
+      e.preventDefault();
+      e.stopPropagation();
     }
   }
 
@@ -267,6 +355,30 @@
     formEl.submit();
     document.body.removeChild(formEl);
   }
+  function escapeHTML(str: string) {
+    const p = document.createElement('p');
+    p.textContent = str;
+    return p.innerHTML;
+  }
+
+  function highlight(text: string, query: string) {
+    if (!query) return escapeHTML(text);
+    const escapedText = escapeHTML(text);
+    const tokens = query.split(/\s+/).filter(t => t.length >= 2);
+    if (tokens.length === 0) return escapedText;
+
+    const pattern = tokens.map(t => t.replace(/[.*+?^${}()|[\\]/g, '\\$&')).join('|');
+    const regex = new RegExp(`(${pattern})`, 'gi');
+    return escapedText.replace(regex, '<mark>$1</mark>');
+  }
+
+  function getSummary(html: string) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    doc.querySelectorAll('script, style, noscript, iframe').forEach(el => el.remove());
+    const textContent = doc.body.textContent || "";
+    return textContent.replace(/\s+/g, ' ').trim().substring(0, 200) + (textContent.length > 200 ? '...' : '');
+  }
 </script>
 
 {#if api.loading && !entry.id}
@@ -285,6 +397,7 @@
     />
     <div class="toolbar">
       <button type="button" onclick={openTagDialog}>🏷️ タグ</button>
+      <button type="button" onclick={openSearchDialog}>🔗 リンク</button>
       <button type="button" onclick={openUploadDialog} disabled={uploading}>
         {uploading ? '⌛ アップロード中...' : '📷 写真'}
       </button>
@@ -432,6 +545,65 @@
   </div>
   <div class="preview-body">
     <iframe name="preview-iframe" title="Preview"></iframe>
+  </div>
+</dialog>
+
+<dialog bind:this={searchDialog} id="searchDialog" class="search-dialog">
+  <div class="search-header">
+    <h3>過去日記を検索</h3>
+    <button type="button" class="close-button" onclick={() => searchDialog.close()}>閉じる</button>
+  </div>
+  <div class="search-body">
+    <input
+      type="search"
+      placeholder="キーワードを入力..."
+      bind:this={searchInput}
+      bind:value={searchQuery}
+      oninput={handleSearchInput}
+      onkeydown={handleSearchKeyDown}
+      class="search-input"
+    />
+    <div class="search-results">
+      {#each searchResults as result, i}
+        <div
+          bind:this={searchResultItems[i]}
+          class="search-result-item"
+          class:selected={searchSelectedIndex === i}
+          onclick={() => selectSearchResult(result)}
+          onmouseenter={() => searchSelectedIndex = i}
+          onkeydown={(e) => e.key === 'Enter' && selectSearchResult(result)}
+          role="button"
+          tabindex="-1"
+        >
+          <div class="result-title">
+            {@html highlight(result.title, searchQuery)}
+            {#each result.tags as tag}
+              <span class="tag">{tag}</span>
+            {/each}
+            <button
+              type="button"
+              class="open-result-button"
+              onclick={(e) => { e.stopPropagation(); openSearchResult(result); }}
+              title="別タブで開く"
+            >
+              ↗️
+            </button>
+          </div>
+          <div class="result-summary">{@html highlight(getSummary(result.formatted_body), searchQuery)}</div>
+          <div class="result-meta">
+            <span class="result-date">{result.date}</span>
+            <span class="result-path">{result.path}</span>
+          </div>
+        </div>
+      {:else}
+        {#if searchQuery.length >= 2}
+          <div class="no-results">結果が見つかりません</div>
+        {/if}
+      {/each}
+    </div>
+  </div>
+  <div class="dialog-footer">
+    <button type="button" onclick={() => searchDialog.close()}>キャンセル</button>
   </div>
 </dialog>
 {/if}
@@ -725,5 +897,164 @@
   @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+  }
+
+  .search-dialog[open] {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .search-dialog {
+    padding: 0;
+  }
+
+  .search-header {
+    padding: 10px 20px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f7f8f9;
+  }
+
+  .search-header h3 {
+    margin: 0;
+    font-size: 1.1em;
+  }
+
+  .search-body {
+    padding: 20px;
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .search-input {
+    margin-bottom: 16px;
+    padding: 12px;
+    border: 1px solid #dfe5e7;
+    border-radius: 4px;
+    font-size: 1em;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .search-input:focus {
+    outline: none;
+    border-color: #00acc1;
+    box-shadow: 0 0 0 2px rgba(0, 172, 193, 0.2);
+  }
+
+  .search-results {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid #dfe5e7;
+    border-radius: 4px;
+    background: #fff;
+  }
+
+  .search-result-item {
+    padding: 10px;
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+  }
+
+  .search-result-item:last-child {
+    border-bottom: none;
+  }
+
+  .search-result-item.selected {
+    background: #e0f7fa;
+  }
+
+  .result-title {
+    font-weight: bold;
+    font-size: 1.1em;
+    margin-bottom: 4px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .result-title .tag {
+    background: #f0f4f5;
+    color: #666;
+    font-size: 0.7rem;
+    padding: 1px 6px;
+    border-radius: 2px;
+    border: 1px solid #dfe5e7;
+    font-weight: normal;
+  }
+
+  .open-result-button {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 0.8em;
+    padding: 4px;
+    border-radius: 4px;
+    opacity: 0.5;
+    transition: opacity 0.2s, background 0.2s;
+  }
+
+  .open-result-button:hover {
+    opacity: 1;
+    background: rgba(0,0,0,0.05);
+  }
+
+  .result-summary {
+    font-size: 0.9rem;
+    color: #333;
+    margin-bottom: 8px;
+    line-height: 1.6;
+    display: -webkit-box;
+    line-clamp: 3;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  :global(.result-summary mark) {
+    background: #fff59d;
+    color: #000;
+    padding: 0 2px;
+    border-radius: 2px;
+    font-weight: bold;
+  }
+
+  .result-meta {
+    font-size: 0.75em;
+    color: #888;
+    display: flex;
+    gap: 12px;
+  }
+
+  .no-results {
+    padding: 20px;
+    text-align: center;
+    color: #666;
+  }
+
+  .dialog-footer {
+    padding: 16px 20px;
+    border-top: 1px solid #eee;
+    display: flex;
+    justify-content: flex-end;
+    background: #f7f8f9;
+  }
+
+  .dialog-footer button {
+    background: #fff;
+    border: 1px solid #dfe5e7;
+    border-radius: 3px;
+    padding: 8px 16px;
+    cursor: pointer;
+  }
+
+  .dialog-footer button:hover {
+    background: #eee;
   }
 </style>
