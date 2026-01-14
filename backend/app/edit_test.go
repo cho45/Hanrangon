@@ -322,4 +322,39 @@ func TestHandleAdminApiEdit_StateTransitions(t *testing.T) {
 		en, _ := e.app.Queries().GetEntryById(ctx, id)
 		assert.Equal(t, d.Format("2006/01/02")+"/2", en.Path)
 	})
+
+	t.Run("Edge:ReservedJobOverwrite", func(t *testing.T) {
+		e := setupTest(t)
+		defer e.close()
+		ctx := context.Background()
+		l := e.login(t)
+
+		pastDate := time.Date(2020, 1, 1, 12, 0, 0, 0, time.Local)
+		// バリデーションを通すために一旦未来の日時を設定する
+		publishDate := time.Now().Add(1 * time.Hour)
+
+		// 1. 既存の公開記事 (Path: 2020/01/01/1) を作成
+		id := createEntryInEnv(t, e, PUBLI, pastDate, "2020/01/01/1")
+
+		// 2. Reserved に変更して保存
+		// 仕様: 「既存パスがあれば維持」
+		doEditRequestInEnv(t, e, l, &id, RESER, publishDate, OK___)
+		en, _ := e.app.Queries().GetEntryById(ctx, id)
+		assert.Equal(t, "2020/01/01/1", en.Path, "保存時は既存パスが維持されるべき")
+
+		// ジョブの公開対象にするために、DB上の publish_at を過去に書き換える
+		_, err := e.app.DB().ExecContext(ctx, "UPDATE entries SET publish_at = ? WHERE id = ?", time.Now().Add(-1*time.Hour), id)
+		require.NoError(t, err)
+
+		// 3. ジョブ実行による公開
+		// 仕様: 「ただし無視し、公開時にその日の最新番号で採番」
+		err = e.app.PublishScheduledEntries(ctx)
+		require.NoError(t, err)
+
+		// 4. パスが今日の日付で再採番されていることを確認
+		en, _ = e.app.Queries().GetEntryById(ctx, id)
+		assert.Equal(t, PUBLI, en.Status)
+		assert.NotEqual(t, "2020/01/01/1", en.Path, "公開時は既存パスが無視（上書き）されるべき")
+		assert.Contains(t, en.Path, time.Now().Format("2006/01/02"), "新しい日付のパスで採番されるべき")
+	})
 }

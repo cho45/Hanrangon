@@ -450,8 +450,8 @@ func (app *AppImpl) PublishScheduledEntries(ctx context.Context) error {
 			// パスが確定していない「予約投稿 (Reserve)」かどうかを判定する
 			if e.IsReserved() {
 				// 予約投稿 (Reserve):
-				// 保存時にパスを空に設定している。
-				// 公開タイミングで、公開予定日の記事数に基づき YYYY/MM/DD/N 形式でパスを採番・確定させる。
+				// 保存時に既存パスがあれば維持されるが、それは無視される。
+				// 公開タイミングで、公開予定日の記事数に基づき YYYY/MM/DD/N 形式でパスを強制的に採番・確定させる。
 				date := e.PublishAt.Time.Format("2006-01-02")
 				// パスを生成 (最大値+1)
 				path, err := app.CalculateNextPath(ctx, qtx, date)
