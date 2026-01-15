@@ -40,8 +40,12 @@ test: generate
 test-go:
 	go test -v -tags "$(GO_TAGS)" ./...
 
-generate:
+generate: generate-sql generate-types
+
+generate-sql:
 	sqlc generate
+
+generate-types:
 	tygo generate
 
 generate-icons:
