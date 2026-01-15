@@ -470,7 +470,6 @@ func (app *AppImpl) HandleAdminApiEntries(c echo.Context) error {
 	}
 
 	var entries []maindb.Entry
-	var err error
 	fetchLimit := int64(limit + 1)
 
 	if search != "" {
@@ -493,10 +492,6 @@ func (app *AppImpl) HandleAdminApiEntries(c echo.Context) error {
 		if err != nil {
 			return err
 		}
-	}
-
-	if err != nil {
-		return err
 	}
 
 	if entries == nil {
