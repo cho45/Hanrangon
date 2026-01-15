@@ -397,7 +397,9 @@ func TestEntryService_SaveEntry_StateTransitions(t *testing.T) {
 
 		en, _ := e.app.MainDB().Q.GetEntryById(ctx, id)
 		assert.Equal(t, "public", en.Status)
-		assert.Contains(t, en.Path, time.Now().Format("2006/01/02"))
+		// publish_at に設定した時刻の日付が含まれているはず
+		expectedDate := time.Now().Add(-1 * time.Hour).Format("2006/01/02")
+		assert.Contains(t, en.Path, expectedDate, "Path should contain the date from publish_at")
 		assert.NotEqual(t, "2020/01/01/1", en.Path)
 	})
 
