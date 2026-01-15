@@ -80,6 +80,24 @@ export interface Config {
 }
 
 //////////
+// source: entry_service.go
+
+/**
+ * EntryService はエントリに関するドメインロジックを担当する
+ */
+export interface EntryService {
+}
+export interface SaveEntryParams {
+  ID: number /* int64 */;
+  Title: string;
+  Body: string;
+  Format: string;
+  Status: string;
+  PublishAt: any /* sql.NullTime */;
+  Reporter: ProgressReporter;
+}
+
+//////////
 // source: handler_admin.go
 
 export interface EditRequest {
@@ -107,7 +125,7 @@ export interface TFIDFStats {
   indexed_entries: number /* int64 */;
   total_related_pairs: number /* int64 */;
   entries_with_related: number /* int64 */;
-  top_terms: any /* model.GetTopTermsByDFRow */[];
+  top_terms: any /* tfidfdb.GetTopTermsByDFRow */[];
   avg_score: number /* float64 */;
 }
 export interface ImageStats {
@@ -155,13 +173,17 @@ export interface ImageProcessor {
  * ScoredSimilarImage represents a similar image with its Jaccard similarity score.
  */
 export interface ScoredSimilarImage {
-  ListSimilarImagesByImageIDsRow: any /* model.ListSimilarImagesByImageIDsRow */;
+  ListSimilarImagesByImageIDsRow: any /* imagesdb.ListSimilarImagesByImageIDsRow */;
   jaccard: number /* float64 */;
 }
 
 //////////
 // source: interface.go
 
+/**
+ * ProgressReporter は進捗状況を報告するためのインターフェース
+ */
+export type ProgressReporter = any;
 /**
  * App はアプリケーションの主要なインターフェース
  */

@@ -16,7 +16,7 @@ sql:
             go_type: "string"
 
   - name: "tfidfdb"
-    schema: ["backend/db/schema/schema.sql", "backend/db/schema/tfidf.sql"]
+    schema: "backend/db/schema/tfidf.sql"
     queries: ["backend/db/query/tfidf.sql"]
     engine: "sqlite"
     gen:
@@ -40,7 +40,7 @@ sql:
         emit_interface: true
 
   - name: "imagesdb"
-    schema: ["backend/db/schema/schema.sql", "backend/db/schema/images.sql"]
+    schema: "backend/db/schema/images.sql"
     queries: ["backend/db/query/images.sql"]
     engine: "sqlite"
     gen:

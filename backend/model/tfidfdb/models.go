@@ -6,35 +6,7 @@ package tfidfdb
 
 import (
 	"database/sql"
-	"time"
 )
-
-type Entry struct {
-	ID            int64        `json:"id"`
-	Title         string       `json:"title"`
-	Body          string       `json:"body"`
-	FormattedBody string       `json:"formatted_body"`
-	Summary       string       `json:"summary"`
-	ImageUrl      string       `json:"image_url"`
-	Path          string       `json:"path"`
-	Format        string       `json:"format"`
-	Date          string       `json:"date"`
-	CreatedAt     time.Time    `json:"created_at"`
-	ModifiedAt    time.Time    `json:"modified_at"`
-	PublishAt     sql.NullTime `json:"publish_at"`
-	Status        string       `json:"status"`
-}
-
-type Exif struct {
-	Uri         string         `json:"uri"`
-	OriginalUri sql.NullString `json:"original_uri"`
-	Model       sql.NullString `json:"model"`
-	Make        sql.NullString `json:"make"`
-	Focallength sql.NullString `json:"focallength"`
-	Fnumber     sql.NullString `json:"fnumber"`
-	Iso         sql.NullString `json:"iso"`
-	Speed       sql.NullString `json:"speed"`
-}
 
 type Posting struct {
 	ID        int64   `json:"id"`
@@ -57,10 +29,4 @@ type Term struct {
 	Term         string        `json:"term"`
 	DfCount      int64         `json:"df_count"`
 	FirstEntryID sql.NullInt64 `json:"first_entry_id"`
-}
-
-type Trackback struct {
-	ID               int64         `json:"id"`
-	EntryID          sql.NullInt64 `json:"entry_id"`
-	TrackbackEntryID sql.NullInt64 `json:"trackback_entry_id"`
 }
