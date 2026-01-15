@@ -12,6 +12,10 @@ import (
 	"github.com/cho45/hanrangon/backend/app"
 	"github.com/cho45/hanrangon/backend/jobqueue"
 	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/imagesdb"
+	"github.com/cho45/hanrangon/backend/model/maindb"
+	"github.com/cho45/hanrangon/backend/model/tfidfdb"
+	"github.com/cho45/hanrangon/backend/model/workerdb"
 	"github.com/cho45/hanrangon/backend/tfidf"
 	"github.com/cho45/hanrangon/internal/testutil"
 )
@@ -454,17 +458,20 @@ func TestAVIFConverter_ProcessEntries(t *testing.T) {
 	config.BaseURL = "http://localhost:5555"
 	config.UploadDir = tmpDir
 
+	// Database wrappers
+	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
+	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
+	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
+	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+
 	registry := jobqueue.NewRegistry()
-	workerQueries := model.New(workerDB)
-	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+	worker := jobqueue.NewWorker(workerDB, workerDBWrapper.Q, registry)
 
-	tfidfQueries := model.New(tfidfDB)
-	dataQueries := model.New(db)
-	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
-	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
-	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfDBWrapper.Q, db, mainDBWrapper.Q)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfDBWrapper.Q)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
 
-	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, calc, sim, searcher, worker)
 
 	// Create a valid 1x1 pixel JPEG image for testing
 	// This is a minimal valid JPEG file (red pixel)
@@ -564,17 +571,20 @@ func TestAVIFConverter_UpdateImageURIs(t *testing.T) {
 	// Setup test app
 	config := app.LoadConfig()
 
+	// Database wrappers
+	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
+	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
+	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
+	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+
 	registry := jobqueue.NewRegistry()
-	workerQueries := model.New(workerDB)
-	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+	worker := jobqueue.NewWorker(workerDB, workerDBWrapper.Q, registry)
 
-	tfidfQueries := model.New(tfidfDB)
-	dataQueries := model.New(db)
-	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
-	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
-	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfDBWrapper.Q, db, mainDBWrapper.Q)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfDBWrapper.Q)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
 
-	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, calc, sim, searcher, worker)
 
 	// Insert image records with .jpg and .jpeg extensions
 	_, err := imagesDB.Exec(`
@@ -661,17 +671,20 @@ func TestAVIFConverter_ProcessEntriesWithLimit(t *testing.T) {
 	config.BaseURL = "http://localhost:5555"
 	config.UploadDir = tmpDir
 
+	// Database wrappers
+	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
+	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
+	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
+	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+
 	registry := jobqueue.NewRegistry()
-	workerQueries := model.New(workerDB)
-	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+	worker := jobqueue.NewWorker(workerDB, workerDBWrapper.Q, registry)
 
-	tfidfQueries := model.New(tfidfDB)
-	dataQueries := model.New(db)
-	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
-	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
-	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfDBWrapper.Q, db, mainDBWrapper.Q)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfDBWrapper.Q)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
 
-	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, calc, sim, searcher, worker)
 
 	// Insert 20 test entries with JPEG images
 	// Create dummy AVIF files for first 10 entries (as if conversion already happened)
@@ -773,17 +786,20 @@ func TestAVIFConverter_ProcessEntries_DryRun(t *testing.T) {
 	config.BaseURL = "http://localhost:5555"
 	config.UploadDir = tmpDir
 
+	// Database wrappers
+	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
+	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
+	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
+	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+
 	registry := jobqueue.NewRegistry()
-	workerQueries := model.New(workerDB)
-	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+	worker := jobqueue.NewWorker(workerDB, workerDBWrapper.Q, registry)
 
-	tfidfQueries := model.New(tfidfDB)
-	dataQueries := model.New(db)
-	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
-	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
-	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfDBWrapper.Q, db, mainDBWrapper.Q)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfDBWrapper.Q)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
 
-	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, calc, sim, searcher, worker)
 
 	// Create test JPEG files and entries
 	for i := 1; i <= 3; i++ {
@@ -886,17 +902,20 @@ func TestAVIFConverter_ProcessEntriesWithEntryID(t *testing.T) {
 	config.UploadDir = tmpDir
 	config.BaseURL = "http://localhost:5555"
 
+	// Database wrappers
+	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
+	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
+	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
+	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+
 	registry := jobqueue.NewRegistry()
-	workerQueries := model.New(workerDB)
-	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+	worker := jobqueue.NewWorker(workerDB, workerDBWrapper.Q, registry)
 
-	tfidfQueries := model.New(tfidfDB)
-	dataQueries := model.New(db)
-	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
-	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
-	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfDBWrapper.Q, db, mainDBWrapper.Q)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfDBWrapper.Q)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
 
-	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, calc, sim, searcher, worker)
 
 	// Create 5 test JPEG files and entries
 	for i := 1; i <= 5; i++ {

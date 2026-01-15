@@ -40,8 +40,8 @@ func init() {
 	AppHash = fmt.Sprintf("%x", h.Sum(nil))
 }
 
-// CheckCache handles HTTP caching headers (ETag, Last-Modified) and validation.
-// Returns true if the request was handled (i.e., 304 Not Modified sent), false otherwise.
+// CheckCache は HTTP キャッシュヘッダー (ETag, Last-Modified) の処理と検証を行う。
+// リクエストが処理された（304 Not Modified を送信した）場合は true を、そうでない場合は false を返す。
 func (app *AppImpl) CheckCache(c echo.Context, lastMod time.Time, etag string) (bool, error) {
 	req := c.Request()
 	res := c.Response()
@@ -92,7 +92,8 @@ func (app *AppImpl) CheckCache(c echo.Context, lastMod time.Time, etag string) (
 	return false, nil
 }
 
-// GenerateListETag generates a strong ETag for a list of items, including AppHash and auth status.
+// GenerateListETag は記事リスト用の Strong ETag を生成。AppHash と認証状態を含めることで、
+// アプリの更新や権限変更時にキャッシュを無効化する。
 func GenerateListETag(latestMod time.Time, count int, extra string, isAuth bool) string {
 	authPart := "public"
 	if isAuth {
@@ -103,7 +104,7 @@ func GenerateListETag(latestMod time.Time, count int, extra string, isAuth bool)
 	return fmt.Sprintf(`"%x"`, h)
 }
 
-// GenerateEntryETag generates a strong ETag for a single entry, including AppHash and auth status.
+// GenerateEntryETag は単一エントリ用の Strong ETag を生成。
 func GenerateEntryETag(id int64, mod time.Time, isAuth bool) string {
 	authPart := "public"
 	if isAuth {

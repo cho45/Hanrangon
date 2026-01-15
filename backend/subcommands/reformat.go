@@ -10,6 +10,14 @@ import (
 	"github.com/cho45/hanrangon/backend/formatter"
 )
 
+func init() {
+	Register(Definition{
+		Name:        "reformat",
+		Description: "Reformat all or specific entries",
+		Run:         Reformat,
+	})
+}
+
 func Reformat(ctx context.Context, application app.App, args []string) error {
 	fs := flag.NewFlagSet("reformat", flag.ExitOnError)
 	all := fs.Bool("all", false, "reformat all entries")
@@ -34,7 +42,7 @@ func Reformat(ctx context.Context, application app.App, args []string) error {
 		queryArgs = append(queryArgs, *prefix)
 	}
 
-	rows, err := application.DB().QueryContext(ctx, query, queryArgs...)
+	rows, err := application.MainDB().QueryContext(ctx, query, queryArgs...)
 	if err != nil {
 		return fmt.Errorf("failed to query entries: %w", err)
 	}
@@ -72,7 +80,7 @@ func Reformat(ctx context.Context, application app.App, args []string) error {
 			formattedBody = processedBody
 		}
 
-		_, err = application.DB().ExecContext(ctx, "UPDATE entries SET formatted_body = ? WHERE id = ?", formattedBody, id)
+		_, err = application.MainDB().ExecContext(ctx, "UPDATE entries SET formatted_body = ? WHERE id = ?", formattedBody, id)
 		if err != nil {
 			log.Printf("  Error updating entry %d: %v", id, err)
 			continue

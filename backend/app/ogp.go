@@ -133,7 +133,7 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 		}
 	}
 
-	entry, err := app.queries.GetEntryById(c.Request().Context(), id)
+	entry, err := app.MainDB().Q.GetEntryById(c.Request().Context(), id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
@@ -244,7 +244,8 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 	d.DrawString(title)
 
 	// 5. 最終的な画像形式への変換 (RGBA -> 16色パレット)
-	// ファイルサイズを劇的に削減するため、フルカラー(RGBA)から16色のインデックス形式(Paletted)へ変換する
+	// フルカラー(RGBA)から16色のインデックス形式(Paletted)へ変換することで、ファイルサイズを削減。
+	// これにより、画質を実用的なレベルで維持しつつ、OGP 画像の転送量を最小化する。
 	ppixPtr := palettedPool.Get().(*[]byte)
 	defer palettedPool.Put(ppixPtr)
 	ppix := *ppixPtr

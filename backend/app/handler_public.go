@@ -12,7 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/maindb"
+	"github.com/cho45/hanrangon/backend/model/tfidfdb"
 	"github.com/cho45/hanrangon/backend/view"
 	"github.com/labstack/echo/v4"
 )
@@ -67,7 +68,7 @@ func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid date format").SetInternal(err)
 	}
 
-	entries, err := app.queries.ListEntriesByYearMonthDay(ctx, model.ListEntriesByYearMonthDayParams{
+	entries, err := app.MainDB().Q.ListEntriesByYearMonthDay(ctx, maindb.ListEntriesByYearMonthDayParams{
 		StartDate: start.Format("2006-01-02"),
 		EndDate:   end.Format("2006-01-02"),
 	})
@@ -106,7 +107,7 @@ func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 func (app *AppImpl) HandleArchive(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	archives, err := app.queries.ListArchiveMonths(ctx)
+	archives, err := app.MainDB().Q.ListArchiveMonths(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch archives").SetInternal(err)
 	}
@@ -123,9 +124,12 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 
 	// ページネーションパラメータの取得
 	dateStr := c.Param("date")
-	maxDays := 10
-	minDays := 3
-	threshold := 10
+	// アダプティブ・ページネーション:
+	// 1ページあたりの記事数が極端に多くなったり少なくなったりするのを防ぐため、
+	// 記事の密度に応じて表示日数を動的に決定する。
+	maxDays := 10   // 最大表示日数
+	minDays := 3    // 最小表示日数
+	threshold := 10 // 1ページあたりの理想的な最大記事数
 
 	var targetDate string
 	if dateStr != "" {
@@ -139,7 +143,7 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 	}
 
 	// 1. 表示対象となるユニークな日付を取得 (次ページ判定用に +1)
-	dates, err := app.queries.ListUniqueDates(ctx, model.ListUniqueDatesParams{
+	dates, err := app.MainDB().Q.ListUniqueDates(ctx, maindb.ListUniqueDatesParams{
 		TargetDate: targetDate,
 		Limit:      int64(maxDays + 1),
 	})
@@ -163,7 +167,7 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 	}
 
 	// 2. 取得した日付に含まれる全記事を取得
-	entries, err := app.queries.ListEntriesByDates(ctx, dates)
+	entries, err := app.MainDB().Q.ListEntriesByDates(ctx, dates)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
 	}
@@ -207,7 +211,7 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 			displayDateMap[d] = true
 		}
 
-		filteredEntries := make([]model.Entry, 0)
+		filteredEntries := make([]maindb.Entry, 0)
 		for _, e := range entries {
 			if displayDateMap[e.Date] {
 				filteredEntries = append(filteredEntries, e)
@@ -259,7 +263,7 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 
 	fetchLimit := limit + 1
 
-	entries, err := app.queries.ListEntriesByCategory(ctx, model.ListEntriesByCategoryParams{
+	entries, err := app.MainDB().Q.ListEntriesByCategory(ctx, maindb.ListEntriesByCategoryParams{
 		Title:      fmt.Sprintf("%%[%s]%%", category),
 		TargetDate: targetDate.Format("2006-01-02"),
 		Limit:      int64(fetchLimit),
@@ -303,7 +307,7 @@ func (app *AppImpl) JoinBaseURL(path string) string {
 func (app *AppImpl) HandleFeed(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	entries, err := app.queries.ListEntries(ctx, model.ListEntriesParams{
+	entries, err := app.MainDB().Q.ListEntries(ctx, maindb.ListEntriesParams{
 		TargetDate: time.Now().Format("2006-01-02"),
 		Limit:      20,
 	})
@@ -360,7 +364,7 @@ func (app *AppImpl) HandleFeed(c echo.Context) error {
 func (app *AppImpl) HandleSitemap(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	rows, err := app.queries.ListAllEntriesForSitemap(ctx)
+	rows, err := app.MainDB().Q.ListAllEntriesForSitemap(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries for sitemap").SetInternal(err)
 	}
@@ -421,10 +425,10 @@ func (app *AppImpl) populateSimilarEntries(ctx context.Context, entries []view.V
 	}
 
 	// 1. Get related entries from tfidfDB in bulk
-	relatedRows, err := app.tfidfQueries.ListRelatedEntriesByEntryIDs(ctx, targetIDs)
+	relatedRows, err := app.TFIDFDB().Q.ListRelatedEntriesByEntryIDs(ctx, targetIDs)
 	if err == nil && len(relatedRows) > 0 {
 		// Group by target entry_id
-		relatedMap := make(map[int64][]model.ListRelatedEntriesByEntryIDsRow)
+		relatedMap := make(map[int64][]tfidfdb.ListRelatedEntriesByEntryIDsRow)
 		allRelatedIDsMap := make(map[int64]bool)
 		for _, row := range relatedRows {
 			relatedMap[row.EntryID] = append(relatedMap[row.EntryID], row)
@@ -437,8 +441,8 @@ func (app *AppImpl) populateSimilarEntries(ctx context.Context, entries []view.V
 		}
 
 		// 2. Get entry details from main DB in bulk
-		entryMap := make(map[int64]model.Entry)
-		entryRows, err := app.queries.ListEntriesByIds(ctx, allRelatedIDs)
+		entryMap := make(map[int64]maindb.Entry)
+		entryRows, err := app.MainDB().Q.ListEntriesByIds(ctx, allRelatedIDs)
 		if err == nil {
 			for _, r := range entryRows {
 				entryMap[r.ID] = r
@@ -472,7 +476,7 @@ func (app *AppImpl) populateSimilarEntries(ctx context.Context, entries []view.V
 
 	if len(fallbackEntryIDs) > 0 {
 		// Bulk fetch images for all fallback entries
-		allImages, err := app.imagesQueries.ListImagesByEntryIDs(ctx, fallbackEntryIDs)
+		allImages, err := app.ImagesDB().Q.ListImagesByEntryIDs(ctx, fallbackEntryIDs)
 		if err == nil && len(allImages) > 0 {
 			imageIDs := make([]int64, len(allImages))
 			imageToEntryMap := make(map[int64]int64)
@@ -501,9 +505,9 @@ func (app *AppImpl) populateSimilarEntries(ctx context.Context, entries []view.V
 				}
 
 				// Bulk fetch entry details for all candidates
-				entryRows, err := app.queries.ListEntriesByIds(ctx, entryIDsToFetch)
+				entryRows, err := app.MainDB().Q.ListEntriesByIds(ctx, entryIDsToFetch)
 				if err == nil {
-					entryMap := make(map[int64]model.Entry)
+					entryMap := make(map[int64]maindb.Entry)
 					for _, re := range entryRows {
 						entryMap[re.ID] = re
 					}
@@ -532,7 +536,7 @@ func (app *AppImpl) populateSimilarEntries(ctx context.Context, entries []view.V
 								if seenImageURI[cand.Uri] {
 									continue
 								}
-								displayTitle, _ := model.ParseTitle(re.Title)
+								displayTitle, _ := maindb.ParseTitle(re.Title)
 								if displayTitle == "" {
 									displayTitle = "✖"
 								}
@@ -569,7 +573,7 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
 	}
 
-	entry, err := app.queries.GetEntryByPath(ctx, path)
+	entry, err := app.MainDB().Q.GetEntryByPath(ctx, path)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
@@ -586,13 +590,13 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 		return err
 	}
 
-	rows, err := app.queries.ListTrackbackEntries(ctx, sql.NullInt64{Int64: entry.ID, Valid: true})
+	rows, err := app.MainDB().Q.ListTrackbackEntries(ctx, sql.NullInt64{Int64: entry.ID, Valid: true})
 	if err != nil && err != sql.ErrNoRows {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch trackbacks").SetInternal(err)
 	}
 	trackbacks := view.NewViewTrackbacks(rows)
 
-	olderEntry, err := app.queries.GetOlderEntry(ctx, entry.CreatedAt)
+	olderEntry, err := app.MainDB().Q.GetOlderEntry(ctx, entry.CreatedAt)
 	if err != nil && err != sql.ErrNoRows {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch older entry").SetInternal(err)
 	}
@@ -602,7 +606,7 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 		olderPtr = &v
 	}
 
-	newerEntry, err := app.queries.GetNewerEntry(ctx, entry.CreatedAt)
+	newerEntry, err := app.MainDB().Q.GetNewerEntry(ctx, entry.CreatedAt)
 	if err != nil && err != sql.ErrNoRows {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch newer entry").SetInternal(err)
 	}
@@ -665,7 +669,7 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
-func getLatestModTime(entries []model.Entry) time.Time {
+func getLatestModTime(entries []maindb.Entry) time.Time {
 	if len(entries) == 0 {
 		return time.Time{}
 	}
@@ -709,7 +713,7 @@ func (app *AppImpl) HandleApiSearch(c echo.Context) error {
 		scoreMap[r.EntryID] = r.Score
 	}
 
-	entries, err := app.queries.ListEntriesByIds(ctx, ids)
+	entries, err := app.MainDB().Q.ListEntriesByIds(ctx, ids)
 	if err != nil {
 		return err
 	}

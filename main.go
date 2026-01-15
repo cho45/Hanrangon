@@ -20,6 +20,10 @@ import (
 	"github.com/cho45/hanrangon/backend/jobqueue"
 	"github.com/cho45/hanrangon/backend/jobs"
 	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/imagesdb"
+	"github.com/cho45/hanrangon/backend/model/maindb"
+	"github.com/cho45/hanrangon/backend/model/tfidfdb"
+	"github.com/cho45/hanrangon/backend/model/workerdb"
 	"github.com/cho45/hanrangon/backend/subcommands"
 	"github.com/cho45/hanrangon/backend/tfidf"
 	_ "github.com/mattn/go-sqlite3"
@@ -80,78 +84,80 @@ func main() {
 	imagesDB := mustOpenDB("sqlite3", config.ImagesDBPath)
 	defer imagesDB.Close()
 
-	// 4. TF-IDF Calculator/Similarity初期化
-	tfidfQueries := model.New(tfidfDB)
-	dataQueries := model.New(db)
-	calc, err := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
+	// 4. Database Wrapper初期化
+	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
+	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
+	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
+	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+
+	// 5. TF-IDF Calculator/Similarity初期化
+	calc, err := tfidf.NewCalculator(tfidfDB, tfidfDBWrapper.Q, db, mainDBWrapper.Q)
 	if err != nil {
 		log.Fatalf("failed to create tfidf calculator: %v", err)
 	}
-	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
-	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfDBWrapper.Q)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
 
-	// 5. Registry作成
+	// 6. Registry作成
 	registry := jobqueue.NewRegistry()
 
-	// 6. Worker作成 (まだStartしない)
-	workerQueries := model.New(workerDB)
-	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+	// 7. Worker作成 (まだStartしない)
+	worker := jobqueue.NewWorker(workerDB, workerDBWrapper.Q, registry)
 
-	// 7. App作成
-	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+	// 8. App作成
+	application := app.NewApp(
+		config,
+		mainDBWrapper,
+		tfidfDBWrapper,
+		workerDBWrapper,
+		imagesDBWrapper,
+		calc,
+		sim,
+		searcher,
+		worker,
+	)
 
 	// 8. Execute command
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	switch cmd {
-	case "serve":
-		if err := RunServe(ctx, application); err != nil {
-			log.Fatalf("serve failed: %v", err)
-		}
+	// Register serve and help commands
+	subcommands.Register(subcommands.Definition{
+		Name:        "serve",
+		Description: "Start the HTTP server and background workers",
+		Run: func(ctx context.Context, application app.App, args []string) error {
+			return RunServe(ctx, application.(*app.AppImpl))
+		},
+	})
+	subcommands.Register(subcommands.Definition{
+		Name:        "help",
+		Description: "Show this help message",
+		Run: func(ctx context.Context, application app.App, args []string) error {
+			fmt.Println("Usage: hanrangon [subcommand] [flags]")
+			fmt.Println("\nAvailable subcommands:")
+			for _, sc := range subcommands.Registered {
+				fmt.Printf("  %-20s %s\n", sc.Name, sc.Description)
+			}
+			return nil
+		},
+	})
 
-	case "reformat":
-		if err := subcommands.Reformat(ctx, application, subArgs); err != nil {
-			log.Fatalf("reformat failed: %v", err)
+	// Dispatch to subcommand
+	var found bool
+	for _, sc := range subcommands.Registered {
+		if sc.Name == cmd {
+			if err := sc.Run(ctx, application, subArgs); err != nil {
+				log.Fatalf("%s failed: %v", cmd, err)
+			}
+			found = true
+			break
 		}
+	}
 
-	case "recalc-tfidf":
-		if err := subcommands.RecalcTFIDF(ctx, application, subArgs); err != nil {
-			log.Fatalf("recalc-tfidf failed: %v", err)
-		}
-
-	case "backup":
-		if err := subcommands.Backup(ctx, application, subArgs); err != nil {
-			log.Fatalf("backup failed: %v", err)
-		}
-
-	case "index-images":
-		if err := subcommands.IndexImages(ctx, application, subArgs); err != nil {
-			log.Fatalf("index-images failed: %v", err)
-		}
-
-	case "recalc-metadata":
-		if err := subcommands.RecalcMetadata(ctx, application, subArgs); err != nil {
-			log.Fatalf("recalc-metadata failed: %v", err)
-		}
-
-	case "update-password":
-		if err := subcommands.UpdatePassword(ctx, application, subArgs); err != nil {
-			log.Fatalf("update-password failed: %v", err)
-		}
-
-	case "migrate-to-r2":
-		if err := subcommands.MigrateToR2(ctx, application, subArgs); err != nil {
-			log.Fatalf("migrate-to-r2 failed: %v", err)
-		}
-
-	case "convert-to-avif":
-		if err := subcommands.ConvertToAVIF(ctx, application, subArgs); err != nil {
-			log.Fatalf("convert-to-avif failed: %v", err)
-		}
-
-	default:
-		log.Fatalf("unknown command: %s", cmd)
+	if !found {
+		fmt.Printf("Unknown command: %s\n\n", cmd)
+		_ = subcommands.Registered[len(subcommands.Registered)-1].Run(ctx, application, nil) // Run help
+		os.Exit(1)
 	}
 }
 

@@ -25,8 +25,8 @@ func GenerateRandomString(n int) (string, error) {
 
 func (app *AppImpl) CSRF(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
-		// Whitelist public GET/HEAD/OPTIONS routes to avoid unnecessary CSRF cookies.
-		// Only paths that lead to forms (like /login) or admin actions require a CSRF token.
+		// 公開されている GET/HEAD/OPTIONS ルートをホワイトリスト化し、不要な CSRF Cookie の生成を避ける。
+		// フォームを表示するパス（/login など）や管理アクションのみが CSRF トークンを必要とする。
 		if method := c.Request().Method; method == http.MethodGet || method == http.MethodHead || method == http.MethodOptions {
 			switch c.Path() {
 			case "/", "/archive", "/feed", "/sitemap.xml", "/robots.txt", "/api/similar",
@@ -37,7 +37,7 @@ func (app *AppImpl) CSRF(next echo.HandlerFunc) echo.HandlerFunc {
 			}
 		}
 
-		// Ensure CSRF cookie exists for state-changing requests or login/admin pages
+		// 状態を変更するリクエスト、またはログイン/管理ページのために CSRF Cookie が存在することを確認する
 		cookie, err := c.Cookie(CSRFCookieName)
 		var sk string
 		if err != nil {
@@ -55,19 +55,25 @@ func (app *AppImpl) CSRF(next echo.HandlerFunc) echo.HandlerFunc {
 			sk = cookie.Value
 		}
 
-		// Allow safe methods
+		// 安全なメソッド（参照系）は許可
 		switch c.Request().Method {
 		case http.MethodGet, http.MethodHead, http.MethodOptions:
 			return next(c)
 		}
 
-		// 1. Check custom header for AJAX/fetch requests
-		// Even with Double Submit Cookie, custom header is a strong proof of origin
+		// CSRF 対策: 以下の 2 段階のチェックを行う
+
+		// 1. AJAX/fetch リクエストに対するカスタムヘッダーの確認
+		// ブラウザの同一生成元ポリシー (SOP) により、クロスドメインのリクエストでは
+		// 事前の CORS 許可なしにカスタムヘッダーを付与することはできない。
 		if c.Request().Header.Get(CSRFHeaderName) == CSRFHeaderValue {
 			return next(c)
 		}
 
-		// 2. Check sk in form or query param against Cookie value
+		// 2. Double Submit Cookie チェック
+		// Cookie に保存された値と、リクエストパラメータ（フォームまたはクエリ）に含まれる値が
+		// 一致することを確認する。攻撃者はユーザーの Cookie を読み取ることができないため、
+		// 正しいトークンをリクエストに含めることができない。
 		reqSK := c.FormValue(SessionKeyName)
 		if reqSK == "" {
 			reqSK = c.QueryParam(SessionKeyName)

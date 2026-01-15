@@ -9,20 +9,20 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/workerdb"
 )
 
 // Worker はジョブキューのワーカーを管理する
 type Worker struct {
 	db       *sql.DB
-	queries  *model.Queries
+	queries  workerdb.Querier
 	registry *Registry
 	interval time.Duration
 	wg       sync.WaitGroup
 }
 
 // NewWorker は新しいWorkerを作成する
-func NewWorker(db *sql.DB, queries *model.Queries, registry *Registry) *Worker {
+func NewWorker(db *sql.DB, queries workerdb.Querier, registry *Registry) *Worker {
 	return &Worker{
 		db:       db,
 		queries:  queries,
@@ -106,13 +106,14 @@ func (w *Worker) processNextJob(ctx context.Context) error {
 		return fmt.Errorf("failed to find next job: %w", err)
 	}
 
-	// これ以降の処理は、たとえ ctx がキャンセルされても完了させたい
-	// そのため、独立したコンテキスト（detached context）を使用する
+	// 親の ctx がキャンセル（プロセスの停止信号など）されても、
+	// 開始したジョブの状態更新（成功/失敗の記録）を確実に行うため、
+	// 独立したコンテキスト（detached context）を使用する。
 	jobCtx, cancelJob := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancelJob()
 
 	// ジョブを実行中としてマーク
-	err = w.queries.GrabJob(jobCtx, model.GrabJobParams{
+	err = w.queries.GrabJob(jobCtx, workerdb.GrabJobParams{
 		GrabbedAt: sql.NullTime{Time: time.Now(), Valid: true},
 		ID:        job.ID,
 	})
@@ -150,7 +151,7 @@ func (w *Worker) processNextJob(ctx context.Context) error {
 }
 
 // executeJob はジョブを実行する（パニックをリカバー、タイムアウト付き）
-func (w *Worker) executeJob(ctx context.Context, handler JobHandler, job model.Job) (err error) {
+func (w *Worker) executeJob(ctx context.Context, handler JobHandler, job workerdb.Job) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("job panicked: %v", r)
@@ -174,7 +175,7 @@ func (w *Worker) executeJob(ctx context.Context, handler JobHandler, job model.J
 }
 
 // markJobFailed はジョブを失敗としてマークする（指数バックオフ付きリトライ）
-func (w *Worker) markJobFailed(ctx context.Context, job model.Job, jobErr error) error {
+func (w *Worker) markJobFailed(ctx context.Context, job workerdb.Job, jobErr error) error {
 	// 指数バックオフの計算: min(30秒 * 2^retry_count, 1時間)
 	baseDelay := 30 * time.Second
 	maxDelay := 1 * time.Hour
@@ -188,7 +189,7 @@ func (w *Worker) markJobFailed(ctx context.Context, job model.Job, jobErr error)
 
 	log.Printf("Job %d failed (retry_count=%d), will retry after %v", job.ID, job.RetryCount, backoffDelay)
 
-	return w.queries.MarkJobFailed(ctx, model.MarkJobFailedParams{
+	return w.queries.MarkJobFailed(ctx, workerdb.MarkJobFailedParams{
 		RunAfter:     runAfter,
 		ErrorMessage: errorMessage,
 		ID:           job.ID,
@@ -232,7 +233,7 @@ func (w *Worker) Enqueue(ctx context.Context, jobTypeName string, arg interface{
 		uniqkeyNull = sql.NullString{String: uniqkey, Valid: true}
 	}
 
-	_, err = w.queries.EnqueueJob(ctx, model.EnqueueJobParams{
+	_, err = w.queries.EnqueueJob(ctx, workerdb.EnqueueJobParams{
 		JobTypeID:  jobType.ID,
 		Arg:        string(argJSON),
 		Uniqkey:    uniqkeyNull,

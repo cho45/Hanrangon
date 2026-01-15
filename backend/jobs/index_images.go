@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/cho45/hanrangon/backend/app"
-	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/imagesdb"
 	"github.com/nfnt/resize"
 	_ "github.com/vegidio/avif-go"
 	_ "golang.org/x/image/webp"
@@ -41,8 +41,8 @@ func (j *IndexImagesJob) Name() string {
 	return "IndexImages"
 }
 
-// Timeout returns the maximum execution time for this job
-// Image processing can take time, so set to 3 minutes
+// Timeout はこのジョブの最大実行時間を返す。
+// 画像処理には時間がかかる可能性があるため、3分に設定。
 func (j *IndexImagesJob) Timeout() time.Duration {
 	return 3 * time.Minute
 }
@@ -108,7 +108,7 @@ func (j *IndexImagesJob) SyncImagesForEntries(ctx context.Context, entryIDs []in
 		return err
 	}
 	defer tx.Rollback()
-	qtx := j.app.ImagesQueries().WithTx(tx)
+	qtx := imagesdb.New(tx)
 
 	for _, entryID := range entryIDs {
 		if err := j.syncInternal(ctx, qtx, entryID); err != nil {
@@ -119,26 +119,26 @@ func (j *IndexImagesJob) SyncImagesForEntries(ctx context.Context, entryIDs []in
 	return tx.Commit()
 }
 
-func (j *IndexImagesJob) syncInternal(ctx context.Context, qtx *model.Queries, entryID int64) error {
-	entry, err := j.app.Queries().GetEntryById(ctx, entryID)
+func (j *IndexImagesJob) syncInternal(ctx context.Context, qtx imagesdb.Querier, entryID int64) error {
+	entry, err := j.app.MainDB().Q.GetEntryById(ctx, entryID)
 	if err != nil {
 		return err
 	}
 
-	// Find all image URLs in current entry using robust HTML parser
+	// 堅牢な HTML パーサーを使用して、現在のエントリ内のすべての画像 URL を抽出
 	urls := j.extractImageURLs(entry.FormattedBody)
 	currentURLs := make(map[string]bool)
 	for _, u := range urls {
 		currentURLs[u] = true
 	}
 
-	// Get existing images from DB
+	// DB から既存の画像を取得
 	existingImages, err := qtx.ListImagesByEntryID(ctx, entryID)
 	if err != nil {
 		return err
 	}
 
-	// Calculate diff
+	// 差分を計算
 	var idsToDelete []int64
 	existingURLs := make(map[string]bool)
 	for _, img := range existingImages {
@@ -156,7 +156,7 @@ func (j *IndexImagesJob) syncInternal(ctx context.Context, qtx *model.Queries, e
 		}
 	}
 
-	// Skip if no changes
+	// 変更がない場合はスキップ
 	if len(idsToDelete) == 0 && len(urlsToAdd) == 0 {
 		return nil
 	}
@@ -171,10 +171,10 @@ func (j *IndexImagesJob) syncInternal(ctx context.Context, qtx *model.Queries, e
 	}
 
 	for _, u := range urlsToAdd {
-		_, err := qtx.CreateImage(ctx, model.CreateImageParams{
+		_, err := qtx.CreateImage(ctx, imagesdb.CreateImageParams{
 			Uri:     u,
 			EntryID: entryID,
-			Sig:     []byte{}, // Empty signature for new images
+			Sig:     []byte{}, // 新規画像の場合は空のシグネチャ
 		})
 		if err != nil {
 			return err
@@ -193,10 +193,10 @@ func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []in
 		return nil
 	}
 
-	// 1. Get all unindexed images for these entries
-	var allImages []model.Image
+	// 1. これらのエントリの未インデックス画像をすべて取得
+	var allImages []imagesdb.Image
 	for _, entryID := range entryIDs {
-		images, err := j.app.ImagesQueries().ListImagesByEntryID(ctx, entryID)
+		images, err := j.app.ImagesDB().Q.ListImagesByEntryID(ctx, entryID)
 		if err != nil {
 			return err
 		}
@@ -211,16 +211,16 @@ func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []in
 		return nil
 	}
 
-	// 2. Process images in parallel
+	// 2. 画像を並列処理
 	type result struct {
-		imgRecord model.Image
+		imgRecord imagesdb.Image
 		sig       uint64
 		success   bool
 	}
 	results := make([]result, len(allImages))
 
 	var g errgroup.Group
-	g.SetLimit(3) // Limit concurrency to 3 as requested
+	g.SetLimit(3) // 並行数を 3 に制限
 
 	for i, imgRecord := range allImages {
 		i, imgRecord := i, imgRecord
@@ -249,13 +249,13 @@ func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []in
 		return err
 	}
 
-	// 3. Save results in a single transaction
+	// 3. 単一のトランザクションで結果を保存
 	tx, err := j.app.ImagesDB().BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	qtx := j.app.ImagesQueries().WithTx(tx)
+	qtx := imagesdb.New(tx)
 
 	for _, res := range results {
 		sigBytes := []byte{}
@@ -264,7 +264,7 @@ func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []in
 			binary.BigEndian.PutUint64(sigBytes, res.sig)
 		}
 
-		if err := qtx.UpdateImageSig(ctx, model.UpdateImageSigParams{
+		if err := qtx.UpdateImageSig(ctx, imagesdb.UpdateImageSigParams{
 			Sig: sigBytes,
 			ID:  res.imgRecord.ID,
 		}); err != nil {
@@ -276,14 +276,13 @@ func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []in
 				return err
 			}
 
-			// Sliding window of 12-bits (53 ngrams)
-			// Including the offset 'i' in the word ensures that we only match
-			// patterns at the same absolute position in the color space.
+			// 12ビットのスライディングウィンドウ (53 個の ngram)
+			// 単語にオフセット 'i' を含めることで、色空間内の同じ絶対位置にあるパターンのみが一致するようにする。
 			for i := 0; i <= 64-12; i++ {
 				pattern := int64((res.sig >> i) & 0xFFF)
 				word := (int64(i) << 12) | pattern
 
-				if err := qtx.CreateNgram(ctx, model.CreateNgramParams{
+				if err := qtx.CreateNgram(ctx, imagesdb.CreateNgramParams{
 					ImageID: res.imgRecord.ID,
 					Word:    word,
 				}); err != nil {
@@ -298,24 +297,24 @@ func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []in
 
 func (j *IndexImagesJob) CalculateColorSignatureFromImage(img image.Image) uint64 {
 	// 1. リサイズ
-	// 処理速度の向上と、ノイズ除去（平滑化）のために 64x64 に縮小します。
+	// 処理速度の向上と、ノイズ除去（平滑化）のために 64x64 に縮小。
 	resized := resize.Resize(64, 64, img, resize.NearestNeighbor)
 
 	// 2. 知覚的カラーヒストグラムの集計 (OKLCH 空間)
-	// 人間の知覚に基づいた OKLCH 空間で、色空間を 4x2x8 = 64分割して集計します。
+	// 人間の知覚に基づいた OKLCH 空間で、色空間を 4x2x8 = 64分割して集計。
 	//
-	// 64bit整数の各ビット（0〜63番目）が、特定の「色領域（バケツ）」に対応します。
+	// 64bit整数の各ビット（0〜63番目）が、特定の「色領域（ビン）」に対応。
 	// ある色が 64ビット中の何番目のビットに該当するか（ビット位置）を、
-	// 空間充填曲線の一種である Z-order (Morton order) を用いて決定します。
+	// 空間充填曲線の一種である Z-order (Morton order) を用いて決定。
 	//
 	// ビットインターリーブ順:
 	//   ビット位置 (0-63) = [ H2 | L1 | H1 | L0 | H0 | C0 ]
 	//   - L = Lightness(2bit), H = Hue(3bit), C = Chroma(1bit)
 	//
 	// この Z-order 配置により、色空間（L, H, C）上で近い特徴を持つ色が、
-	// 1次元のビット列上でも高い確率で隣り合う（空間局所性が保存される）ようになります。
-	// これによりスライディングウィンドウ（12bit 窓）による検索が、
-	// 「色空間上の局所的な色の塊」をより意味のあるパターンとして捉えられます。
+	// 1次元のビット列上でも高い確率で隣り合う（空間局所性が保存される）。
+	// これにより、後続のスライディングウィンドウ（12bit 窓）による検索において、
+	// 「色空間上の局所的な色の塊」を意味のあるパターンとして抽出可能となる。
 	counts := make([]int, 64)
 	bounds := resized.Bounds()
 	totalPixels := 0
@@ -346,8 +345,8 @@ func (j *IndexImagesJob) CalculateColorSignatureFromImage(img image.Image) uint6
 	}
 
 	// 3. 64bit シグネチャ（主要色ビットマスク）の生成
-	// 画像内で面積の 3% 以上を占める色のビットを立て、画像の「色の指紋」を作成します。
-	// これにより、画像の「構造」ではなく「雰囲気（パレット）」に基づいた検索が可能になります。
+	// 画像内で面積の 3% 以上を占める色のビットを立て、画像の「色の指紋」を作成。
+	// 画像の「構造」ではなく「雰囲気（パレット）」に基づいた検索を目的とする。
 
 	maxCount := 0
 	maxBitPos := 0
@@ -369,10 +368,10 @@ func (j *IndexImagesJob) CalculateColorSignatureFromImage(img image.Image) uint6
 	return sig
 }
 
-// rgbToOKLCH converts sRGB to OKLCH color space.
-// Based on https://bottosson.github.io/posts/oklab/
+// rgbToOKLCH は sRGB を OKLCH 色空間に変換する。
+// 参照: https://bottosson.github.io/posts/oklab/
 func rgbToOKLCH(r, g, b float64) (l, c, h float64) {
-	// 1. sRGB to Linear RGB
+	// 1. sRGB から Linear RGB へ
 	lin := func(v float64) float64 {
 		if v <= 0.04045 {
 			return v / 12.92
@@ -381,12 +380,12 @@ func rgbToOKLCH(r, g, b float64) (l, c, h float64) {
 	}
 	r, g, b = lin(r), lin(g), lin(b)
 
-	// 2. Linear RGB to LMS
+	// 2. Linear RGB から LMS へ
 	l_ := 0.4122214708*r + 0.5363325363*g + 0.0514459929*b
 	m_ := 0.2119034982*r + 0.6806995451*g + 0.1073969566*b
 	s_ := 0.0883024619*r + 0.2817188376*g + 0.6299787005*b
 
-	// 3. LMS to OKLab
+	// 3. LMS から OKLab へ
 	l_root := math.Cbrt(l_)
 	m_root := math.Cbrt(m_)
 	s_root := math.Cbrt(s_)
@@ -395,7 +394,7 @@ func rgbToOKLCH(r, g, b float64) (l, c, h float64) {
 	a := 1.9779984951*l_root - 2.4285922050*m_root + 0.4505937099*s_root
 	b_ := 0.0259040371*l_root + 0.7827717662*m_root - 0.8086757660*s_root
 
-	// 4. OKLab to OKLCH
+	// 4. OKLab から OKLCH へ
 	C := math.Sqrt(a*a + b_*b_)
 	var H float64
 	if C < 1e-6 {
@@ -415,10 +414,10 @@ func (j *IndexImagesJob) loadImage(rawURL string) (image.Image, error) {
 	uploadDir := j.app.Config().UploadDir
 	baseURL := j.app.Config().BaseURL
 
-	// 1. Handle local paths
+	// 1. ローカルパスの処理
 	if strings.HasPrefix(rawURL, uploadURLPrefix) {
 		p := filepath.Join(uploadDir, strings.TrimPrefix(rawURL, uploadURLPrefix))
-		// Handle URL encoded filenames
+		// URL エンコードされたファイル名を処理
 		if unescaped, err := url.PathUnescape(p); err == nil {
 			p = unescaped
 		}
@@ -431,20 +430,20 @@ func (j *IndexImagesJob) loadImage(rawURL string) (image.Image, error) {
 				return img, nil
 			}
 		}
-		// If local open/decode failed, we might want to try other sources if it's an absolute URL
+		// ローカルでのオープン/デコードに失敗した場合、絶対 URL であれば他のソースを試みる可能性がある
 	}
 
-	// 2. Handle absolute URLs to our host
+	// 2. 自ホストへの絶対 URL の処理
 	u, err := url.Parse(rawURL)
 	if err == nil {
 		baseU, _ := url.Parse(baseURL)
 		if u.Host == baseU.Host && strings.HasPrefix(u.Path, uploadURLPrefix) {
-			// Reuse local path logic via recursing with the path part
+			// パス部分を用いて再帰的に呼び出すことで、ローカルパスのロジックを再利用
 			return j.loadImage(u.Path)
 		}
 
-		// 3. Handle specific remote asset host with local fallback
-		// Pattern: https://assets.lowreal.net/entry/{filename}
+		// 3. 特定のリモートアセットホストの処理（ローカルフォールバック付き）
+		// パターン: https://assets.lowreal.net/entry/{filename}
 		if u.Scheme == "https" && u.Host == "assets.lowreal.net" && strings.HasPrefix(u.Path, "/entry/") {
 			filename := strings.TrimPrefix(u.Path, "/entry/")
 			localPath := filepath.Join(uploadDir, filename)
@@ -452,7 +451,7 @@ func (j *IndexImagesJob) loadImage(rawURL string) (image.Image, error) {
 				localPath = unescaped
 			}
 
-			// Try local first
+			// まずローカルを試す
 			if f, err := os.Open(localPath); err == nil {
 				defer f.Close()
 				if img, _, err := image.Decode(f); err == nil {
@@ -460,7 +459,7 @@ func (j *IndexImagesJob) loadImage(rawURL string) (image.Image, error) {
 				}
 			}
 
-			// Fallback: download from remote
+			// フォールバック: リモートからダウンロード
 			log.Printf("[INFO] Downloading remote image for indexing: %s", rawURL)
 			resp, err := http.Get(rawURL)
 			if err != nil {

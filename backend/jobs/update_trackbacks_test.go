@@ -9,6 +9,10 @@ import (
 	"github.com/cho45/hanrangon/backend/app"
 	"github.com/cho45/hanrangon/backend/jobqueue"
 	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/imagesdb"
+	"github.com/cho45/hanrangon/backend/model/maindb"
+	"github.com/cho45/hanrangon/backend/model/tfidfdb"
+	"github.com/cho45/hanrangon/backend/model/workerdb"
 	"github.com/cho45/hanrangon/backend/tfidf"
 	"github.com/cho45/hanrangon/internal/testutil"
 	_ "github.com/mattn/go-sqlite3"
@@ -22,22 +26,26 @@ func setupTestApp(t *testing.T) (app.App, *sql.DB) {
 	config := app.LoadConfig()
 	config.BaseURL = "https://example.com"
 
+	// Database wrappers
+	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
+	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
+	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
+	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+
 	// TF-IDF calculator and similarity calculator
-	tfidfQueries := model.New(tfidfDB)
-	calc, err := tfidf.NewCalculator(tfidfDB, model.New(tfidfDB), db, model.New(db))
+	calc, err := tfidf.NewCalculator(tfidfDB, tfidfDBWrapper.Q, db, mainDBWrapper.Q)
 	if err != nil {
 		t.Fatalf("failed to create calculator: %v", err)
 	}
-	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
-	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfDBWrapper.Q)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
 
 	// Job queue
 	registry := jobqueue.NewRegistry()
-	workerQueries := model.New(workerDB)
-	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+	worker := jobqueue.NewWorker(workerDB, workerDBWrapper.Q, registry)
 
 	// App (Use same DB for simplicity if needed, but here we follow main.go pattern)
-	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, calc, sim, searcher, worker)
 	return application, db
 }
 

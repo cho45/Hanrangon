@@ -10,7 +10,7 @@ import (
 	"github.com/cho45/xatena-go/pkg/xatena"
 )
 
-// Replicate templates from Nogag::Formatter::Hatena.pm
+// Nogag::Formatter::Hatena.pm のテンプレートを再現
 var hatenaTemplates = map[string]string{
 	"superpre":   `{{ if contains .Class "lang-math" }}<p class="{{ .Class }}">{{ .RawText }}</p>{{ else }}<pre class="{{ .Class }}">{{ .RawText }}</pre>{{ end }}`,
 	"section":    `<section class="level-{{ add .Level -2 }}"><h{{ .Level }}>{{ .Title }}</h{{ .Level }}>{{ .Content }}</section>`,
@@ -44,7 +44,7 @@ func FormatHatena(body string) (res string, err error) {
 		}
 	}()
 
-	// Define custom inline rules
+	// カスタムインラインルールを定義
 	inline := xatena.NewInlineFormatter()
 
 	// f:id:user:id[jpeg]:image
@@ -82,15 +82,15 @@ func FormatHatena(body string) (res string, err error) {
 
 	x := xatena.NewXatenaWithInline(inline)
 
-	// Custom templates
+	// カスタムテンプレート
 	for name, t := range parsedHatenaTemplates {
 		x.Templates[name] = t
 	}
 
 	htmlBody := x.ToHTML(context.Background(), strings.TrimSpace(body))
 
-	// Footnotes handling
-	// x.Inline is an interface, we expect it to be *xatena.InlineFormatter
+	// 脚注の処理
+	// x.Inline はインターフェースだが、ここでは *xatena.InlineFormatter であることを期待する
 	if inline, ok := x.Inline.(*xatena.InlineFormatter); ok {
 		footnotes := inline.Footnotes()
 		if len(footnotes) > 0 {

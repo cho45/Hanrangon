@@ -2,10 +2,13 @@ package app
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/cho45/hanrangon/backend/jobqueue"
 	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/imagesdb"
+	"github.com/cho45/hanrangon/backend/model/maindb"
+	"github.com/cho45/hanrangon/backend/model/tfidfdb"
+	"github.com/cho45/hanrangon/backend/model/workerdb"
 	"github.com/cho45/hanrangon/backend/tfidf"
 )
 
@@ -17,14 +20,10 @@ type ProgressReporter interface {
 // App はアプリケーションの主要なインターフェース
 type App interface {
 	// Database accessors
-	Queries() *model.Queries
-	DB() *sql.DB
-	TFIDFQueries() *model.Queries
-	TFIDFDB() *sql.DB
-	WorkerQueries() *model.Queries
-	WorkerDB() *sql.DB
-	ImagesQueries() *model.Queries
-	ImagesDB() *sql.DB
+	MainDB() *model.Database[maindb.Querier]
+	TFIDFDB() *model.Database[tfidfdb.Querier]
+	WorkerDB() *model.Database[workerdb.Querier]
+	ImagesDB() *model.Database[imagesdb.Querier]
 
 	// TF-IDF accessors
 	Calculator() *tfidf.Calculator
@@ -45,8 +44,6 @@ type App interface {
 	PostprocessBatch(ctx context.Context) (*BatchProcessor, error)
 
 	// Utils for Service
-	BeginImmediate(ctx context.Context) (*sql.Tx, error)
-
 	EnqueuePublishedEntryJobs(ctx context.Context, entryID int64) error
 
 	GetR2Usage(ctx context.Context) (*R2UsageStats, error)

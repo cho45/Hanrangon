@@ -6,12 +6,12 @@ import (
 	"math/bits"
 	"sort"
 
-	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/imagesdb"
 )
 
 // ScoredSimilarImage represents a similar image with its Jaccard similarity score.
 type ScoredSimilarImage struct {
-	model.ListSimilarImagesByImageIDsRow
+	imagesdb.ListSimilarImagesByImageIDsRow
 	Jaccard float64 `json:"jaccard"`
 }
 
@@ -34,20 +34,20 @@ func calculateJaccard(sig1, sig2 []byte) (float64, int) {
 
 // findSimilarImagesBulk finds similar images for multiple source images in a single bulk operation.
 // Returns a map where the key is the source search_image_id.
-func (app *AppImpl) findSimilarImagesBulk(ctx context.Context, sourceImages []model.Image) (map[int64][]ScoredSimilarImage, error) {
+func (app *AppImpl) findSimilarImagesBulk(ctx context.Context, sourceImages []imagesdb.Image) (map[int64][]ScoredSimilarImage, error) {
 	if len(sourceImages) == 0 {
 		return make(map[int64][]ScoredSimilarImage), nil
 	}
 
 	srcIDs := make([]int64, len(sourceImages))
-	srcMap := make(map[int64]model.Image)
+	srcMap := make(map[int64]imagesdb.Image)
 	for i, img := range sourceImages {
 		srcIDs[i] = img.ID
 		srcMap[img.ID] = img
 	}
 
 	// Bulk fetch candidates from database (SQL handles Hamming distance filtering)
-	rows, err := app.imagesQueries.ListSimilarImagesByImageIDs(ctx, srcIDs)
+	rows, err := app.ImagesDB().Q.ListSimilarImagesByImageIDs(ctx, srcIDs)
 	if err != nil {
 		return nil, err
 	}

@@ -48,9 +48,9 @@ func NewImageProcessor(cfg *Config) *ImageProcessor {
 	return p
 }
 
-// ProcessFile optimizes the image at srcPath.
-// It may overwrite the file or create a new one (like .avif).
-// Returns: resultPath, resultFilename, resultContentType, error
+// ProcessFile は srcPath にある画像を最適化する。
+// 元ファイルを上書きする場合と、新しいファイル（.avif など）を作成する場合がある。
+// 戻り値: resultPath, resultFilename, resultContentType, error
 func (p *ImageProcessor) ProcessFile(ctx context.Context, srcPath string, filename string, contentType string) (string, string, string, error) {
 	ext := strings.ToLower(filepath.Ext(filename))
 
@@ -78,7 +78,7 @@ func (p *ImageProcessor) processPNG(ctx context.Context, srcPath string, filenam
 	defer cancel()
 
 	if p.oxipngPath != "" {
-		// oxipng -o 2 --strip none <srcPath> (overwrites)
+		// oxipng -o 2 --strip none <srcPath> (上書き)
 		var stderr strings.Builder
 		cmd := exec.CommandContext(ctx, p.oxipngPath, "-o", "2", "--strip", "none", srcPath)
 		cmd.Stderr = &stderr
@@ -91,7 +91,7 @@ func (p *ImageProcessor) processPNG(ctx context.Context, srcPath string, filenam
 	}
 
 	if p.optipngPath != "" {
-		// optipng -quiet -preserve -clobber <srcPath> (overwrites)
+		// optipng -quiet -preserve -clobber <srcPath> (上書き)
 		var stderr strings.Builder
 		cmd := exec.CommandContext(ctx, p.optipngPath, "-quiet", "-preserve", "-clobber", srcPath)
 		cmd.Stderr = &stderr
@@ -126,7 +126,7 @@ func (p *ImageProcessor) processJPEG(ctx context.Context, srcPath string, filena
 			return dstPath, newFilename, "image/avif", nil
 		} else {
 			log.Printf("[WARN] avifenc failed: %v, stderr: %s", err, stderr.String())
-			// fallthrough to next avif tool
+			// 次の avif ツールへフォールバック
 		}
 	}
 
@@ -141,12 +141,12 @@ func (p *ImageProcessor) processJPEG(ctx context.Context, srcPath string, filena
 			return dstPath, newFilename, "image/avif", nil
 		} else {
 			log.Printf("[WARN] cavif failed: %v, stderr: %s", err, stderr.String())
-			// fallthrough to next avif tool
+			// 次の avif ツールへフォールバック
 		}
 	}
 
 	if p.jpegoptimPath != "" {
-		// jpegoptim --strip-none <srcPath> (overwrites)
+		// jpegoptim --strip-none <srcPath> (上書き)
 		var stderr strings.Builder
 		cmd := exec.CommandContext(ctx, p.jpegoptimPath, "--strip-none", srcPath)
 		cmd.Stderr = &stderr

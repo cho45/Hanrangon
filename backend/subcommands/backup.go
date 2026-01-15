@@ -20,6 +20,14 @@ import (
 	"github.com/cho45/hanrangon/backend/app"
 )
 
+func init() {
+	Register(Definition{
+		Name:        "backup",
+		Description: "Create a backup of the database and send it via email",
+		Run:         Backup,
+	})
+}
+
 func Backup(ctx context.Context, application app.App, args []string) error {
 	fs := flag.NewFlagSet("backup", flag.ExitOnError)
 	smtpAddr := fs.String("smtp", "localhost:25", "SMTP server address")
@@ -34,7 +42,7 @@ func Backup(ctx context.Context, application app.App, args []string) error {
 	tempDB := filepath.Join(os.TempDir(), fmt.Sprintf("hanrangon-backup-%d.db", time.Now().Unix()))
 	defer os.Remove(tempDB)
 
-	_, err := application.DB().ExecContext(ctx, fmt.Sprintf("VACUUM INTO '%s'", tempDB))
+	_, err := application.MainDB().ExecContext(ctx, fmt.Sprintf("VACUUM INTO '%s'", tempDB))
 	if err != nil {
 		return fmt.Errorf("failed to vacuum DB: %w", err)
 	}

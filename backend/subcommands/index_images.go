@@ -10,6 +10,14 @@ import (
 	"github.com/cho45/hanrangon/backend/jobs"
 )
 
+func init() {
+	Register(Definition{
+		Name:        "index-images",
+		Description: "Index images in entries and calculate signatures",
+		Run:         IndexImages,
+	})
+}
+
 func IndexImages(ctx context.Context, application app.App, args []string) error {
 	fs := flag.NewFlagSet("index-images", flag.ExitOnError)
 	force := fs.Bool("force", false, "force execution of indexing")
@@ -43,7 +51,7 @@ func IndexImages(ctx context.Context, application app.App, args []string) error 
 	job := jobs.NewIndexImagesJob(application)
 
 	if doSync {
-		entries, err := application.Queries().ListAllEntries(ctx)
+		entries, err := application.MainDB().Q.ListAllEntries(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to list entries: %w", err)
 		}
@@ -76,9 +84,9 @@ func IndexImages(ctx context.Context, application app.App, args []string) error 
 		var entryIDs []int64
 		var err error
 		if *overwrite {
-			entryIDs, err = application.ImagesQueries().ListAllEntryIDsInImages(ctx)
+			entryIDs, err = application.ImagesDB().Q.ListAllEntryIDsInImages(ctx)
 		} else {
-			entryIDs, err = application.ImagesQueries().ListEntryIDsWithUnindexedImages(ctx)
+			entryIDs, err = application.ImagesDB().Q.ListEntryIDsWithUnindexedImages(ctx)
 		}
 		if err != nil {
 			return fmt.Errorf("failed to list entries for filling: %w", err)

@@ -6,18 +6,17 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/tfidfdb"
 )
 
 // SimilarityCalculator はエントリ間の類似度計算を処理
 type SimilarityCalculator struct {
 	db            *sql.DB
-	queries       *model.Queries
+	queries       tfidfdb.Querier
 	MinValidTerms int
 }
 
-// NewSimilarityCalculator は新しい SimilarityCalculator を作成
-func NewSimilarityCalculator(db *sql.DB, queries *model.Queries) *SimilarityCalculator {
+func NewSimilarityCalculator(db *sql.DB, queries tfidfdb.Querier) *SimilarityCalculator {
 	return &SimilarityCalculator{
 		db:      db,
 		queries: queries,
@@ -29,18 +28,16 @@ func NewSimilarityCalculator(db *sql.DB, queries *model.Queries) *SimilarityCalc
 	}
 }
 
-// SimilarEntry はスコア付きの類似エントリを表現
 type SimilarEntry struct {
 	EntryID int64
 	Score   float64
 }
 
 const (
-	// MinValidTermsForSimilarity is the minimum number of valid terms (tfidf_n > 0)
-	// required to perform similarity calculation.
-	// In the character bigram method, an entry with fewer than 20 valid terms
-	// is likely too short to have a meaningful topic (e.g., "2009年12月12日撮影").
-	// 20 bigrams roughly correspond to 20-30 characters of unique content.
+	// MinValidTermsForSimilarity は類似度計算を行うために必要な最小の有効ターム数 (tfidf_n > 0)。
+	// 文字 2-gram 方式において、有効なタームが 20 個未満のエントリは、
+	// 意味のあるトピックを持たない短い定型文（例: 「2009年12月12日撮影」のみのエントリ）とみなす。
+	// 20 個の 2-gram は実質的に約 20〜30 文字のユニークなテキスト量に相当。
 	MinValidTermsForSimilarity = 20
 )
 
@@ -72,7 +69,8 @@ func (s *SimilarityCalculator) CalculateSimilarEntries(ctx context.Context, entr
 
 // calculateForEntryTx はトランザクション内で単一エントリの類似エントリを計算
 func (s *SimilarityCalculator) calculateForEntryTx(ctx context.Context, tx *sql.Tx, entryID int64) error {
-	// エントリが十分な情報（tfidf_n > 0 のターム）を持っているか確認
+	// エントリが十分な情報（tfidf_n > 0 のターム）を持っているか確認。
+	// 情報不足のエントリに対して計算を行うと、無関係なエントリが「類似」としてヒットしやすくなるため。
 	var validTermCount int
 	err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM (SELECT 1 FROM postings WHERE entry_id = ? AND tfidf_n > 0 LIMIT ?)`, entryID, s.MinValidTerms).Scan(&validTermCount)
 	if err != nil {
@@ -98,9 +96,15 @@ func (s *SimilarityCalculator) calculateForEntryTx(ctx context.Context, tx *sql.
 	}
 
 	// 候補テーブルの作成条件:
-	// 1. entry_id > (target - 1000) : 古すぎるエントリを除外（パフォーマンス最適化）
-	// 2. 対象エントリの上位 50 タームのいずれかを共有
-	// 3. 少なくとも 3 つのタームを共有 (cnt > 3)
+	// 1. entry_id > (target - 1000) :
+	//    全件比較を避けるためのヒューリスティックな制限。
+	//    ブログの性質上、関連エントリは比較的近い時期に書かれることが多いため、
+	//    過去 1000 件程度に絞ることで計算コストを大幅に削減しつつ、実用的な精度を維持する。
+	// 2. 対象エントリの上位 50 タームのいずれかを共有:
+	//    重要度の低いタームでの一致を無視し、特徴的な単語での一致を優先。
+	// 3. 少なくとも 3 つのタームを共有 (cnt > 3):
+	//    1つや2つの Bigram の一致は偶然（助詞の連続など）である可能性が高いため、
+	//    ノイズ除去のために 3 つ以上の共有を必須とする。
 	// 上位 100 件の候補に制限
 	_, err = tx.ExecContext(ctx, `
 		CREATE TEMPORARY TABLE similar_candidate AS

@@ -56,7 +56,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/maindb"
+	"github.com/cho45/hanrangon/backend/model/tfidfdb"
 )
 
 // UpdateEntry は TF-IDF 更新用のエントリデータ
@@ -69,9 +70,9 @@ type UpdateEntry struct {
 // Calculator handles TF-IDF calculations
 type Calculator struct {
 	tfidfDB            *sql.DB
-	tfidfQueries       *model.Queries
+	tfidfQueries       tfidfdb.Querier
 	dataDB             *sql.DB
-	dataQueries        *model.Queries
+	dataQueries        maindb.Querier
 	DFMaxThresholdRate float64
 
 	alphanumericPattern *regexp.Regexp
@@ -79,7 +80,7 @@ type Calculator struct {
 }
 
 // NewCalculator creates a new Calculator
-func NewCalculator(tfidfDB *sql.DB, tfidfQueries *model.Queries, dataDB *sql.DB, dataQueries *model.Queries) (*Calculator, error) {
+func NewCalculator(tfidfDB *sql.DB, tfidfQueries tfidfdb.Querier, dataDB *sql.DB, dataQueries maindb.Querier) (*Calculator, error) {
 	return &Calculator{
 		tfidfDB:             tfidfDB,
 		tfidfQueries:        tfidfQueries,
@@ -248,7 +249,7 @@ func (c *Calculator) UpdateTFIDFs(ctx context.Context, entries []UpdateEntry) er
 		inBatch[e.ID] = true
 	}
 
-	allPromotedTerms := make(map[int64][]model.Term)
+	allPromotedTerms := make(map[int64][]tfidfdb.Term)
 
 	for _, e := range entries {
 		newTerms := c.ExtractTerms(e.Title, e.Body)
@@ -280,7 +281,7 @@ func (c *Calculator) UpdateTFIDFs(ctx context.Context, entries []UpdateEntry) er
 		var postingArgs []interface{}
 		var postingPlaceholders []string
 		for rows.Next() {
-			var t model.Term
+			var t tfidfdb.Term
 			if err := rows.Scan(&t.ID, &t.Term, &t.DfCount, &t.FirstEntryID); err != nil {
 				rows.Close()
 				return fmt.Errorf("failed to scan term after bulk upsert: %w", err)
@@ -371,6 +372,10 @@ func (c *Calculator) RecalculateTFIDFValues(ctx context.Context, entryIDs []int6
 	defer tx.Rollback()
 
 	// 計算用の一時テーブルを作成
+	// 注記: SQLite において CTE (Common Table Expressions) を使用すると、
+	// クエリプランナが適切にマテリアライズ（実体化）せず、パフォーマンスが著しく低下する場合がある。
+	// 過去に CTE での置き換えを試みたが改善が見られなかったため、
+	// ここでは明示的に TEMPORARY TABLE を作成して中間結果を保持する方針を採っている。
 	_, _ = tx.ExecContext(ctx, `DROP TABLE IF EXISTS temp.entry_total`)
 	_, _ = tx.ExecContext(ctx, `DROP TABLE IF EXISTS temp.term_counts`)
 	_, _ = tx.ExecContext(ctx, `DROP TABLE IF EXISTS temp.entry_term_counts`)

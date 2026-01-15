@@ -10,12 +10,12 @@ import (
 	"github.com/cho45/hanrangon/backend/app"
 )
 
-// RecalculateTFIDFJob handles TF-IDF recalculation for entries
+// RecalculateTFIDFJob はエントリの TF-IDF 再計算を処理
 type RecalculateTFIDFJob struct {
 	app app.App
 }
 
-// RecalculateTFIDFArg is the argument for RecalculateTFIDFJob
+// RecalculateTFIDFArg は RecalculateTFIDFJob の引数
 type RecalculateTFIDFArg struct {
 	EntryID int64 `json:"entry_id"`
 }
@@ -32,8 +32,8 @@ func (j *RecalculateTFIDFJob) Name() string {
 	return "RecalculateTFIDF"
 }
 
-// Timeout returns the maximum execution time for this job
-// TF-IDF recalculation can be heavy for large numbers of entries, so set to 10 minutes
+// Timeout はこのジョブの最大実行時間を返す。
+// TF-IDF の再計算はエントリ数が多い場合に重くなる可能性があるため、10分に設定。
 func (j *RecalculateTFIDFJob) Timeout() time.Duration {
 	return 10 * time.Minute
 }
@@ -48,24 +48,25 @@ func (j *RecalculateTFIDFJob) Execute(ctx context.Context, arg json.RawMessage) 
 	log.Printf("RecalculateTFIDF job started for entry %d", params.EntryID)
 
 	// Get entry from database
-	entry, err := j.app.Queries().GetEntryById(ctx, params.EntryID)
+	entry, err := j.app.MainDB().Q.GetEntryById(ctx, params.EntryID)
 	if err != nil {
 		return fmt.Errorf("failed to get entry: %w", err)
 	}
 
-	// Step 1: Extract terms and update TF-IDF data
+	// ステップ 1: タームを抽出し、DF (Document Frequency) 統計を更新
 	if err := j.app.Calculator().UpdateTFIDF(ctx, params.EntryID, entry.Title, entry.Body); err != nil {
 		return fmt.Errorf("failed to update tfidf: %w", err)
 	}
 
-	// Step 2: Recalculate TF-IDF values for all entries
-	// Note: We recalculate for all entries to ensure global statistics (IDF) are up-to-date
-	// This is necessary because IDF depends on the total number of entries and term frequencies
+	// ステップ 2: 全エントリの TF-IDF 値を再計算
+	// 注記: IDF (Inverse Document Frequency) は総エントリ数および各タームの出現頻度に依存する
+	// グローバルな統計量である。個別の記事更新が全体の重みに影響を与えるため、
+	// 統計の整合性を維持するために全件を対象とした再計算を行う。
 	if err := j.app.Calculator().RecalculateTFIDFValues(ctx, []int64{}); err != nil {
 		return fmt.Errorf("failed to recalculate tfidf values: %w", err)
 	}
 
-	// Step 3: Calculate similar entries for this entry
+	// ステップ 3: このエントリに対する類似エントリを計算
 	if err := j.app.SimilarityCalculator().CalculateSimilarEntries(ctx, []int64{params.EntryID}); err != nil {
 		return fmt.Errorf("failed to calculate similar entries: %w", err)
 	}

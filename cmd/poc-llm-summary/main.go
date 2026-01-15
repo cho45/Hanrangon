@@ -15,7 +15,7 @@ import (
 	"strings"
 
 	"github.com/cho45/hanrangon/backend/app"
-	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/maindb"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -63,8 +63,8 @@ func main() {
 	}
 	defer db.Close()
 
-	queries := model.New(db)
-	var entry model.Entry
+	queries := maindb.New(db)
+	var entry maindb.Entry
 	if *entryID != "" {
 		// エントリIDを整数に変換
 		id, err := strconv.ParseInt(*entryID, 10, 64)

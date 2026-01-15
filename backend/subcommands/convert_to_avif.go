@@ -25,6 +25,14 @@ type ConvertToAVIFOptions struct {
 	Verify   bool  // 検証のみ実行
 }
 
+func init() {
+	Register(Definition{
+		Name:        "convert-to-avif",
+		Description: "Convert JPG/JPEG images to AVIF and update entries",
+		Run:         ConvertToAVIF,
+	})
+}
+
 // ConvertToAVIF はJPG/JPEG画像をAVIFに変換し、データベースのエントリを書き換える
 func ConvertToAVIF(ctx context.Context, application app.App, args []string) error {
 	fs := flag.NewFlagSet("convert-to-avif", flag.ExitOnError)
@@ -74,16 +82,14 @@ func ConvertToAVIF(ctx context.Context, application app.App, args []string) erro
 		log.Printf("ドライランモード - 実際の変更は行われません")
 	}
 
-	// エントリ単位で処理
-	// 理由: 各エントリごとに「変換→DB更新→削除」を完結させることで、
-	//       途中で止まっても処理済みエントリは完全に終わっている状態を維持
+	// 各エントリごとに「変換→DB更新→削除」を完結させることで、
+	// 途中で停止しても処理済みエントリの整合性が保たれるようにエントリ単位で処理。
 	if err := converter.ProcessEntries(ctx); err != nil {
 		return fmt.Errorf("entry processing failed: %w", err)
 	}
 
-	// 検証
-	// 理由: すべての変換が完了した後に、残っている未変換データがないか確認
-	// ただし、dry-run、limit、entry-id指定時は部分的な処理なので検証をスキップ
+	// すべての変換完了後、未変換データの有無を確認。
+	// ただし部分的な処理（dry-run, limit, entry-id 指定時）の場合は検証をスキップ。
 	if !opts.DryRun && opts.Limit == 0 && opts.EntryID == 0 {
 		if err := converter.Verify(ctx); err != nil {
 			log.Printf("警告: 検証に失敗しました: %v", err)
@@ -108,8 +114,8 @@ type AVIFConverter struct {
 	config    *app.Config
 }
 
-// ProcessEntries はエントリ単位で画像変換を処理する
-// 各エントリごとに: 画像抽出 → AVIF変換 → DB更新 → JPG削除を完結させる
+// ProcessEntries はエントリ単位で画像変換を処理。
+// 各エントリごとに画像抽出、AVIF 変換、DB 更新、および元ファイルの削除を完結させる。
 func (c *AVIFConverter) ProcessEntries(ctx context.Context) error {
 	// .jpg または .jpeg を含むエントリをクエリ
 	// ID昇順（古いものから）処理し、オプションでLIMITまたはEntryIDを適用
@@ -141,7 +147,7 @@ func (c *AVIFConverter) ProcessEntries(ctx context.Context) error {
 		}
 	}
 
-	rows, err := c.app.DB().QueryContext(ctx, query)
+	rows, err := c.app.MainDB().QueryContext(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to query entries: %w", err)
 	}
@@ -173,7 +179,7 @@ func (c *AVIFConverter) ProcessEntries(ctx context.Context) error {
 		log.Printf("ドライラン: %d個のエントリを処理します（実際には変更しません）", len(entries))
 	}
 
-	// avifencコマンドのパスを取得（dry-runモードでは不要だがエラーチェックのため取得）
+	// avifenc コマンドのパスを取得。dry-run モードでは不要だが、事前チェックのため取得。
 	var avifencPath string
 	if !c.opts.DryRun {
 		var err error
@@ -268,7 +274,7 @@ func (c *AVIFConverter) ProcessEntries(ctx context.Context) error {
 		newBody := c.rewriteExtensions(e.body)
 		newHTML := c.rewriteExtensions(e.formattedBody)
 
-		_, err := c.app.DB().ExecContext(ctx, `
+		_, err := c.app.MainDB().ExecContext(ctx, `
 			UPDATE entries
 			SET body = ?, formatted_body = ?
 			WHERE id = ?
@@ -465,7 +471,7 @@ func (c *AVIFConverter) UpdateImageURIsForEntry(ctx context.Context, entryID int
 func (c *AVIFConverter) Verify(ctx context.Context) error {
 	log.Printf("AVIF変換を検証中...")
 
-	rows, err := c.app.DB().QueryContext(ctx, `
+	rows, err := c.app.MainDB().QueryContext(ctx, `
 		SELECT id, path, body, formatted_body
 		FROM entries
 		WHERE (body LIKE '%/images/entry/%.jpg%' OR body LIKE '%/images/entry/%.jpeg%' OR

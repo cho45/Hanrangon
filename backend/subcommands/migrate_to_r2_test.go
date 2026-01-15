@@ -12,6 +12,10 @@ import (
 	"github.com/cho45/hanrangon/backend/app"
 	"github.com/cho45/hanrangon/backend/jobqueue"
 	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/imagesdb"
+	"github.com/cho45/hanrangon/backend/model/maindb"
+	"github.com/cho45/hanrangon/backend/model/tfidfdb"
+	"github.com/cho45/hanrangon/backend/model/workerdb"
 	"github.com/cho45/hanrangon/backend/tfidf"
 	"github.com/cho45/hanrangon/internal/testutil"
 	_ "github.com/mattn/go-sqlite3"
@@ -244,17 +248,20 @@ func TestMigrator_ProcessEntries(t *testing.T) {
 		}
 	}
 
+	// Database wrappers
+	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
+	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
+	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
+	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+
 	registry := jobqueue.NewRegistry()
-	workerQueries := model.New(workerDB)
-	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+	worker := jobqueue.NewWorker(workerDB, workerDBWrapper.Q, registry)
 
-	tfidfQueries := model.New(tfidfDB)
-	dataQueries := model.New(db)
-	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
-	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
-	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfDBWrapper.Q, db, mainDBWrapper.Q)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfDBWrapper.Q)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
 
-	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, calc, sim, searcher, worker)
 
 	// Insert test entries
 	_, err := db.Exec(`
@@ -454,17 +461,20 @@ func TestMigrator_ProcessEntries_BodyField(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Database wrappers
+	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
+	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
+	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
+	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+
 	registry := jobqueue.NewRegistry()
-	workerQueries := model.New(workerDB)
-	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+	worker := jobqueue.NewWorker(workerDB, workerDBWrapper.Q, registry)
 
-	tfidfQueries := model.New(tfidfDB)
-	dataQueries := model.New(db)
-	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
-	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
-	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfDBWrapper.Q, db, mainDBWrapper.Q)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfDBWrapper.Q)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
 
-	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, calc, sim, searcher, worker)
 
 	// Insert test entry with Hatena notation body
 	hatenaBody := `>|html|
@@ -538,17 +548,20 @@ func TestMigrator_UpdateImageURIs(t *testing.T) {
 	config := app.LoadConfig()
 	config.R2PublicURL = "https://assets.lowreal.net"
 
+	// Database wrappers
+	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
+	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
+	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
+	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+
 	registry := jobqueue.NewRegistry()
-	workerQueries := model.New(workerDB)
-	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+	worker := jobqueue.NewWorker(workerDB, workerDBWrapper.Q, registry)
 
-	tfidfQueries := model.New(tfidfDB)
-	dataQueries := model.New(db)
-	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
-	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
-	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfDBWrapper.Q, db, mainDBWrapper.Q)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfDBWrapper.Q)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
 
-	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, calc, sim, searcher, worker)
 
 	// Insert test images
 	_, err := imagesDB.Exec(`
@@ -630,17 +643,20 @@ func TestMigrator_Idempotency(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Database wrappers
+	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
+	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
+	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
+	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+
 	registry := jobqueue.NewRegistry()
-	workerQueries := model.New(workerDB)
-	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+	worker := jobqueue.NewWorker(workerDB, workerDBWrapper.Q, registry)
 
-	tfidfQueries := model.New(tfidfDB)
-	dataQueries := model.New(db)
-	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
-	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
-	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfDBWrapper.Q, db, mainDBWrapper.Q)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfDBWrapper.Q)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
 
-	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, calc, sim, searcher, worker)
 
 	// Insert test entry
 	_, err := db.Exec(`
@@ -757,17 +773,20 @@ func TestMigrator_ProcessEntries_UploadError(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Database wrappers
+	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
+	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
+	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
+	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+
 	registry := jobqueue.NewRegistry()
-	workerQueries := model.New(workerDB)
-	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+	worker := jobqueue.NewWorker(workerDB, workerDBWrapper.Q, registry)
 
-	tfidfQueries := model.New(tfidfDB)
-	dataQueries := model.New(db)
-	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
-	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
-	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfDBWrapper.Q, db, mainDBWrapper.Q)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfDBWrapper.Q)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
 
-	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, calc, sim, searcher, worker)
 
 	// Insert test entries
 	_, err := db.Exec(`
@@ -1087,17 +1106,20 @@ func TestMigrator_ProcessEntriesWithLimit(t *testing.T) {
 	config.UploadDir = tmpDir
 	config.BaseURL = "http://localhost:5555"
 
+	// Database wrappers
+	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
+	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
+	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
+	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+
 	registry := jobqueue.NewRegistry()
-	workerQueries := model.New(workerDB)
-	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+	worker := jobqueue.NewWorker(workerDB, workerDBWrapper.Q, registry)
 
-	tfidfQueries := model.New(tfidfDB)
-	dataQueries := model.New(db)
-	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
-	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
-	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfDBWrapper.Q, db, mainDBWrapper.Q)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfDBWrapper.Q)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
 
-	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, calc, sim, searcher, worker)
 
 	// Insert 20 test entries with images
 	for i := 1; i <= 20; i++ {
@@ -1211,17 +1233,20 @@ func TestMigrator_ProcessEntries_DryRun(t *testing.T) {
 	config.R2PublicURL = "https://assets.lowreal.net"
 	config.R2BucketName = "test-bucket"
 
+	// Database wrappers
+	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
+	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
+	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
+	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+
 	registry := jobqueue.NewRegistry()
-	workerQueries := model.New(workerDB)
-	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+	worker := jobqueue.NewWorker(workerDB, workerDBWrapper.Q, registry)
 
-	tfidfQueries := model.New(tfidfDB)
-	dataQueries := model.New(db)
-	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
-	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
-	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfDBWrapper.Q, db, mainDBWrapper.Q)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfDBWrapper.Q)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
 
-	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, calc, sim, searcher, worker)
 
 	// Create test files
 	for i := 1; i <= 3; i++ {
@@ -1320,17 +1345,20 @@ func TestMigrator_ProcessEntriesWithEntryID(t *testing.T) {
 	config.R2PublicURL = "https://assets.lowreal.net"
 	config.UploadDir = tmpDir
 
+	// Database wrappers
+	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
+	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
+	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
+	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+
 	registry := jobqueue.NewRegistry()
-	workerQueries := model.New(workerDB)
-	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+	worker := jobqueue.NewWorker(workerDB, workerDBWrapper.Q, registry)
 
-	tfidfQueries := model.New(tfidfDB)
-	dataQueries := model.New(db)
-	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
-	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
-	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfDBWrapper.Q, db, mainDBWrapper.Q)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfDBWrapper.Q)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
 
-	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, calc, sim, searcher, worker)
 
 	// Insert 5 test entries with images
 	for i := 1; i <= 5; i++ {
@@ -1420,17 +1448,20 @@ func TestMigrator_UpdateImageURIs_DryRun(t *testing.T) {
 	config.R2PublicURL = "https://assets.lowreal.net"
 	config.R2BucketName = "test-bucket"
 
+	// Database wrappers
+	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
+	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
+	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
+	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+
 	registry := jobqueue.NewRegistry()
-	workerQueries := model.New(workerDB)
-	worker := jobqueue.NewWorker(workerDB, workerQueries, registry)
+	worker := jobqueue.NewWorker(workerDB, workerDBWrapper.Q, registry)
 
-	tfidfQueries := model.New(tfidfDB)
-	dataQueries := model.New(db)
-	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfQueries, db, dataQueries)
-	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfQueries)
-	searcher := tfidf.NewSearcher(tfidfDB, tfidfQueries, calc)
+	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfDBWrapper.Q, db, mainDBWrapper.Q)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfDBWrapper.Q)
+	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
 
-	application := app.NewApp(config, db, tfidfDB, workerDB, imagesDB, calc, sim, searcher, worker)
+	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, calc, sim, searcher, worker)
 
 	// Insert test entries with local image references
 	_, err := db.Exec(`

@@ -15,7 +15,7 @@ func Format(body string, format string) (string, error) {
 	case "Markdown":
 		return FormatMarkdown(body)
 	default:
-		// Unknown format, fallback to plain HTML or error
+		// 未知のフォーマットの場合はエラーを返す
 		return "", fmt.Errorf("unsupported format: %s", format)
 	}
 }

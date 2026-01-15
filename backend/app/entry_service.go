@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/cho45/hanrangon/backend/formatter"
-	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/maindb"
 	"github.com/cho45/hanrangon/backend/view"
 )
 
@@ -29,20 +29,19 @@ type SaveEntryParams struct {
 	Reporter  ProgressReporter
 }
 
-// NewEntryService creates a new EntryService instance
 func NewEntryService(app App) *EntryService {
 	return &EntryService{app: app}
 }
 
-func (s *EntryService) SaveEntry(ctx context.Context, params SaveEntryParams) (*model.Entry, error) {
+func (s *EntryService) SaveEntry(ctx context.Context, params SaveEntryParams) (*maindb.Entry, error) {
 	now := time.Now()
 	status := params.Status
 
-	// 0. Validation
-	if status == string(model.StatusScheduled) || status == string(model.StatusReserved) {
+	// 0. バリデーション
+	if status == string(maindb.StatusScheduled) || status == string(maindb.StatusReserved) {
 		if !params.PublishAt.Valid || !params.PublishAt.Time.After(now) {
 			msg := "Scheduled status requires a future publish_at"
-			if status == string(model.StatusReserved) {
+			if status == string(maindb.StatusReserved) {
 				msg = "Reserved status requires a future publish_at"
 			}
 			return nil, fmt.Errorf("%s", msg)
@@ -84,13 +83,13 @@ func (s *EntryService) SaveEntry(ctx context.Context, params SaveEntryParams) (*
 		params.Reporter.Report("データベース保存中...")
 	}
 
-	tx, err := s.app.BeginImmediate(ctx)
+	tx, err := s.app.MainDB().BeginImmediate(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("transaction start error: %w", err)
 	}
 	defer tx.Rollback()
 
-	qtx := s.app.Queries().WithTx(tx)
+	qtx := tx.Q
 
 	summary, imageURL := view.ExtractSummaryAndFirstImage(processedBody, 70)
 
@@ -111,12 +110,12 @@ func (s *EntryService) SaveEntry(ctx context.Context, params SaveEntryParams) (*
 		}
 
 		// reserved への変更時は、既存の date/path を維持する（公開時に CalculateNextPath されるため）
-		if status == string(model.StatusReserved) {
+		if status == string(maindb.StatusReserved) {
 			// 何もしない（既存の date, path を維持）
-		} else if existing.Status == string(model.StatusReserved) {
+		} else if existing.Status == string(maindb.StatusReserved) {
 			// reserved から public/scheduled になった場合は新規採番対象
 			path = ""
-			if status == string(model.StatusScheduled) || !params.PublishAt.Valid {
+			if status == string(maindb.StatusScheduled) || !params.PublishAt.Valid {
 				date = now.Format("2006-01-02")
 			} else {
 				date = params.PublishAt.Time.Format("2006-01-02")
@@ -124,9 +123,9 @@ func (s *EntryService) SaveEntry(ctx context.Context, params SaveEntryParams) (*
 		}
 	} else {
 		path = ""
-		if status == string(model.StatusReserved) && params.PublishAt.Valid {
+		if status == string(maindb.StatusReserved) && params.PublishAt.Valid {
 			date = params.PublishAt.Time.Format("2006-01-02")
-		} else if status == string(model.StatusPublic) && params.PublishAt.Valid {
+		} else if status == string(maindb.StatusPublic) && params.PublishAt.Valid {
 			date = params.PublishAt.Time.Format("2006-01-02")
 		} else {
 			date = now.Format("2006-01-02")
@@ -141,9 +140,9 @@ func (s *EntryService) SaveEntry(ctx context.Context, params SaveEntryParams) (*
 		}
 	}
 
-	var row model.Entry
+	var row maindb.Entry
 	if params.ID != 0 {
-		row, err = qtx.UpdateEntry(ctx, model.UpdateEntryParams{
+		row, err = qtx.UpdateEntry(ctx, maindb.UpdateEntryParams{
 			ID:            params.ID,
 			Title:         params.Title,
 			Body:          params.Body,
@@ -158,7 +157,7 @@ func (s *EntryService) SaveEntry(ctx context.Context, params SaveEntryParams) (*
 			Status:        status,
 		})
 	} else {
-		row, err = qtx.CreateEntry(ctx, model.CreateEntryParams{
+		row, err = qtx.CreateEntry(ctx, maindb.CreateEntryParams{
 			Title:         params.Title,
 			Body:          params.Body,
 			FormattedBody: processedBody,
@@ -206,7 +205,7 @@ func (s *EntryService) SaveEntry(ctx context.Context, params SaveEntryParams) (*
 }
 
 // CalculateNextPath は指定日の既存パスの中から最大の N を探し、N+1 のパスを生成する
-func (s *EntryService) CalculateNextPath(ctx context.Context, qtx *model.Queries, date string) (string, error) {
+func (s *EntryService) CalculateNextPath(ctx context.Context, qtx maindb.Querier, date string) (string, error) {
 	paths, err := qtx.ListPathsByDate(ctx, date)
 	if err != nil {
 		return "", err
@@ -232,7 +231,7 @@ func (s *EntryService) CalculateNextPath(ctx context.Context, qtx *model.Queries
 // PublishScheduledEntries は公開予定日時が過ぎたエントリを公開状態にする
 func (s *EntryService) PublishScheduledEntries(ctx context.Context) error {
 	now := time.Now()
-	entries, err := s.app.Queries().FindScheduledEntriesToPublish(ctx, sql.NullTime{Time: now, Valid: true})
+	entries, err := s.app.MainDB().Q.FindScheduledEntriesToPublish(ctx, sql.NullTime{Time: now, Valid: true})
 	if err != nil {
 		return fmt.Errorf("failed to find scheduled entries: %w", err)
 	}
@@ -245,15 +244,16 @@ func (s *EntryService) PublishScheduledEntries(ctx context.Context) error {
 		err := func() error {
 			// SQLite において、読み取りから書き込みまでの間に他者が割り込まないよう
 			// トランザクション開始時に即座に書き込みロックを取得する
-			tx, err := s.app.BeginImmediate(ctx)
+			tx, err := s.app.MainDB().BeginImmediate(ctx)
 			if err != nil {
 				return err
 			}
 			defer tx.Rollback()
 
-			qtx := s.app.Queries().WithTx(tx)
+			qtx := tx.Q
 
-			// パスが確定していない「予約投稿 (Reserve)」かどうかを判定する
+			// パスが確定していない「予約投稿 (Reserve)」かどうかを判定する。
+			// 詳細は docs/specs/entry-path-logic.md を参照。
 			if e.IsReserved() {
 				// 予約投稿 (Reserve):
 				// 保存時に既存パスがあれば維持されるが、それは無視される。
@@ -264,7 +264,7 @@ func (s *EntryService) PublishScheduledEntries(ctx context.Context) error {
 				if err != nil {
 					return fmt.Errorf("failed to calculate next path for date %s: %w", date, err)
 				}
-				err = qtx.PublishEntry(ctx, model.PublishEntryParams{
+				err = qtx.PublishEntry(ctx, maindb.PublishEntryParams{
 					ID:         e.ID,
 					Path:       path,
 					Date:       date,
@@ -278,7 +278,7 @@ func (s *EntryService) PublishScheduledEntries(ctx context.Context) error {
 				// 公開を遅延 (PublishLater):
 				// 保存時に既にパスが確定している状態 (IsScheduledLater)。
 				// 既存のパスと日付をそのまま渡して公開状態にする。
-				err = qtx.PublishEntry(ctx, model.PublishEntryParams{
+				err = qtx.PublishEntry(ctx, maindb.PublishEntryParams{
 					ID:         e.ID,
 					Path:       e.Path,
 					Date:       e.Date,

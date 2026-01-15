@@ -34,7 +34,7 @@ watch:
 	(cd admin-frontend && npm run dev) & \
 	HANRANGON_FE_DEV=true air
 
-test:
+test: generate
 	node scripts/test-runner.js test-go postprocess-test admin-test
 
 test-go:

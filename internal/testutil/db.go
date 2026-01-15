@@ -7,7 +7,10 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/imagesdb"
+	"github.com/cho45/hanrangon/backend/model/maindb"
+	"github.com/cho45/hanrangon/backend/model/tfidfdb"
+	"github.com/cho45/hanrangon/backend/model/workerdb"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -40,13 +43,13 @@ var schemaFiles = map[dbType]string{
 // DBs holds all test databases and their query objects
 type DBs struct {
 	Main          *sql.DB
-	MainQueries   *model.Queries
+	MainQueries   maindb.Querier
 	TFIDF         *sql.DB
-	TFIDFQueries  *model.Queries
+	TFIDFQueries  tfidfdb.Querier
 	Worker        *sql.DB
-	WorkerQueries *model.Queries
+	WorkerQueries workerdb.Querier
 	Images        *sql.DB
-	ImagesQueries *model.Queries
+	ImagesQueries imagesdb.Querier
 }
 
 // Close closes all databases
@@ -102,12 +105,12 @@ func SetupAllDBs(t *testing.T) *DBs {
 
 	return &DBs{
 		Main:          mainDB,
-		MainQueries:   model.New(mainDB),
+		MainQueries:   maindb.New(mainDB),
 		TFIDF:         tfidfDB,
-		TFIDFQueries:  model.New(tfidfDB),
+		TFIDFQueries:  tfidfdb.New(tfidfDB),
 		Worker:        workerDB,
-		WorkerQueries: model.New(workerDB),
+		WorkerQueries: workerdb.New(workerDB),
 		Images:        imagesDB,
-		ImagesQueries: model.New(imagesDB),
+		ImagesQueries: imagesdb.New(imagesDB),
 	}
 }

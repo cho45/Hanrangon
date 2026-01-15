@@ -14,6 +14,14 @@ import (
 	"golang.org/x/term"
 )
 
+func init() {
+	Register(Definition{
+		Name:        "update-password",
+		Description: "Update the administrator password in config.toml",
+		Run:         UpdatePassword,
+	})
+}
+
 func UpdatePassword(ctx context.Context, application app.App, args []string) error {
 	fs := flag.NewFlagSet("update-password", flag.ExitOnError)
 	configPath := fs.String("config", "config.toml", "path to config file")

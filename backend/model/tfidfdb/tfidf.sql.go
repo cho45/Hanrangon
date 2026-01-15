@@ -3,7 +3,7 @@
 //   sqlc v1.30.0
 // source: tfidf.sql
 
-package model
+package tfidfdb
 
 import (
 	"context"

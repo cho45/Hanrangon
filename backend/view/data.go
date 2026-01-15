@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/maindb"
 )
 
 // LayoutData holds data for the layout template
@@ -20,9 +20,9 @@ type LayoutData struct {
 	IsAuth       bool
 }
 
-// ViewEntry wraps model.Entry with pre-calculated display fields
+// ViewEntry wraps maindb.Entry with pre-calculated display fields
 type ViewEntry struct {
-	model.Entry
+	maindb.Entry
 	DisplayTitle      string
 	Tags              []string
 	Summary           string
@@ -41,8 +41,8 @@ type ViewEntry struct {
 	SimilarImages     []SimilarImage
 }
 
-func NewViewEntry(e model.Entry, baseURL string) ViewEntry {
-	displayTitle, tags := model.ParseTitle(e.Title)
+func NewViewEntry(e maindb.Entry, baseURL string) ViewEntry {
+	displayTitle, tags := maindb.ParseTitle(e.Title)
 	if displayTitle == "" {
 		displayTitle = "✖"
 	}
@@ -73,7 +73,7 @@ func NewViewEntry(e model.Entry, baseURL string) ViewEntry {
 	}
 }
 
-func NewViewEntries(entries []model.Entry, baseURL string) []ViewEntry {
+func NewViewEntries(entries []maindb.Entry, baseURL string) []ViewEntry {
 	res := make([]ViewEntry, len(entries))
 	for i, e := range entries {
 		res[i] = NewViewEntry(e, baseURL)
@@ -88,7 +88,7 @@ func NewViewEntries(entries []model.Entry, baseURL string) []ViewEntry {
 
 // ViewTrackback represents pre-calculated trackback data
 type ViewTrackback struct {
-	model.ListTrackbackEntriesRow
+	maindb.ListTrackbackEntriesRow
 	DisplayTitle     string
 	Summary          string
 	CreatedAtUnix    int64
@@ -96,8 +96,8 @@ type ViewTrackback struct {
 	DisplayTime      string
 }
 
-func NewViewTrackback(row model.ListTrackbackEntriesRow) ViewTrackback {
-	displayTitle, _ := model.ParseTitle(row.Title)
+func NewViewTrackback(row maindb.ListTrackbackEntriesRow) ViewTrackback {
+	displayTitle, _ := maindb.ParseTitle(row.Title)
 	if displayTitle == "" {
 		displayTitle = "✖"
 	}
@@ -112,7 +112,7 @@ func NewViewTrackback(row model.ListTrackbackEntriesRow) ViewTrackback {
 	}
 }
 
-func NewViewTrackbacks(rows []model.ListTrackbackEntriesRow) []ViewTrackback {
+func NewViewTrackbacks(rows []maindb.ListTrackbackEntriesRow) []ViewTrackback {
 	res := make([]ViewTrackback, len(rows))
 	for i, r := range rows {
 		res[i] = NewViewTrackback(r)
