@@ -82,6 +82,8 @@ func RecalcMetadata(ctx context.Context, application app.App, args []string) err
 
 	for rows.Next() {
 		count++
+		// 各エントリごとに抽出と更新を行う。
+		// 一定数ごとにコミット（バッチ処理）することで WAL の肥大化を防ぎ、処理を高速化する。
 		var eid int64
 		var path, formattedBody string
 		err := rows.Scan(&eid, &path, &formattedBody)

@@ -124,9 +124,12 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 
 	// ページネーションパラメータの取得
 	dateStr := c.Param("date")
-	maxDays := 10
-	minDays := 3
-	threshold := 10
+	// アダプティブ・ページネーション:
+	// 1ページあたりの記事数が極端に多くなったり少なくなったりするのを防ぐため、
+	// 記事の密度に応じて表示日数を動的に決定する。
+	maxDays := 10   // 最大表示日数
+	minDays := 3    // 最小表示日数
+	threshold := 10 // 1ページあたりの理想的な最大記事数
 
 	var targetDate string
 	if dateStr != "" {

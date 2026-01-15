@@ -1,88 +1,44 @@
-# Hanrangon (Hanra-n-Go-n)
+# Hanrangon (Go Implementation)
 
-Hanrangon is a modern rewrite of the Nogag CMS (originally Perl) in Go. It is designed to be a fast, memory-efficient, and self-contained blogging platform with advanced features like full-text search similarity (TF-IDF) and robust image handling.
+## プロジェクト概要
 
-## Project Overview
+HanrangonはブログシステムのGo実装。Echoフレームワークベースで、複数テキストフォーマットをサポート。
 
-*   **Core Logic:** Go (Golang) 1.24+
-*   **Web Framework:** Echo v4
-*   **Database:** SQLite (partitioned into Data, Images, TF-IDF, and Worker DBs).
-*   **Data Access:** `sqlc` is used for type-safe SQL execution.
-*   **Image Handling:** Supports JPEG, PNG, WebP, and AVIF (via `vegidio/avif-go`).
-*   **Frontend (Public):** Server-side rendered `html/template`.
-*   **Frontend (Admin):** Single Page Application (SPA) built with Svelte 5 and Vite.
-*   **Post-processing:** Node.js sidecar process for heavy content rendering (MathJax, Syntax Highlighting).
+## 主要コマンド
 
-## Architecture
+```bash
+# ビルド・実行・生成
+make build | make run | make clean | make generate | make fmt
 
-1.  **Backend (Go):** Handles HTTP requests, database operations, and an internal job queue (TheSchwartz-like implementation on SQLite).
-2.  **Admin UI:** A Svelte-based SPA living in `admin-frontend/`. It compiles to static assets served by the Go backend.
-3.  **Content Pipeline:**
-    *   Input: Markdown, Hatena, or tDiary format.
-    *   Processing: Parsed by Go, then piped to a Node.js script (`postprocess/main.js`) for final HTML generation (math, highlighting) before storage.
-    *   Storage: SQLite.
+# テスト (全テスト / 特定パッケージ)
+make test
+go test -v -tags "sqlite_math_functions" ./formatter/...
 
-## Development Guidelines
+# 開発サーバー起動 (通常 / 設定指定 / 本番モード)
+go run .
+HANRANGON_CONFIG=/path/to/config.toml go run .
+HANRANGON_ENV=production go run .
+```
 
-### 0. Strict Mandates for AI Agents
-Code modifications MUST follow this sequence:
-1.  **Verification (Functional):** Run `make test` first. Functional correctness is the highest priority.
-2.  **Linting:** Only after tests pass, run `make lint`. Resolve all issues.
-3.  **Final Verification:** If any changes were made to satisfy the linter, run `make test` again to ensure no regressions were introduced.
-4.  **No Exceptions:** Do not ignore errors without documented justification.
+## アーキテクチャ
 
-### 1. Build & Run
+### ディレクトリ構造
 
-*   **Run Server:** `make run` (runs on `http://localhost:5555`)
-*   **Build Binary:** `make build`
-*   **Test:** `make test` (Requires `sqlite_math_functions` build tag, handled by Makefile)
-*   **Lint:** `make lint`
+- **Backend (Go)**: `backend/app/` (コア), `backend/db/` (SQL), `backend/model/` (sqlc生成), `backend/formatter/` (変換), `backend/tfidf/` (解析), `backend/jobqueue/` (ジョブ), `backend/subcommands/` (CLI), `backend/view/` (SSR)
+- **Frontend & Assets**: `admin-frontend/` (Svelte SPA), `static/` (静的), `postprocess/` (Node.js)
+- **Other**: `internal/` (共通), `var/` (データ), `main.go` (エントリ)
 
-### 2. Database & SQL
+### 主要な設計パターン
 
-*   **Schema:** Located in `db/schema/`.
-*   **Queries:** Located in `db/query/`.
-*   **Code Generation:** After modifying SQL files, **ALWAYS** run:
-    ```bash
-    make generate
-    ```
-    This updates the Go code in `model/` via `sqlc`.
+- **パス解決 (BaseDir)**: `app.Config.BaseDir` 起点の絶対パス構築。詳細は [docs/backend_architecture.md](docs/backend_architecture.md)。
+- **データベース層 (sqlc)**: `backend/model/` 下に自動生成（編集禁止）。詳細は [docs/database_design.md](docs/database_design.md)。
+- **テンプレート層**: `backend/view/` 下の `html/template` を使用。詳細は [docs/ssr-view-and-templating.md](docs/ssr-view-and-templating.md)。
+- **App 構造体パターン**: `AppImpl` メソッドとして全ハンドラを実装。サービス層（`EntryService` 等）によるロジック分離。詳細は [docs/backend_architecture.md](docs/backend_architecture.md)。
+- **コンテンツパイプライン**: `formatter.Format` による HTML 変換。詳細は [docs/content_pipeline.md](docs/content_pipeline.md)。
 
-### 3. Formatting
+## 開発時の注意事項
 
-*   **Go:** Run `make fmt` (uses `goimports`).
-*   **Do not manually format imports.**
-
-### 4. Admin Frontend Development
-
-*   Navigate to `admin-frontend/`.
-*   Run `npm install` then `npm run dev` for hot-reloading development.
-*   The Go server expects built assets in `static/admin/`. Run `npm run build` to update them.
-
-### 5. Post-process Development
-
-*   Logic resides in `postprocess/`.
-*   Test changes with `make postprocess-test`.
-
-## Project Structure
-
-*   `backend/app/`: Core application logic, HTTP handlers, and server setup.
-*   `backend/db/` & `backend/model/`: SQL schemas, queries, and `sqlc` generated code.
-*   `backend/subcommands/`: Subcommands integrated into the main `hanrangon` binary.
-*   `cmd/`: Independent tools and utilities built separately from the main binary.
-*   `backend/formatter/`: Text format parsers (Markdown, Hatena, etc.).
-*   `backend/xatena-go/`: Hatena notation parser implementation.
-*   `backend/jobqueue/` & `backend/jobs/`: Asynchronous background worker system.
-*   `backend/tfidf/`: TF-IDF calculation and related entries extraction.
-*   `backend/view/`: Public-facing HTML templates (SSR).
-*   `admin-frontend/`: Svelte 5 admin panel source (SPA).
-*   `postprocess/`: Node.js rendering script for MathJax and syntax highlighting.
-*   `static/`: Public static assets (CSS, JS, Images).
-*   `var/`: SQLite databases and cache storage.
-*   `internal/`: Common internal utilities and test helpers.
-
-
-## Configuration
-
-*   Copy `config.toml.sample` to `config.toml` to customize database paths and credentials.
-*   Default credentials (dev): `admin` / `changeme`.
+1. **AIエージェントへの厳命 (Mandates for AI Agents)**: `make test` -> `make lint` -> `make test` の順で検証を徹底。
+2. **ディレクトリ移動への配慮**: インポートには常に `github.com/cho45/hanrangon/backend/...` を使用。
+3. **生成コードの編集禁止**: `backend/model/` 以下の `sqlc` 生成ファイル。
+4. **型定義ルール**: `tygo` を使用。フロントエンドでは `admin-frontend/src/lib/types/models.ts` からインポート。

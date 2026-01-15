@@ -106,8 +106,9 @@ func (w *Worker) processNextJob(ctx context.Context) error {
 		return fmt.Errorf("failed to find next job: %w", err)
 	}
 
-	// これ以降の処理は、たとえ ctx がキャンセルされても完了させたい
-	// そのため、独立したコンテキスト（detached context）を使用する
+	// 親の ctx がキャンセル（プロセスの停止信号など）されても、
+	// 開始したジョブの状態更新（成功/失敗の記録）を確実に行うため、
+	// 独立したコンテキスト（detached context）を使用する。
 	jobCtx, cancelJob := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancelJob()
 

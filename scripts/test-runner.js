@@ -19,64 +19,91 @@ const isTTY = process.stdout.isTTY && !process.env.NO_TTY;
 const columns = process.stdout.columns || 80;
 const paneWidth = Math.floor((columns - (numTargets - 1)) / numTargets);
 
-function stripAnsi(str) {
-  return str.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
+const ANSI_RE = /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g;
+
+function color(code, str) {
+  return isTTY ? `\x1b[${code}m${str}\x1b[0m` : str;
+}
+
+function sliceVisible(str, width) {
+  str = str.replace(/\t/g, '  ').replace(/\r/g, '');
+  let vWidth = 0, result = '', i = 0;
+  while (i < str.length) {
+    const match = str.slice(i).match(ANSI_RE);
+    if (match && str.indexOf(match[0]) === i) {
+      result += match[0];
+      i += match[0].length;
+    } else {
+      const char = str[i], cw = /[^\x00-\xff]/.test(char) ? 2 : 1;
+      if (vWidth + cw > width) {
+        // 残り文字がある場合のみ '…' に置換
+        if (str.slice(i).replace(ANSI_RE, '').length > 0) {
+          // 最後の1文字を削って '…' にする。
+          // result から最後の表示文字を1つ消す
+          let lastCharMatch = result.match(/([^\x00-\xff]|[\x00-\xff])(?:\x1b\[[0-9;]*m)*$/);
+          if (lastCharMatch) {
+            result = result.slice(0, result.length - lastCharMatch[0].length) + lastCharMatch[0].replace(/^([^\x00-\xff]|[\x00-\xff])/, '…');
+          }
+        }
+        vWidth = width;
+        break;
+      }
+      result += char;
+      vWidth += cw;
+      i++;
+    }
+  }
+  return result + (isTTY ? '\x1b[0m' : '') + ' '.repeat(Math.max(0, width - vWidth));
 }
 
 function draw() {
   if (!isTTY) return;
 
   const rows = process.stdout.rows || 24;
-  const displayRows = rows - 10;
+  const displayRows = Math.max(1, rows - 10);
 
-  process.stdout.write('\x1b[H\x1b[J');
+  process.stdout.write('\x1b[H'); // Cursor to home
+
+  const printLine = (line) => process.stdout.write(line + '\x1b[K\n');
 
   let header = '';
   for (let i = 0; i < numTargets; i++) {
-    const name = results[i].name.padEnd(paneWidth).substring(0, paneWidth);
-    header += `\x1b[1;36m${name}\x1b[0m`;
+    header += color('1;36', sliceVisible(results[i].name, paneWidth));
     if (i < numTargets - 1) header += '│';
   }
-  console.log(header);
-  console.log('─'.repeat(columns));
+  printLine(header);
+  printLine('─'.repeat(columns));
 
   for (let r = 0; r < displayRows; r++) {
     let line = '';
     for (let i = 0; i < numTargets; i++) {
       const targetOutput = results[i].output;
       const outputIndex = targetOutput.length - displayRows + r;
-      let content = '';
-      if (outputIndex >= 0 && outputIndex < targetOutput.length) {
-        content = stripAnsi(targetOutput[outputIndex]);
-      }
-      line += content.padEnd(paneWidth).substring(0, paneWidth);
+      const content = (outputIndex >= 0 && outputIndex < targetOutput.length) ? targetOutput[outputIndex] : '';
+      line += sliceVisible(content, paneWidth);
       if (i < numTargets - 1) line += '│';
     }
-    console.log(line);
+    printLine(line);
   }
 
-  console.log('─'.repeat(columns));
+  printLine('─'.repeat(columns));
   
   let statusLine = '';
   for (let i = 0; i < numTargets; i++) {
     const res = results[i];
     let statusText = '';
-    let ansiLen = 0;
     if (res.status === 'running') {
-      statusText = '\x1b[33mRUNNING...\x1b[0m';
-      ansiLen = 9;
+      statusText = color('33', 'RUNNING...');
     } else if (res.status === 'success') {
-      statusText = '\x1b[32m[PASSED]\x1b[0m';
-      ansiLen = 9;
+      statusText = color('32', '[PASSED]');
     } else {
-      statusText = '\x1b[31m[FAILED]\x1b[0m';
-      ansiLen = 9;
+      statusText = color('31', '[FAILED]');
     }
-    
-    statusLine += statusText.padEnd(paneWidth + ansiLen).substring(0, paneWidth + ansiLen);
+    statusLine += sliceVisible(statusText, paneWidth);
     if (i < numTargets - 1) statusLine += '│';
   }
-  console.log(statusLine);
+  printLine(statusLine);
+  process.stdout.write('\x1b[J'); // Clear remaining screen
 }
 
 const timer = isTTY ? setInterval(draw, 200) : null;
@@ -111,7 +138,7 @@ async function runTarget(index) {
 }
 
 if (isTTY) {
-  console.log('\x1b[?1049h'); // 代替画面バッファに切り替え
+  process.stdout.write('\x1b[?1049h\x1b[?25l'); // 代替画面バッファ & カーソル非表示
 } else {
   console.log(`Running ${numTargets} tests in parallel: ${targets.join(', ')}...`);
 }
@@ -121,18 +148,18 @@ try {
 } finally {
   if (timer) clearInterval(timer);
   if (isTTY) {
-    process.stdout.write('\x1b[?1049l'); // 元の画面に戻す
+    process.stdout.write('\x1b[?1049l\x1b[?25h'); // 元の画面に戻す & カーソル表示
   }
 }
 
 // 最終結果の表示
-console.log('\n========================================');
+console.log('\n' + '─'.repeat(40));
 console.log('             TEST SUMMARY               ');
-console.log('========================================');
+console.log('─'.repeat(40));
 
 let allPassed = true;
 for (const res of results) {
-  const status = res.status === 'success' ? '\x1b[32m[PASSED]\x1b[0m' : '\x1b[31m[FAILED]\x1b[0m';
+  const status = res.status === 'success' ? color('32', '[PASSED]') : color('31', '[FAILED]');
   console.log(`${res.name.padEnd(20)}: ${status}`);
   if (res.status !== 'success') {
     allPassed = false;
@@ -143,7 +170,7 @@ console.log('========================================');
 // 失敗したテストがある場合はログを表示
 for (const res of results) {
   if (res.status !== 'success') {
-    console.log(`\n\x1b[1;31m--- ${res.name} Failed Output ---\x1b[0m`);
+    console.log(`\n${color('1;31', `--- ${res.name} Failed Output ---`)}`);
     console.log(res.output.join('\n')); // 全ログを表示
   }
 }

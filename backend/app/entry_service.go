@@ -29,7 +29,6 @@ type SaveEntryParams struct {
 	Reporter  ProgressReporter
 }
 
-// NewEntryService creates a new EntryService instance
 func NewEntryService(app App) *EntryService {
 	return &EntryService{app: app}
 }
@@ -38,7 +37,7 @@ func (s *EntryService) SaveEntry(ctx context.Context, params SaveEntryParams) (*
 	now := time.Now()
 	status := params.Status
 
-	// 0. Validation
+	// 0. バリデーション
 	if status == string(maindb.StatusScheduled) || status == string(maindb.StatusReserved) {
 		if !params.PublishAt.Valid || !params.PublishAt.Time.After(now) {
 			msg := "Scheduled status requires a future publish_at"
@@ -253,7 +252,8 @@ func (s *EntryService) PublishScheduledEntries(ctx context.Context) error {
 
 			qtx := tx.Q
 
-			// パスが確定していない「予約投稿 (Reserve)」かどうかを判定する
+			// パスが確定していない「予約投稿 (Reserve)」かどうかを判定する。
+			// 詳細は docs/specs/entry-path-logic.md を参照。
 			if e.IsReserved() {
 				// 予約投稿 (Reserve):
 				// 保存時に既存パスがあれば維持されるが、それは無視される。

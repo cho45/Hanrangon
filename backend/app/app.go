@@ -54,7 +54,6 @@ type AppImpl struct {
 	entryService         *EntryService
 }
 
-// NewApp creates a new App instance
 func NewApp(
 	config *Config,
 	mainDB *model.Database[maindb.Querier],
@@ -112,7 +111,6 @@ func NewApp(
 	return app
 }
 
-// Getter implementations
 func (a *AppImpl) MainDB() *model.Database[maindb.Querier]           { return a.mainDB }
 func (a *AppImpl) TFIDFDB() *model.Database[tfidfdb.Querier]         { return a.tfidfDB }
 func (a *AppImpl) WorkerDB() *model.Database[workerdb.Querier]       { return a.workerDB }
@@ -212,7 +210,7 @@ func (app *AppImpl) Postprocess(ctx context.Context, html string) (string, error
 	return stdout.String(), nil
 }
 
-// PostprocessWithProgress は進捗通知付きでpostprocessを実行する
+// PostprocessWithProgress は進捗通知付きで postprocess を実行する
 func (app *AppImpl) PostprocessWithProgress(ctx context.Context, html string, session *ProgressSession) (string, error) {
 	start := time.Now()
 
@@ -230,8 +228,6 @@ func (app *AppImpl) PostprocessWithProgress(ctx context.Context, html string, se
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	// Node.js スクリプトのパス
-	// Node.js スクリプトのパス（プロジェクトルートからの相対パス）
 	// Node.js スクリプトのパス（プロジェクトルートからの相対パス）
 	scriptPath := filepath.Join(app.config.BaseDir, "postprocess", "main.js")
 

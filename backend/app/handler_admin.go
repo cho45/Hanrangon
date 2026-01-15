@@ -286,7 +286,8 @@ func (app *AppImpl) HandleAdminApiEdit(c echo.Context) error {
 	// 2. ProgressSession作成
 	session := app.createProgressSession()
 
-	// 3. goroutineで全処理を非同期実行
+	// 3. 保存処理（フォーマットや Postprocess）は重いため、HTTP リクエストを長時間保持せず
+	// goroutine で非同期に実行する。進捗は SSE を通じてクライアントに通知する。
 	go func() {
 		defer app.cleanupProgressSession(session.ID)
 

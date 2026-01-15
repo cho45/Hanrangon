@@ -105,15 +105,14 @@ func MigrateToR2(ctx context.Context, application app.App, args []string) error 
 		log.Printf("ドライランモード - 実際の変更は行われません")
 	}
 
-	// エントリ単位でアトミックに処理
-	// 各エントリごとに: 画像抽出 → R2アップロード → DB更新を完結させる
+	// 各エントリごとに「画像抽出→R2アップロード→DB更新」を完結させることで、
+	// 途中で停止しても処理済みエントリの整合性が保たれるようにエントリ単位で処理。
 	if err := migrator.ProcessEntries(ctx); err != nil {
 		return fmt.Errorf("entry processing failed: %w", err)
 	}
 
-	// 検証
-	// 理由: すべての移行が完了した後に、残っている未移行データがないか確認
-	// ただし、dry-run、limit、entry-id指定時は部分的な処理なので検証をスキップ
+	// すべての移行完了後、未移行データの有無を確認。
+	// ただし部分的な処理（dry-run, limit, entry-id 指定時）の場合は検証をスキップ。
 	if !opts.DryRun && opts.Limit == 0 && opts.EntryID == 0 {
 		if err := migrator.Verify(ctx); err != nil {
 			log.Printf("警告: 検証に失敗しました: %v", err)
@@ -139,8 +138,8 @@ type Migrator struct {
 	opts        *MigrateToR2Options
 }
 
-// ProcessEntries はエントリ単位で画像移行を処理する
-// 各エントリごとに: 画像抽出 → R2アップロード → DB更新を完結させる
+// ProcessEntries はエントリ単位で画像移行を処理。
+// 各エントリごとに画像抽出、R2 アップロード、および DB 更新を完結させる。
 func (m *Migrator) ProcessEntries(ctx context.Context) error {
 	// /images/entry/を含むエントリをクエリ
 	// ID昇順（古いものから）処理し、オプションでLIMITまたはEntryIDを適用

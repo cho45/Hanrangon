@@ -27,7 +27,7 @@ func FormatMarkdown(body string) (string, error) {
 	if err := md.Convert([]byte(body), &buf); err != nil {
 		return "", err
 	}
-	// Strip HTML comments for security and compatibility
+	// セキュリティと互換性のため、HTML コメントを除去する
 	res := mdCommentRegexp.ReplaceAllString(buf.String(), "")
 	return res, nil
 }

@@ -30,15 +30,15 @@ Perl 版 Nogag (氾濫原) の Go (Golang) によるリライトプロジェク�
 
 ### Backend Architecture
 システムのコンポーネント構成と非同期ジョブのフロー。
-![Backend Architecture](docs/arch_diagram.png)
+![Backend Architecture](docs/diagrams/arch_diagram.png)
 
 ### Frontend Architecture
 公開側（SSR）と管理画面（Svelte SPA）の構成。
-![Frontend Architecture](docs/frontend_arch_diagram.png)
+![Frontend Architecture](docs/diagrams/frontend_arch_diagram.png)
 
 ### Content Pipeline
-記事の投稿からフォーマット、ポストプロセス、保存、そして進捗通知（SSE）の流れ。
-![Content Pipeline](docs/content_pipeline_diagram.png)
+記事の投稿からフォーマット、ポストプロセス、保存、および進捗通知（SSE）の流れ。
+![Content Pipeline](docs/diagrams/content_pipeline_diagram.png)
 
 ## Prerequisites
 
@@ -91,7 +91,7 @@ make run
 
 ## Database & Code Generation
 
-SQL スキーマ (`db/schema/`) やクエリ (`db/query/`) を変更した場合は、`sqlc` を使用して Go のモデルコードを再生成する必要があります。
+SQL スキーマ (`backend/db/schema/`) やクエリ (`backend/db/query/`) を変更した場合は、`sqlc` を使用して Go のモデルコードを再生成する必要があります。
 
 ```bash
 make generate
@@ -140,7 +140,7 @@ make
 ### Backend (Go & Content Pipeline)
 - **Core Logic**
   - `backend/app/`: アプリケーションのコアロジック（ハンドラー、サーバー構成、設定）。
-  - `backend/db/`, `backend/model/`: SQL スキーマ、クエリ定義、および `sqlc` 生成コード。
+  - `backend/db/`, `backend/model/`: SQL スキーマ、クエリ定義、および `sqlc` 生成コード。`model/` 以下は各データベース（`maindb`, `imagesdb`, `tfidfdb`, `workerdb`）ごとにディレクトリが分かれています。
   - `backend/subcommands/`: `hanrangon` メインバイナリに組み込まれるサブコマンド群（`serve`, `reformat`, `backup` 等）。
   - `internal/`: プロジェクト全体で使用される共通ユーティリティ（テストヘルパー等）。
   - `var/`: SQLite データベースファイル、およびキャッシュデータの格納場所。
@@ -175,14 +175,10 @@ make
 
 ## Testing
 
-インメモリ `SQLite` を使用した統合テストが可能。`SQLite` の数学関数を使用するため、`sqlite_math_functions` タグが必要。
+バックエンド (Go)、ポストプロセス (Node.js)、管理画面 (Svelte) のすべてのテストを実行します。
 
 ```bash
 make test
 ```
 
-`Node.js` によるポストプロセスのテスト:
-
-```bash
-make postprocess-test
-```
+詳細は [docs/how-to-testing.md](docs/how-to-testing.md) を参照してください。

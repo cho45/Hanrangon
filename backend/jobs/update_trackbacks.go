@@ -41,13 +41,14 @@ func (j *UpdateTrackbacksJob) Execute(ctx context.Context, arg json.RawMessage) 
 		return err
 	}
 
-	// Extract paths from formatted body
+	// 本文から自サイト内のリンク（パス）を抽出。
+	// これにより、記事間での言及を「トラックバック」として自動登録する。
 	u, err := url.Parse(j.app.Config().BaseURL)
 	if err != nil {
 		return err
 	}
 	host := regexp.QuoteMeta(u.Host)
-	// Match paths like /2026/01/02/1
+	// YYYY/MM/DD/N 形式のパスにマッチさせる
 	re := regexp.MustCompile(fmt.Sprintf(`https?://%s/(\d{4}/\d{2}/\d{2}/\d+)`, host))
 	matches := re.FindAllStringSubmatch(entry.FormattedBody, -1)
 
@@ -61,7 +62,7 @@ func (j *UpdateTrackbacksJob) Execute(ctx context.Context, arg json.RawMessage) 
 		}
 	}
 
-	// Update trackbacks
+	// トラックバック情報の更新
 	tx, err := j.app.MainDB().BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -69,16 +70,16 @@ func (j *UpdateTrackbacksJob) Execute(ctx context.Context, arg json.RawMessage) 
 	defer tx.Rollback()
 	qtx := maindb.New(tx)
 
-	// 1. Delete old ones where this entry is the source (trackback_entry_id)
+	// 1. このエントリを送信元とする古いトラックバックを削除
 	if err := qtx.DeleteTrackbacksBySourceEntryId(ctx, sql.NullInt64{Int64: a.EntryID, Valid: true}); err != nil {
 		return err
 	}
 
-	// 2. Insert new ones
+	// 2. 新しいトラックバックを登録
 	for _, path := range paths {
 		target, err := qtx.GetEntryByPath(ctx, path)
 		if err != nil {
-			// If target entry not found, just skip it
+			// ターゲットエントリが見つからない場合はスキップ
 			continue
 		}
 

@@ -372,6 +372,10 @@ func (c *Calculator) RecalculateTFIDFValues(ctx context.Context, entryIDs []int6
 	defer tx.Rollback()
 
 	// 計算用の一時テーブルを作成
+	// 注記: SQLite において CTE (Common Table Expressions) を使用すると、
+	// クエリプランナが適切にマテリアライズ（実体化）せず、パフォーマンスが著しく低下する場合がある。
+	// 過去に CTE での置き換えを試みたが改善が見られなかったため、
+	// ここでは明示的に TEMPORARY TABLE を作成して中間結果を保持する方針を採っている。
 	_, _ = tx.ExecContext(ctx, `DROP TABLE IF EXISTS temp.entry_total`)
 	_, _ = tx.ExecContext(ctx, `DROP TABLE IF EXISTS temp.term_counts`)
 	_, _ = tx.ExecContext(ctx, `DROP TABLE IF EXISTS temp.entry_term_counts`)
