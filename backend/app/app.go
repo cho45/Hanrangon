@@ -236,10 +236,8 @@ func (app *AppImpl) postprocessWithRetry(ctx context.Context, html string, repor
 
 		// エラー時のみロックして破棄
 		app.postprocessMu.Lock()
-		if app.postprocessProcessor == p {
-			_ = p.Close()
-			app.postprocessProcessor = nil
-		}
+		_ = p.Close()
+		app.postprocessProcessor = nil
 		app.postprocessMu.Unlock()
 	}
 
