@@ -146,4 +146,70 @@ describe('Integration tests', () => {
     // stderr に解決された URL が含まれているか確認
     assert(stderr.includes('http://localhost:12345/images/entry/test.png'), `Should try to fetch resolved URL in stderr: ${stderr}`);
   });
+
+  describe('Batch mode (JSON-RPC)', () => {
+    it('should process HTML via JSON-RPC', async () => {
+      const html = '<p>Math: \\(x^2\\)</p>';
+      const input = JSON.stringify({
+        jsonrpc: '2.0',
+        id: 123,
+        method: 'process',
+        params: { html }
+      }) + '\n';
+
+      const proc = spawn('node', [mainJsPath, '--batch']);
+      const rl = (await import('node:readline')).createInterface({ input: proc.stdout });
+
+      proc.stdin.write(input);
+
+      const lines = [];
+      for await (const line of rl) {
+        const msg = JSON.parse(line);
+        lines.push(msg);
+        if (msg.result) break;
+      }
+      proc.stdin.end();
+      proc.kill();
+
+      const progressLogs = lines.filter(l => l.method === 'progress');
+      const result = lines.find(l => l.result);
+
+      assert(progressLogs.length > 0, 'Should receive progress notifications');
+      assert.strictEqual(result.id, 123);
+      assert(result.result.html.includes('svg'), 'Should contain processed MathJax');
+    });
+
+    it('should handle multiple requests sequentially', async () => {
+      const proc = spawn('node', [mainJsPath, '--batch']);
+      const rl = (await import('node:readline')).createInterface({ input: proc.stdout });
+
+      const results = [];
+      const sendRequest = (id, html) => {
+        proc.stdin.write(JSON.stringify({
+          jsonrpc: '2.0',
+          id: id,
+          method: 'process',
+          params: { html }
+        }) + '\n');
+      };
+
+      sendRequest(1, '<p>First</p>');
+      sendRequest(2, '<p>Second</p>');
+
+      for await (const line of rl) {
+        const msg = JSON.parse(line);
+        if (msg.result) {
+          results.push(msg);
+        }
+        if (results.length === 2) break;
+      }
+
+      proc.stdin.end();
+      proc.kill();
+
+      assert.strictEqual(results.length, 2);
+      assert.strictEqual(results[0].id, 1);
+      assert.strictEqual(results[1].id, 2);
+    });
+  });
 });

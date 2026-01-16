@@ -187,7 +187,8 @@ export type ProgressReporter = any;
 /**
  * App はアプリケーションの主要なインターフェース
  */
-export type App = any;
+export type App = 
+    any /* io.Closer */;
 
 //////////
 // source: middleware_csrf.go

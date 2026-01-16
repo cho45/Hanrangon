@@ -113,6 +113,7 @@ func (env *testEnv) close() {
 	env.tfidfDB.Close()
 	env.workerDB.Close()
 	env.imagesDB.Close()
+	env.app.Close()
 	os.RemoveAll(env.uploadDir)
 }
 

@@ -640,12 +640,19 @@ func TestHandleApiEdit(t *testing.T) {
 
 			scanner := bufio.NewScanner(progRec.Body)
 			var location string
+			var foundNodeLog bool
 			for scanner.Scan() {
 				line := scanner.Text()
 				if strings.HasPrefix(line, "data: ") {
 					data := strings.TrimPrefix(line, "data: ")
 					var msg map[string]interface{}
 					if err := json.Unmarshal([]byte(data), &msg); err == nil {
+						if msg["type"] == "progress" {
+							message := msg["message"].(string)
+							if strings.Contains(message, "processHTML:") {
+								foundNodeLog = true
+							}
+						}
 						if msg["type"] == "done" {
 							location = msg["location"].(string)
 							break
@@ -656,6 +663,10 @@ func TestHandleApiEdit(t *testing.T) {
 						}
 					}
 				}
+			}
+			if !foundNodeLog {
+				errChan <- fmt.Errorf("did not receive Node.js progress logs via SSE")
+				return
 			}
 			if location != "" {
 				done <- location

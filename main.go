@@ -120,6 +120,7 @@ func main() {
 	// 8. Execute command
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	defer application.Close()
 
 	// Register serve and help commands
 	subcommands.Register(subcommands.Definition{

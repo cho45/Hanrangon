@@ -23,6 +23,7 @@
   let progress = $state('');
   let uploading = $state(false);
   let isInitialLoading = $state(true);
+  let previewLoading = $state(false);
 
   let titleInput = $state<HTMLInputElement>(null!);
   let bodyTextArea = $state<HTMLTextAreaElement>(null!);
@@ -341,6 +342,17 @@
   function openPreview() {
     previewDialog.showModal();
 
+    const iframe = document.getElementsByName('preview-iframe')[0] as HTMLIFrameElement;
+    if (iframe) {
+      iframe.src = 'about:blank';
+    }
+
+    // about:blank への遷移による load イベントで previewLoading が解除されないよう
+    // わずかに遅らせてから true に設定する
+    setTimeout(() => {
+      previewLoading = true;
+    }, 0);
+
     const formEl = document.createElement('form');
     formEl.method = 'POST';
     formEl.action = '/admin/api/preview';
@@ -364,6 +376,11 @@
     document.body.appendChild(formEl);
     formEl.submit();
     document.body.removeChild(formEl);
+  }
+
+  function closePreview() {
+    previewLoading = false;
+    previewDialog.close();
   }
   function escapeHTML(str: string) {
     const p = document.createElement('p');
@@ -551,10 +568,30 @@
 <dialog bind:this={previewDialog} id="previewDialog">
   <div class="preview-header">
     <h3>プレビュー</h3>
-    <button type="button" class="close-button" onclick={() => previewDialog.close()}>閉じる</button>
+    <button type="button" class="close-button" onclick={closePreview}>閉じる</button>
   </div>
   <div class="preview-body">
-    <iframe name="preview-iframe" title="Preview"></iframe>
+    {#if previewLoading}
+      <div class="preview-overlay">
+        <div class="preview-progress-container">
+          <div class="preview-progress-bar"></div>
+          <div class="preview-progress-text">読み込み中...</div>
+        </div>
+      </div>
+    {/if}
+    <iframe
+      name="preview-iframe"
+      title="Preview"
+      onload={() => {
+        if (previewLoading) {
+          previewLoading = false;
+        }
+      }}
+      onerror={() => {
+        previewLoading = false;
+        alert('プレビューの読み込みに失敗しました');
+      }}
+    ></iframe>
   </div>
 </dialog>
 
@@ -840,6 +877,55 @@
   .preview-body {
     flex: 1;
     overflow: hidden;
+    position: relative;
+  }
+
+  .preview-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+
+  .preview-progress-container {
+    width: 200px;
+    text-align: center;
+  }
+
+  .preview-progress-bar {
+    height: 4px;
+    background: #f3f3f3;
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+    margin-bottom: 8px;
+  }
+
+  .preview-progress-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: #00acc1;
+    animation: preview-progress-anim 1.5s infinite linear;
+  }
+
+  @keyframes preview-progress-anim {
+    0% { left: -100%; }
+    100% { left: 100%; }
+  }
+
+  .preview-progress-text {
+    font-size: 0.9em;
+    color: #666;
   }
 
   .preview-body iframe {

@@ -252,7 +252,7 @@ type progressReporterAdapter struct {
 }
 
 func (a *progressReporterAdapter) Report(message string) {
-	a.app.sendProgressMessage(a.session, message)
+	a.session.Report(message)
 }
 
 func (app *AppImpl) HandleAdminApiEdit(c echo.Context) error {
@@ -346,7 +346,7 @@ func (app *AppImpl) HandleAdminApiPreview(c echo.Context) error {
 	}
 
 	// 2. Postprocess
-	processedBody, err := app.Postprocess(ctx, formattedBody)
+	processedBody, err := app.Postprocess(ctx, formattedBody, nil)
 	if err != nil {
 		// Postprocess failed, but we can still show the formatted body
 		processedBody = formattedBody
@@ -470,7 +470,6 @@ func (app *AppImpl) HandleAdminApiEntries(c echo.Context) error {
 	}
 
 	var entries []maindb.Entry
-	var err error
 	fetchLimit := int64(limit + 1)
 
 	if search != "" {
@@ -493,10 +492,6 @@ func (app *AppImpl) HandleAdminApiEntries(c echo.Context) error {
 		if err != nil {
 			return err
 		}
-	}
-
-	if err != nil {
-		return err
 	}
 
 	if entries == nil {

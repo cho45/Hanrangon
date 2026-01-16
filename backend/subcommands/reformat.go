@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/cho45/hanrangon/backend/app"
 	"github.com/cho45/hanrangon/backend/formatter"
@@ -48,7 +49,7 @@ func Reformat(ctx context.Context, application app.App, args []string) error {
 	}
 	defer rows.Close()
 
-	processor, err := application.PostprocessBatch(ctx)
+	processor, err := application.PostprocessBatch(ctx, 30*time.Minute)
 	if err != nil {
 		return fmt.Errorf("failed to start postprocess batch: %w", err)
 	}
@@ -73,7 +74,9 @@ func Reformat(ctx context.Context, application app.App, args []string) error {
 			continue
 		}
 
-		processedBody, err := processor.Process(id, formattedBody)
+		// BatchProcessor.Process に context と reporter を渡す
+		// バッチ処理では個別の進捗報告は不要なので reporter は nil
+		processedBody, err := processor.Process(ctx, formattedBody, nil)
 		if err != nil {
 			log.Printf("  Error postprocessing entry %d: %v", id, err)
 		} else {

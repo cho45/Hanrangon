@@ -219,9 +219,6 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 		}
 		entries = filteredEntries
 	}
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
-	}
 
 	if len(entries) > 0 {
 		latest := getLatestModTime(entries)

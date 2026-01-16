@@ -192,7 +192,7 @@ describe('AppEditor', () => {
     });
   });
 
-  it('プレビューボタンを押すと form.submit が呼ばれ、ダイアログが開き、「閉じる」ボタンで閉じられること', async () => {
+  it('プレビューボタンを押すと form.submit が呼ばれ、ダイアログが開き、ロード状態が管理されること', async () => {
     const user = userEvent.setup();
     const submitSpy = vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(() => {});
 
@@ -207,16 +207,60 @@ describe('AppEditor', () => {
     const dialog = document.getElementById('previewDialog') as HTMLDialogElement;
     expect(dialog.open).toBe(true);
 
-    // 「閉じる」ボタンが存在し、スタイル用のクラスを持っていることを確認
-    const closeButton = screen.getByRole('button', { name: '閉じる' });
-    expect(closeButton.className).toContain('close-button');
+    // ロード中のオーバーレイが表示されるまで待機
+    await waitFor(() => {
+      expect(screen.getByText('読み込み中...')).toBeTruthy();
+    });
+
+    // iframe を取得
+    const iframe = document.querySelector('iframe[name="preview-iframe"]') as HTMLIFrameElement;
+    
+    // onload をシミュレート
+    iframe.dispatchEvent(new Event('load'));
+
+    // オーバーレイが消えることを確認
+    await waitFor(() => {
+      expect(screen.queryByText('読み込み中...')).toBeNull();
+    });
 
     // 「閉じる」ボタンをクリック
+    const closeButton = screen.getByRole('button', { name: '閉じる' });
     await user.click(closeButton);
 
     // dialog が閉じていることを確認
     expect(dialog.open).toBe(false);
 
     submitSpy.mockRestore();
+  });
+
+  it('プレビューの読み込みエラー時にアラートが表示され、ロード状態が解除されること', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(() => {});
+
+    render(AppEditor, { id: null, onSave: () => {} });
+
+    const previewButton = screen.getByRole('button', { name: 'プレビュー' });
+    await user.click(previewButton);
+
+    // ロード中のオーバーレイが表示されるまで待機
+    await waitFor(() => {
+      expect(screen.getByText('読み込み中...')).toBeTruthy();
+    });
+
+    // iframe を取得
+    const iframe = document.querySelector('iframe[name="preview-iframe"]') as HTMLIFrameElement;
+    
+    // onerror をシミュレート
+    iframe.dispatchEvent(new Event('error'));
+
+    // アラートが表示されるまで待機
+    await waitFor(() => {
+      expect(window.alert).toHaveBeenCalledWith('プレビューの読み込みに失敗しました');
+    });
+
+    // オーバーレイが消えることを確認
+    await waitFor(() => {
+      expect(screen.queryByText('読み込み中...')).toBeNull();
+    });
   });
 });
