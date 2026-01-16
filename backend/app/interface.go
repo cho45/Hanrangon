@@ -53,4 +53,6 @@ type App interface {
 	GetR2Usage(ctx context.Context) (*R2UsageStats, error)
 
 	InvalidateOGPCache(id int64) error
+
+	Storage() StorageClient
 }

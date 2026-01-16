@@ -134,6 +134,7 @@ func (a *AppImpl) JobQueue() *jobqueue.Worker                        { return a.
 func (a *AppImpl) Config() *Config                                   { return a.config }
 func (a *AppImpl) Templates() *Templates                             { return a.templates }
 func (a *AppImpl) EntryService() *EntryService                       { return a.entryService }
+func (a *AppImpl) Storage() StorageClient                            { return a.storage }
 
 func (a *AppImpl) Close() error {
 	a.postprocessMu.Lock()

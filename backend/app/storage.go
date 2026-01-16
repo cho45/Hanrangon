@@ -16,6 +16,11 @@ import (
 )
 
 // StorageClient はストレージ操作の抽象化インターフェース
+type StorageObject struct {
+	Key  string
+	Size int64
+}
+
 type StorageClient interface {
 	// Upload uploads a file and returns the public URL
 	// key: ファイル名のみ（例: "20240101120000-image.jpg"）
@@ -24,6 +29,13 @@ type StorageClient interface {
 
 	// Exists checks if the file exists in the storage
 	Exists(ctx context.Context, key string) (bool, error)
+
+	// ListObjects lists objects in the storage with the given prefix
+	// Returns relative keys (without "entry/" prefix)
+	ListObjects(ctx context.Context, prefix string) ([]StorageObject, error)
+
+	// Delete deletes the file from the storage
+	Delete(ctx context.Context, key string) error
 }
 
 // LocalStorage はローカルファイルシステムへの保存
@@ -76,10 +88,47 @@ func (s *LocalStorage) Exists(ctx context.Context, key string) (bool, error) {
 	return false, err
 }
 
+// ListObjects lists files locally
+func (s *LocalStorage) ListObjects(ctx context.Context, prefix string) ([]StorageObject, error) {
+	searchPattern := filepath.Join(s.uploadDir, prefix+"*")
+	matches, err := filepath.Glob(searchPattern)
+	if err != nil {
+		return nil, err
+	}
+
+	var objects []StorageObject
+	for _, match := range matches {
+		info, err := os.Stat(match)
+		if err != nil {
+			continue
+		}
+		if info.IsDir() {
+			continue
+		}
+		rel, err := filepath.Rel(s.uploadDir, match)
+		if err != nil {
+			continue
+		}
+		objects = append(objects, StorageObject{
+			Key:  rel,
+			Size: info.Size(),
+		})
+	}
+	return objects, nil
+}
+
+// Delete deletes the file locally
+func (s *LocalStorage) Delete(ctx context.Context, key string) error {
+	destPath := filepath.Join(s.uploadDir, key)
+	return os.Remove(destPath)
+}
+
 // S3ClientInterface はS3クライアントの抽象化インターフェース（テスト用）
 type S3ClientInterface interface {
 	PutObject(ctx context.Context, params *s3.PutObjectInput, optFns ...func(*s3.Options)) (*s3.PutObjectOutput, error)
 	HeadObject(ctx context.Context, params *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error)
+	ListObjectsV2(ctx context.Context, params *s3.ListObjectsV2Input, optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error)
+	DeleteObject(ctx context.Context, params *s3.DeleteObjectInput, optFns ...func(*s3.Options)) (*s3.DeleteObjectOutput, error)
 }
 
 // R2Storage はCloudflare R2への保存
@@ -184,4 +233,48 @@ func (s *R2Storage) Exists(ctx context.Context, key string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+// ListObjects lists objects in R2
+func (s *R2Storage) ListObjects(ctx context.Context, prefix string) ([]StorageObject, error) {
+	objectPrefix := "entry/" + prefix
+	var objects []StorageObject
+
+	paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(s.bucket),
+		Prefix: aws.String(objectPrefix),
+	})
+
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list objects in R2: %w", err)
+		}
+
+		for _, obj := range page.Contents {
+			key := aws.ToString(obj.Key)
+			relKey := strings.TrimPrefix(key, "entry/")
+			objects = append(objects, StorageObject{
+				Key:  relKey,
+				Size: aws.ToInt64(obj.Size),
+			})
+		}
+	}
+
+	return objects, nil
+}
+
+// Delete deletes the object from R2
+func (s *R2Storage) Delete(ctx context.Context, key string) error {
+	objectKey := "entry/" + key
+
+	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(objectKey),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete object from R2: %w", err)
+	}
+
+	return nil
 }

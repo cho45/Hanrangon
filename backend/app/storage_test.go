@@ -9,15 +9,27 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 // mockS3Client はS3ClientInterfaceのモック実装
 type mockS3Client struct {
-	putObjectCalls  []mockPutObjectCall
-	putObjectError  error
-	headObjectCalls []mockHeadObjectCall
-	headObjectError error
+	putObjectCalls         []mockPutObjectCall
+	putObjectError         error
+	headObjectCalls        []mockHeadObjectCall
+	headObjectError        error
+	listObjectsV2Error     error
+	listObjectsV2Outputs   []*s3.ListObjectsV2Output
+	listObjectsV2CallCount int
+	deleteObjectCalls      []mockDeleteObjectCall
+	deleteObjectError      error
+}
+
+type mockDeleteObjectCall struct {
+	bucket string
+	key    string
 }
 
 type mockPutObjectCall struct {
@@ -66,6 +78,34 @@ func (m *mockS3Client) HeadObject(ctx context.Context, params *s3.HeadObjectInpu
 	}
 
 	return &s3.HeadObjectOutput{}, nil
+}
+
+func (m *mockS3Client) ListObjectsV2(ctx context.Context, params *s3.ListObjectsV2Input, optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
+	if m.listObjectsV2Error != nil {
+		return nil, m.listObjectsV2Error
+	}
+	if len(m.listObjectsV2Outputs) > 0 {
+		if m.listObjectsV2CallCount < len(m.listObjectsV2Outputs) {
+			out := m.listObjectsV2Outputs[m.listObjectsV2CallCount]
+			m.listObjectsV2CallCount++
+			return out, nil
+		}
+		return &s3.ListObjectsV2Output{IsTruncated: aws.Bool(false)}, nil
+	}
+	return &s3.ListObjectsV2Output{IsTruncated: aws.Bool(false)}, nil
+}
+
+func (m *mockS3Client) DeleteObject(ctx context.Context, params *s3.DeleteObjectInput, optFns ...func(*s3.Options)) (*s3.DeleteObjectOutput, error) {
+	call := mockDeleteObjectCall{
+		bucket: *params.Bucket,
+		key:    *params.Key,
+	}
+	m.deleteObjectCalls = append(m.deleteObjectCalls, call)
+
+	if m.deleteObjectError != nil {
+		return nil, m.deleteObjectError
+	}
+	return &s3.DeleteObjectOutput{}, nil
 }
 
 func TestLocalStorage_Upload(t *testing.T) {
@@ -557,4 +597,156 @@ func TestR2Storage_Exists(t *testing.T) {
 			t.Fatal("expected error, got nil")
 		}
 	})
+}
+
+func TestLocalStorage_ListObjects(t *testing.T) {
+	tmpDir := t.TempDir()
+	storage := NewLocalStorage(tmpDir, "/images/entry/")
+	ctx := context.Background()
+
+	// 準備: ファイルをいくつか作成
+	files := []string{"a.jpg", "b.jpg", "other.png"}
+	for _, f := range files {
+		os.WriteFile(filepath.Join(tmpDir, f), []byte("test"), 0644)
+	}
+	// サブディレクトリ作成 (無視されるべき)
+	os.Mkdir(filepath.Join(tmpDir, "subdir"), 0755)
+
+	t.Run("list all", func(t *testing.T) {
+		objs, err := storage.ListObjects(ctx, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(objs) != 3 {
+			t.Errorf("expected 3 objects, got %d", len(objs))
+		}
+	})
+
+	t.Run("list with prefix", func(t *testing.T) {
+		objs, err := storage.ListObjects(ctx, "a")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(objs) != 1 || objs[0].Key != "a.jpg" {
+			t.Errorf("expected a.jpg, got %v", objs)
+		}
+	})
+}
+
+func TestLocalStorage_Delete(t *testing.T) {
+	tmpDir := t.TempDir()
+	storage := NewLocalStorage(tmpDir, "/images/entry/")
+	ctx := context.Background()
+
+	filename := "delete-me.jpg"
+	localPath := filepath.Join(tmpDir, filename)
+	os.WriteFile(localPath, []byte("test"), 0644)
+
+	err := storage.Delete(ctx, filename)
+	if err != nil {
+		t.Fatalf("Delete failed: %v", err)
+	}
+
+	if _, err := os.Stat(localPath); !os.IsNotExist(err) {
+		t.Error("file still exists after Delete")
+	}
+}
+
+func TestR2Storage_ListObjects(t *testing.T) {
+	mock := &mockS3Client{
+		listObjectsV2Outputs: []*s3.ListObjectsV2Output{
+			{
+				Contents: []types.Object{
+					{Key: aws.String("entry/image1.jpg"), Size: aws.Int64(100)},
+					{Key: aws.String("entry/image2.jpg"), Size: aws.Int64(200)},
+				},
+				IsTruncated: aws.Bool(false),
+			},
+		},
+	}
+	storage := &R2Storage{
+		client:    mock,
+		bucket:    "test-bucket",
+		publicURL: "https://assets.example.com",
+	}
+	ctx := context.Background()
+
+	objs, err := storage.ListObjects(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(objs) != 2 {
+		t.Errorf("expected 2 objects, got %d", len(objs))
+	}
+	if objs[0].Key != "image1.jpg" || objs[0].Size != 100 {
+		t.Errorf("unexpected object 0: %+v", objs[0])
+	}
+	if objs[1].Key != "image2.jpg" || objs[1].Size != 200 {
+		t.Errorf("unexpected object 1: %+v", objs[1])
+	}
+}
+
+func TestR2Storage_ListObjects_Pagination(t *testing.T) {
+	mock := &mockS3Client{
+		listObjectsV2Outputs: []*s3.ListObjectsV2Output{
+			{
+				Contents: []types.Object{
+					{Key: aws.String("entry/page1-1.jpg"), Size: aws.Int64(10)},
+				},
+				IsTruncated:           aws.Bool(true),
+				NextContinuationToken: aws.String("token1"),
+			},
+			{
+				Contents: []types.Object{
+					{Key: aws.String("entry/page2-1.jpg"), Size: aws.Int64(20)},
+				},
+				IsTruncated: aws.Bool(false),
+			},
+		},
+	}
+	storage := &R2Storage{
+		client:    mock,
+		bucket:    "test-bucket",
+		publicURL: "https://assets.example.com",
+	}
+	ctx := context.Background()
+
+	objs, err := storage.ListObjects(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 2ページ分、合計2つのオブジェクトが取得されているはず
+	if len(objs) != 2 {
+		t.Errorf("expected 2 objects, got %d", len(objs))
+	}
+	if objs[0].Key != "page1-1.jpg" || objs[1].Key != "page2-1.jpg" {
+		t.Errorf("unexpected objects: %v", objs)
+	}
+	if mock.listObjectsV2CallCount != 2 {
+		t.Errorf("expected 2 API calls, got %d", mock.listObjectsV2CallCount)
+	}
+}
+
+func TestR2Storage_Delete(t *testing.T) {
+	mock := &mockS3Client{}
+	storage := &R2Storage{
+		client:    mock,
+		bucket:    "test-bucket",
+		publicURL: "https://assets.example.com",
+	}
+	ctx := context.Background()
+
+	err := storage.Delete(ctx, "delete-me.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(mock.deleteObjectCalls) != 1 {
+		t.Fatalf("expected 1 DeleteObject call, got %d", len(mock.deleteObjectCalls))
+	}
+	if mock.deleteObjectCalls[0].key != "entry/delete-me.jpg" {
+		t.Errorf("expected key %q, got %q", "entry/delete-me.jpg", mock.deleteObjectCalls[0].key)
+	}
 }
