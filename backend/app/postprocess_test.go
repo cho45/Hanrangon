@@ -59,7 +59,7 @@ func TestPostprocessIdleTimeout(t *testing.T) {
 	}
 
 	// 3. タイムアウト（100ms）より長く待機
-	time.Sleep(300 * time.Millisecond)
+	time.Sleep(150 * time.Millisecond)
 
 	// 4. 再度実行（ここで Broken pipe を検知してリトライ・再起動が走るはず）
 	res, err := env.app.Postprocess(ctx, html, nil)
@@ -138,10 +138,10 @@ loop:
 		default:
 			if foundProgress {
 				// すべてのメッセージを読み切るために少し待つ
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(20 * time.Millisecond)
 				break loop
 			}
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(5 * time.Millisecond)
 		}
 	}
 
@@ -179,7 +179,7 @@ func TestPostprocessProgressBlocking(t *testing.T) {
 	select {
 	case <-done:
 		// Success
-	case <-time.After(2 * time.Second):
+	case <-time.After(1 * time.Second):
 		t.Fatal("Postprocess timed out (likely deadlocked due to blocking channel)")
 	}
 }
@@ -247,7 +247,7 @@ func TestPostprocessProcessCrash(t *testing.T) {
 	appImpl.postprocessMu.Unlock()
 
 	// 少し待機（プロセスが完全に終了するまで）
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 
 	// 3. 再度実行（リトライが走って新しいプロセスが起動されるはず）
 	res2, err := env.app.Postprocess(ctx, html, nil)
@@ -385,7 +385,7 @@ func TestPostprocessCloseWhileProcessing(t *testing.T) {
 	}
 
 	// 少し待ってから Close
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
 	if err := appImpl.Close(); err != nil {
 		t.Logf("Close returned error (expected): %v", err)
 	}

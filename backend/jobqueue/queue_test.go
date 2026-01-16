@@ -913,7 +913,7 @@ func TestWorker_GracefulShutdown_RunningJobCompletes(t *testing.T) {
 			// Wait for a signal that the main context is canceled
 			// Use a select with time.After to avoid hanging if something goes wrong
 			select {
-			case <-time.After(2 * time.Second):
+			case <-time.After(500 * time.Millisecond):
 				// OK
 			case <-ctx.Done():
 				t.Error("job context should not be canceled by main context cancellation")
@@ -947,7 +947,7 @@ func TestWorker_GracefulShutdown_RunningJobCompletes(t *testing.T) {
 	select {
 	case <-jobFinished:
 		// OK
-	case <-time.After(3 * time.Second):
+	case <-time.After(1 * time.Second):
 		t.Fatal("job did not finish in time")
 	}
 
