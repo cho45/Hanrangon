@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"io"
+	"time"
 
 	"github.com/cho45/hanrangon/backend/jobqueue"
 	"github.com/cho45/hanrangon/backend/model"
@@ -19,6 +21,8 @@ type ProgressReporter interface {
 
 // App はアプリケーションの主要なインターフェース
 type App interface {
+	io.Closer
+
 	// Database accessors
 	MainDB() *model.Database[maindb.Querier]
 	TFIDFDB() *model.Database[tfidfdb.Querier]
@@ -40,8 +44,8 @@ type App interface {
 	EntryService() *EntryService
 
 	// Postprocess
-	Postprocess(ctx context.Context, html string) (string, error)
-	PostprocessBatch(ctx context.Context) (*BatchProcessor, error)
+	Postprocess(ctx context.Context, html string, reporter ProgressReporter) (string, error)
+	PostprocessBatch(ctx context.Context, idleTimeout time.Duration) (*BatchProcessor, error)
 
 	// Utils for Service
 	EnqueuePublishedEntryJobs(ctx context.Context, entryID int64) error

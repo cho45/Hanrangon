@@ -64,7 +64,7 @@ func (s *EntryService) SaveEntry(ctx context.Context, params SaveEntryParams) (*
 	if params.Reporter != nil {
 		params.Reporter.Report("postprocess開始")
 	}
-	processedBody, err := s.app.Postprocess(ctx, formattedBody)
+	processedBody, err := s.app.Postprocess(ctx, formattedBody, params.Reporter)
 	if err != nil {
 		log.Printf("Postprocess failed: %v", err)
 		if params.Reporter != nil {

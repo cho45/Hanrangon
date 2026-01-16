@@ -31,6 +31,9 @@ linters:
         # io: Closer.Close is often ignored in defer for read-only streams or cleanup
         - (io.Closer).Close
         - (*os.File).Close
+        # app: App.Close is called in defer for cleanup on shutdown
+        - (github.com/cho45/hanrangon/backend/app.App).Close
+        - (*github.com/cho45/hanrangon/backend/app.AppImpl).Close
         # os: Remove is often used for best-effort cleanup of temporary files
         - os.Remove
         - os.RemoveAll

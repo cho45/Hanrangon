@@ -28,15 +28,70 @@ const combinedRegex = new RegExp(
 );
 
 /**
- * HTML を postprocess する統合処理
- * @param {string} html - 処理対象の HTML
- * @param {string} baseURL - ベース URL
- * @returns {Promise<string>} - 処理後の HTML
+ * JSON-RPC 2.0 形式で出力を行う Dispatcher (バッチモード用)
+ * 進捗報告、正常結果、エラーをすべて stdout に JSON-RPC メッセージとして送信する
  */
-async function processHTML(html, baseURL) {
+class BatchDispatcher {
+  constructor(id) {
+    this.id = id;
+  }
+  progress(message) {
+    stdout.write(JSON.stringify({
+      jsonrpc: "2.0", id: this.id, method: "progress", params: { message }
+    }) + '\n');
+  }
+  result(html) {
+    stdout.write(JSON.stringify({
+      jsonrpc: "2.0", id: this.id, result: { html }
+    }) + '\n');
+  }
+  error(error) {
+    stdout.write(JSON.stringify({
+      jsonrpc: "2.0", id: this.id, error: {
+        code: -32000,
+        message: error.message,
+        data: { stack: error.stack }
+      }
+    }) + '\n');
+  }
+}
+
+/**
+ * 従来の CLI 形式で出力を行う Dispatcher (ワンショット実行用)
+ * 結果は stdout に HTML として、ログは stderr に出力する
+ */
+class CLIDispatcher {
+  progress(message) {
+    stderr.write(`[postprocess] ${message}\n`);
+  }
+  result(html) {
+    stdout.write(html);
+  }
+  error(error) {
+    stderr.write(`Error: ${error.message}\n${error.stack}\n`);
+    process.exit(1);
+  }
+}
+
+/**
+ * HTML を postprocess する統合処理
+ * MathJax、シンタックスハイライト、画像処理、ウィジェット処理を行う
+ *
+ * @param {string} html - 処理対象の HTML
+ * @param {string} baseURL - ベース URL（画像などのリソース解決に使用）
+ * @param {BatchDispatcher|CLIDispatcher} dispatcher - 出力先（進捗と結果を送信）
+ */
+async function processHTML(html, baseURL, dispatcher) {
+  const startTime = performance.now();
+  const logDone = (msg) => {
+    const totalTime = performance.now() - startTime;
+    dispatcher.progress(`processHTML: ${msg} in ${totalTime.toFixed(2)}ms`);
+  };
+
   if (!html.includes('<')) {
-    console.error(`[main] processHTML: skipping (no tags found, input: ${html.length} bytes)`);
-    return html;
+    logDone(`skipping (no tags found, input: ${html.length} bytes)`);
+    dispatcher.result(html);
+    return;
   }
 
   // 高速な事前判定
@@ -49,17 +104,17 @@ async function processHTML(html, baseURL) {
   }
 
   if (activeNames.size === 0) {
-    console.error(`[main] processHTML: skipping (no processors matched, input: ${html.length} bytes)`);
-    return html;
+    logDone(`skipping (no processors matched, input: ${html.length} bytes)`);
+    dispatcher.result(html);
+    return;
   }
 
-  const startTime = performance.now();
-  console.error(`[main] processHTML: start (input: ${html.length} bytes, baseURL: ${baseURL}, active: ${[...activeNames].join(', ')})`);
+  dispatcher.progress(`processHTML: start (input: ${html.length} bytes, baseURL: ${baseURL}, active: ${[...activeNames].join(', ')})`);
 
   if (!JSDOM) {
     const importStart = performance.now();
     JSDOM = (await import('jsdom')).JSDOM;
-    console.error(`[main] processHTML: JSDOM imported in ${(performance.now() - importStart).toFixed(2)}ms`);
+    dispatcher.progress(`processHTML: JSDOM imported in ${(performance.now() - importStart).toFixed(2)}ms`);
   }
 
   // 1. DOM 構築（一度だけ）
@@ -72,7 +127,7 @@ async function processHTML(html, baseURL) {
     }
   });
   const dom = window.document.body;
-  console.error(`[main] processHTML: DOM built in ${(performance.now() - stepStart).toFixed(2)}ms`);
+  dispatcher.progress(`processHTML: DOM built in ${(performance.now() - stepStart).toFixed(2)}ms`);
 
   // 各プロセッサを順次実行
   for (const processor of processors) {
@@ -80,7 +135,7 @@ async function processHTML(html, baseURL) {
       const stepStart = performance.now();
       await processor.run(dom, baseURL);
       const elapsed = performance.now() - stepStart;
-      console.error(`[main] processHTML: Step ${processor.constructor.name} completed in ${elapsed.toFixed(2)}ms`);
+      dispatcher.progress(`processHTML: Step ${processor.constructor.name} completed in ${elapsed.toFixed(2)}ms`);
     }
   }
 
@@ -88,10 +143,8 @@ async function processHTML(html, baseURL) {
   const result = dom.innerHTML;
   window.close();
 
-  const totalTime = performance.now() - startTime;
-  console.error(`[main] processHTML: completed in ${totalTime.toFixed(2)}ms (output: ${result.length} bytes)`);
-
-  return result;
+  logDone(`completed (output: ${result.length} bytes)`);
+  dispatcher.result(result);
 }
 
 // 引数の解析
@@ -107,36 +160,82 @@ for (let i = 0; i < argv.length; i++) {
 }
 
 if (batchMode) {
+  // === バッチモード: JSON-RPC 2.0 による常駐プロセスとして動作 ===
+  // stdin から1行ずつ JSON-RPC リクエストを読み取り、stdout に JSON-RPC レスポンスを返す。
+  // アイドルタイムアウトにより、一定時間リクエストがない場合は自動終了する。
+
   const rl = readline.createInterface({
     input: stdin,
     terminal: false
   });
 
-  rl.on('line', async (line) => {
-    if (!line.trim()) return;
-    let inputID;
-    try {
-      const input = JSON.parse(line);
-      inputID = input.id;
-      const resultHTML = await processHTML(input.html, baseURL);
-      stdout.write(JSON.stringify({ id: input.id, html: resultHTML }) + '\n');
-    } catch (error) {
-      stderr.write(`Error processing line: ${error.message}\n`);
-      stdout.write(JSON.stringify({ id: inputID, error: error.message }) + '\n');
+  let idleTimeout = 30 * 60 * 1000; // デフォルト 30分
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === '--idle-timeout' && argv[i + 1]) {
+      idleTimeout = parseInt(argv[i + 1], 10);
     }
-  });
+  }
+
+  let idleTimer;
+  let activeRequests = 0;
+  const resetIdleTimer = () => {
+    if (idleTimer) clearTimeout(idleTimer);
+    // リクエスト処理中はタイマーをセットしない（アイドル状態のみカウント）
+    if (activeRequests === 0) {
+      idleTimer = setTimeout(() => {
+        console.error(`[main] Idle timeout reached (${idleTimeout}ms), exiting...`);
+        process.exit(0);
+      }, idleTimeout);
+    }
+  };
+
+  resetIdleTimer();
+
+  // 【設計上の意図】リクエストは逐次処理（await による待機）を行う
+  // 理由: postprocess は CPU バウンドな処理が中心（DOM操作、MathJax、シンタックスハイライト）で、
+  //       I/O 待ちがほとんど発生しないため、並行処理にしても性能向上はほぼ見込めない。
+  //       また、JSDOM や MathJax の内部状態の競合リスクを避けるため、逐次処理が安全。
+  //       Go 側は sync.Map で複数リクエストを並行管理しているが、Node.js 側では
+  //       リクエストをキューイングして順番に処理することで、シンプルかつ安全な実装を保つ。
+  (async () => {
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+
+      // リクエスト開始：アクティブカウントを増やしてタイマーをキャンセル
+      activeRequests++;
+      resetIdleTimer();
+
+      let dispatcher;
+      try {
+        const input = JSON.parse(line);
+        dispatcher = new BatchDispatcher(input.id);
+        // 逐次実行: 前のリクエストが完了するまで次のリクエストは読み取られない
+        await processHTML(input.params?.html || input.html, baseURL, dispatcher);
+      } catch (error) {
+        if (dispatcher) {
+          dispatcher.error(error);
+        } else {
+          stderr.write(`Error processing line: ${error.message}\n`);
+        }
+      } finally {
+        // リクエスト完了：アクティブカウントを減らしてタイマーを再設定
+        activeRequests--;
+        resetIdleTimer();
+      }
+    }
+  })();
 } else {
-  // stdin から HTML を読み込み、処理して stdout に出力
+  // === ワンショットモード: 従来の CLI インターフェース ===
+  // stdin から HTML 全体を読み込み、処理結果を stdout に出力して終了する。
   let html = '';
   stdin.setEncoding('utf8');
   stdin.on('data', chunk => html += chunk);
   stdin.on('end', async () => {
+    const dispatcher = new CLIDispatcher();
     try {
-      const result = await processHTML(html, baseURL);
-      stdout.write(result);
+      await processHTML(html, baseURL, dispatcher);
     } catch (error) {
-      stderr.write(`Error: ${error.message}\n${error.stack}\n`);
-      process.exit(1);
+      dispatcher.error(error);
     }
   });
 }

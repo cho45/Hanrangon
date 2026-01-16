@@ -2,7 +2,6 @@ package app
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -13,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cho45/hanrangon/backend/jobqueue"
@@ -36,6 +36,16 @@ type ProgressSession struct {
 	Done      chan error  // 完了/エラー通知
 }
 
+func (s *ProgressSession) Report(message string) {
+	msg := map[string]string{"type": "progress", "message": message}
+	msgJSON, _ := json.Marshal(msg)
+	select {
+	case s.Messages <- string(msgJSON):
+	default:
+		// バッファがいっぱいの場合はスキップしてブロックを防ぐ
+	}
+}
+
 // AppImpl は App インターフェースの具象実装
 type AppImpl struct {
 	mainDB               *model.Database[maindb.Querier]
@@ -52,6 +62,8 @@ type AppImpl struct {
 	storage              StorageClient
 	imageProcessor       *ImageProcessor
 	entryService         *EntryService
+	postprocessProcessor *BatchProcessor
+	postprocessMu        sync.Mutex
 }
 
 func NewApp(
@@ -123,6 +135,17 @@ func (a *AppImpl) Config() *Config                                   { return a.
 func (a *AppImpl) Templates() *Templates                             { return a.templates }
 func (a *AppImpl) EntryService() *EntryService                       { return a.entryService }
 
+func (a *AppImpl) Close() error {
+	a.postprocessMu.Lock()
+	defer a.postprocessMu.Unlock()
+	if a.postprocessProcessor != nil {
+		err := a.postprocessProcessor.Close()
+		a.postprocessProcessor = nil
+		return err
+	}
+	return nil
+}
+
 func (a *AppImpl) newLayoutData(c echo.Context, pageTitle string) view.LayoutData {
 	baseURL := strings.TrimSuffix(a.config.BaseURL, "/")
 	return view.LayoutData{
@@ -155,174 +178,192 @@ func (app *AppImpl) IsAuth(c echo.Context) bool {
 	return ok && auth
 }
 
-// Postprocess はフォーマット済み HTML に対して postprocess を実行する
-// MathJax、シンタックスハイライト、画像処理、ウィジェット処理を行う
-func (app *AppImpl) Postprocess(ctx context.Context, html string) (string, error) {
-	start := time.Now()
+func (app *AppImpl) getPostprocessProcessor(ctx context.Context) (*BatchProcessor, error) {
+	app.postprocessMu.Lock()
+	defer app.postprocessMu.Unlock()
 
-	nodePath := app.config.NodePath
-	if nodePath == "" {
-		var err error
-		nodePath, err = exec.LookPath("node")
+	if app.postprocessProcessor != nil {
+		// プロセスの生存を確認（ポータブルな方法）
+		if !app.postprocessProcessor.IsAlive() {
+			_ = app.postprocessProcessor.Close()
+			app.postprocessProcessor = nil
+		}
+	}
+
+	if app.postprocessProcessor == nil {
+		// 常駐プロセスはリクエストの ctx に縛られないように Background を使う
+		p, err := app.PostprocessBatch(context.Background(), 30*time.Minute)
 		if err != nil {
-			return "", fmt.Errorf("node binary not found in PATH and node_path is not configured: %w", err)
+			return nil, err
 		}
-	}
-	log.Printf("[postprocess] Starting postprocess using %s (input size: %d bytes)", nodePath, len(html))
-
-	// タイムアウト設定（30秒）
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
-	// Node.js スクリプトのパス（プロジェクトルートからの相対パス）
-	// Node.js スクリプトのパス（プロジェクトルートからの相対パス）
-	// Node.js スクリプトのパス（プロジェクトルートからの相対パス）
-	scriptPath := filepath.Join(app.config.BaseDir, "postprocess", "main.js")
-
-	cmd := exec.CommandContext(ctx, nodePath, scriptPath, "--base-url", app.config.BaseURL)
-	cmd.Stdin = bytes.NewReader([]byte(html))
-
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-
-	// stderr をリアルタイムでログに出力
-	stderrPipe, err := cmd.StderrPipe()
-	if err != nil {
-		return "", fmt.Errorf("failed to create stderr pipe: %w", err)
+		app.postprocessProcessor = p
 	}
 
-	// stderr を行ごとにログ出力する goroutine
-	go func() {
-		scanner := bufio.NewScanner(stderrPipe)
-		for scanner.Scan() {
-			log.Printf("[postprocess] %s", scanner.Text())
-		}
-	}()
-
-	if err := cmd.Run(); err != nil {
-		log.Printf("[postprocess] Failed after %v: %v", time.Since(start), err)
-		return "", fmt.Errorf("postprocess failed: %w", err)
-	}
-
-	elapsed := time.Since(start)
-	log.Printf("[postprocess] Completed successfully in %v (output size: %d bytes)", elapsed, stdout.Len())
-
-	return stdout.String(), nil
+	return app.postprocessProcessor, nil
 }
 
-// PostprocessWithProgress は進捗通知付きで postprocess を実行する
-func (app *AppImpl) PostprocessWithProgress(ctx context.Context, html string, session *ProgressSession) (string, error) {
-	start := time.Now()
+func (app *AppImpl) Postprocess(ctx context.Context, html string, reporter ProgressReporter) (string, error) {
+	return app.postprocessWithRetry(ctx, html, reporter)
+}
 
-	nodePath := app.config.NodePath
-	if nodePath == "" {
-		var err error
-		nodePath, err = exec.LookPath("node")
+func (app *AppImpl) postprocessWithRetry(ctx context.Context, html string, reporter ProgressReporter) (string, error) {
+	const maxRetries = 1
+	var lastErr error
+
+	for i := 0; i <= maxRetries; i++ {
+		// コンテキストがキャンセルされている場合はリトライせず終了
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+
+		p, err := app.getPostprocessProcessor(ctx)
 		if err != nil {
-			return "", fmt.Errorf("node binary not found in PATH and node_path is not configured: %w", err)
+			return "", err
 		}
-	}
-	log.Printf("[postprocess] Starting postprocess using %s (input size: %d bytes)", nodePath, len(html))
 
-	// タイムアウト設定（30秒）
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
-	// Node.js スクリプトのパス（プロジェクトルートからの相対パス）
-	scriptPath := filepath.Join(app.config.BaseDir, "postprocess", "main.js")
-
-	cmd := exec.CommandContext(ctx, nodePath, scriptPath, "--base-url", app.config.BaseURL)
-	cmd.Stdin = bytes.NewReader([]byte(html))
-
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-
-	// stderr をリアルタイムでログに出力し、SSE に送信
-	stderrPipe, err := cmd.StderrPipe()
-	if err != nil {
-		return "", fmt.Errorf("failed to create stderr pipe: %w", err)
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	// stderr を行ごとにログ出力＆SSE送信する goroutine
-	go func() {
-		defer wg.Done()
-		scanner := bufio.NewScanner(stderrPipe)
-		for scanner.Scan() {
-			line := scanner.Text()
-			log.Printf("[postprocess] %s", line)
-
-			// JSON形式でSSEに送信（非ブロッキング）
-			msg := map[string]string{"type": "progress", "message": line}
-			msgJSON, _ := json.Marshal(msg)
-			select {
-			case session.Messages <- string(msgJSON):
-			case <-ctx.Done():
-				return
-			default:
-				// クライアントの読み取りが遅い、またはバッファがいっぱいの場合はスキップ
-			}
+		// ロックせずに Process を呼ぶ（並列実行可能に）
+		// BatchProcessor は sync.Map で並列リクエストを安全に管理している
+		tctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		res, err := p.Process(tctx, html, reporter)
+		cancel()
+		if err == nil {
+			return res, nil
 		}
-	}()
 
-	if err := cmd.Run(); err != nil {
-		log.Printf("[postprocess] Failed after %v: %v", time.Since(start), err)
-		wg.Wait()
-		return "", fmt.Errorf("postprocess failed: %w", err)
+		lastErr = err
+		log.Printf("[postprocess] Process error (attempt %d/%d): %v", i+1, maxRetries+1, err)
+
+		// エラー時のみロックして破棄
+		app.postprocessMu.Lock()
+		if app.postprocessProcessor == p {
+			_ = p.Close()
+			app.postprocessProcessor = nil
+		}
+		app.postprocessMu.Unlock()
 	}
 
-	wg.Wait()
-	elapsed := time.Since(start)
-	log.Printf("[postprocess] Completed successfully in %v (output size: %d bytes)", elapsed, stdout.Len())
-
-	return stdout.String(), nil
+	return "", fmt.Errorf("postprocess failed after %d retries: %w", maxRetries, lastErr)
 }
 
 type BatchProcessor struct {
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	stdout *bufio.Scanner
-	cancel context.CancelFunc
+	app      *AppImpl
+	cmd      *exec.Cmd
+	stdin    io.WriteCloser
+	stdout   *bufio.Scanner
+	cancel   context.CancelFunc
+	idSeq    int64
+	sessions sync.Map      // map[int64]*batchSession
+	done     chan struct{} // プロセス終了通知
+	doneOnce sync.Once     // done チャネルを一度だけ close するため
+	closing  atomic.Bool   // Close 処理中フラグ
 }
 
-func (p *BatchProcessor) Process(id int64, html string) (string, error) {
+type batchSession struct {
+	resCh    chan batchResult
+	reporter ProgressReporter
+}
+
+type batchResult struct {
+	html string
+	err  error
+}
+
+func (p *BatchProcessor) Process(ctx context.Context, html string, reporter ProgressReporter) (string, error) {
+	// Close 処理中は新しいリクエストを受け付けない
+	if p.closing.Load() {
+		return "", fmt.Errorf("processor is closing")
+	}
+
+	id := atomic.AddInt64(&p.idSeq, 1)
+
+	resCh := make(chan batchResult, 1)
+	p.sessions.Store(id, &batchSession{
+		resCh:    resCh,
+		reporter: reporter,
+	})
+	defer p.sessions.Delete(id)
+
+	// JSON-RPC Request
 	input, _ := json.Marshal(map[string]interface{}{
-		"id":   id,
-		"html": html,
+		"jsonrpc": "2.0",
+		"id":      id,
+		"method":  "process",
+		"params": map[string]interface{}{
+			"html": html,
+		},
 	})
 	if _, err := p.stdin.Write(append(input, '\n')); err != nil {
 		return "", err
 	}
 
-	if !p.stdout.Scan() {
-		return "", fmt.Errorf("batch processor stdout closed unexpectedly")
+	for {
+		select {
+		case res := <-resCh:
+			return res.html, res.err
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-p.done:
+			return "", fmt.Errorf("postprocess process terminated unexpectedly")
+		}
 	}
+}
 
-	var output struct {
-		ID    int64  `json:"id"`
-		HTML  string `json:"html"`
-		Error string `json:"error"`
+func (p *BatchProcessor) IsAlive() bool {
+	if p.cmd == nil || p.cmd.Process == nil {
+		return false
 	}
-	if err := json.Unmarshal(p.stdout.Bytes(), &output); err != nil {
-		return "", err
+	// closing フラグがセットされていれば終了中
+	if p.closing.Load() {
+		return false
 	}
+	// done チャネルが閉じられていなければ生存している
+	select {
+	case <-p.done:
+		return false
+	default:
+		return true
+	}
+}
 
-	if output.Error != "" {
-		return "", fmt.Errorf("node error: %s", output.Error)
-	}
-
-	return output.HTML, nil
+func (p *BatchProcessor) markDone() {
+	p.doneOnce.Do(func() {
+		close(p.done)
+	})
 }
 
 func (p *BatchProcessor) Close() error {
-	p.stdin.Close()
-	err := p.cmd.Wait()
+	// 1. closing フラグをセット（新しいリクエストを拒否）
+	p.closing.Store(true)
+
+	// 2. done チャネルを閉じて待機中のすべての Process 呼び出しに通知
+	p.markDone()
+
+	// 3. すべての待機中セッションにエラーを送信
+	p.sessions.Range(func(key, value interface{}) bool {
+		sess := value.(*batchSession)
+		select {
+		case sess.resCh <- batchResult{err: fmt.Errorf("processor closing")}:
+		default:
+			// チャネルがすでに閉じられているか、別の結果が送信済み
+		}
+		return true
+	})
+
+	if p.stdin != nil {
+		p.stdin.Close()
+	}
+	var err error
+	if p.cmd != nil && p.cmd.Process != nil {
+		if p.cmd.ProcessState == nil {
+			_ = p.cmd.Process.Kill()
+		}
+		err = p.cmd.Wait()
+	}
 	p.cancel()
 	return err
 }
 
-func (app *AppImpl) PostprocessBatch(ctx context.Context) (*BatchProcessor, error) {
+func (app *AppImpl) PostprocessBatch(ctx context.Context, idleTimeout time.Duration) (*BatchProcessor, error) {
 	nodePath := app.config.NodePath
 	if nodePath == "" {
 		var err error
@@ -332,11 +373,15 @@ func (app *AppImpl) PostprocessBatch(ctx context.Context) (*BatchProcessor, erro
 		}
 	}
 
-	// Node.js スクリプトのパス（プロジェクトルートからの相対パス）
 	scriptPath := filepath.Join(app.config.BaseDir, "postprocess", "main.js")
 	ctx, cancel := context.WithCancel(ctx)
 
-	cmd := exec.CommandContext(ctx, nodePath, scriptPath, "--base-url", app.config.BaseURL, "--batch")
+	log.Printf("[postprocess] Starting new batch process: %s %s (idle-timeout: %v)", nodePath, scriptPath, idleTimeout)
+	cmd := exec.CommandContext(ctx, nodePath, scriptPath,
+		"--base-url", app.config.BaseURL,
+		"--batch",
+		"--idle-timeout", fmt.Sprintf("%d", idleTimeout.Milliseconds()),
+	)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		cancel()
@@ -355,10 +400,91 @@ func (app *AppImpl) PostprocessBatch(ctx context.Context) (*BatchProcessor, erro
 		return nil, err
 	}
 
+	// JSON-RPC レスポンス用のバッファサイズ
+	// 通常のエントリ: 100KB の HTML → JSON レスポンスで約 120KB
+	// 大きなエントリ: 500KB の HTML → JSON レスポンスで約 600KB
+	// 最大 2MB まで対応（安全マージン込み）
+	stdoutScanner := bufio.NewScanner(stdout)
+	const maxCapacity = 2 * 1024 * 1024 // 2MB
+	stdoutScanner.Buffer(make([]byte, 64*1024), maxCapacity)
+
+	p := &BatchProcessor{
+		app:    app,
+		cmd:    cmd,
+		stdin:  stdin,
+		stdout: stdoutScanner,
+		cancel: cancel,
+		done:   make(chan struct{}),
+	}
+
+	// stdout 読み取りループ (JSON-RPC 対応)
 	go func() {
-		scanner := bufio.NewScanner(stderrPipe)
-		for scanner.Scan() {
-			log.Printf("[postprocess-batch] %s", scanner.Text())
+		defer p.markDone()
+		for p.stdout.Scan() {
+			var msg struct {
+				JSONRPC string          `json:"jsonrpc"`
+				ID      int64           `json:"id"`
+				Method  string          `json:"method"`
+				Params  json.RawMessage `json:"params"`
+				Result  struct {
+					HTML string `json:"html"`
+				} `json:"result"`
+				Error *struct {
+					Code    int    `json:"code"`
+					Message string `json:"message"`
+					Data    struct {
+						Stack string `json:"stack"`
+					} `json:"data"`
+				} `json:"error"`
+			}
+			if err := json.Unmarshal(p.stdout.Bytes(), &msg); err != nil {
+				log.Printf("[postprocess] Failed to unmarshal JSON-RPC: %v (raw: %s)", err, p.stdout.Text())
+				continue
+			}
+
+			// ID に基づいてセッションを特定
+			val, ok := p.sessions.Load(msg.ID)
+			if !ok {
+				log.Printf("[postprocess] Received response for unknown ID: %d", msg.ID)
+				continue
+			}
+			sess := val.(*batchSession)
+
+			if msg.Method == "progress" {
+				var params struct {
+					Message string `json:"message"`
+				}
+				if err := json.Unmarshal(msg.Params, &params); err == nil {
+					if sess.reporter != nil {
+						sess.reporter.Report(params.Message)
+					}
+				}
+				continue
+			}
+
+			if msg.Error != nil {
+				errStr := msg.Error.Message
+				if msg.Error.Data.Stack != "" {
+					errStr += "\n" + msg.Error.Data.Stack
+				}
+				sess.resCh <- batchResult{err: fmt.Errorf("node error: %s", errStr)}
+			} else {
+				sess.resCh <- batchResult{html: msg.Result.HTML}
+			}
+		}
+		if err := p.stdout.Err(); err != nil {
+			log.Printf("[postprocess] stdout scan error: %v", err)
+		}
+		log.Printf("[postprocess] stdout read loop terminated")
+	}()
+
+	// stderr 読み取りループ (デバッグログ用)
+	go func() {
+		stderrScanner := bufio.NewScanner(stderrPipe)
+		// stderr は通常のログ行なので 64KB で十分
+		stderrScanner.Buffer(make([]byte, 4*1024), 64*1024)
+		for stderrScanner.Scan() {
+			log.Printf("[postprocess-stderr] %s", stderrScanner.Text())
 		}
 	}()
 
@@ -367,12 +493,7 @@ func (app *AppImpl) PostprocessBatch(ctx context.Context) (*BatchProcessor, erro
 		return nil, err
 	}
 
-	return &BatchProcessor{
-		cmd:    cmd,
-		stdin:  stdin,
-		stdout: bufio.NewScanner(stdout),
-		cancel: cancel,
-	}, nil
+	return p, nil
 }
 
 func (app *AppImpl) EnqueuePublishedEntryJobs(ctx context.Context, entryID int64) error {
@@ -428,11 +549,4 @@ func (app *AppImpl) cleanupProgressSession(id string) {
 		close(session.Messages)
 		// Done チャネルは送信側がクローズする
 	}
-}
-
-// sendProgressMessage は進捗メッセージをJSON形式で送信する
-func (app *AppImpl) sendProgressMessage(session *ProgressSession, message string) {
-	msg := map[string]string{"type": "progress", "message": message}
-	msgJSON, _ := json.Marshal(msg)
-	session.Messages <- string(msgJSON)
 }
