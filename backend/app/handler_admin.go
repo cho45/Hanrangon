@@ -289,8 +289,6 @@ func (app *AppImpl) HandleAdminApiEdit(c echo.Context) error {
 	// 3. 保存処理（フォーマットや Postprocess）は重いため、HTTP リクエストを長時間保持せず
 	// goroutine で非同期に実行する。進捗は SSE を通じてクライアントに通知する。
 	go func() {
-		defer app.cleanupProgressSession(session.ID)
-
 		// detached context（HTTPリクエストから独立）
 		ctx := context.Background()
 		ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
@@ -310,6 +308,10 @@ func (app *AppImpl) HandleAdminApiEdit(c echo.Context) error {
 
 		if err != nil {
 			session.Done <- err
+			// エラー時も30秒後にクリーンアップ（クライアントがエラーを受信する時間を確保）
+			time.AfterFunc(30*time.Second, func() {
+				app.cleanupProgressSession(session.ID)
+			})
 			return
 		}
 
@@ -319,6 +321,14 @@ func (app *AppImpl) HandleAdminApiEdit(c echo.Context) error {
 		doneJSON, _ := json.Marshal(doneMsg)
 		session.Messages <- string(doneJSON)
 		// Done チャネルはエラー時のみ使用（正常終了時は Messages のみ）
+
+		// done メッセージ送信後、チャネルを close（SSE接続を正常終了）
+		close(session.Messages)
+
+		// セッション自体は30秒後にクリーンアップ（遅延接続の可能性を考慮）
+		time.AfterFunc(30*time.Second, func() {
+			app.progressSessions.Delete(session.ID)
+		})
 	}()
 
 	// 4. 即座にレスポンス返却（session_id のみ）
