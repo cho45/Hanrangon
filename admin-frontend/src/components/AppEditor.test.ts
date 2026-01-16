@@ -282,4 +282,63 @@ describe('AppEditor', () => {
     await user.clear(bodyInput);
     expect(charCount.textContent).toBe('0 文字');
   });
+
+  it('画像をアップロードすると img タグが挿入されること', async () => {
+    const user = userEvent.setup();
+    (api.post as any).mockResolvedValue({ uploaded: 'https://assets.example.com/photo.jpg' });
+
+    render(AppEditor, { id: null, onSave: () => {} });
+
+    const bodyInput = screen.getByPlaceholderText('本文') as HTMLTextAreaElement;
+    const uploadButton = screen.getByRole('button', { name: /写真/ });
+
+    // input[type="file"] の click イベントをシミュレート
+    // AppEditor.svelte 内で動的に作成される input への対応
+    const input = document.createElement('input');
+    input.type = 'file';
+    const originalCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tagName) => {
+      if (tagName === 'input') return input;
+      return originalCreateElement(tagName);
+    });
+
+    await user.click(uploadButton);
+
+    // ファイル選択をシミュレート
+    const file = new File(['hello'], 'photo.jpg', { type: 'image/jpeg' });
+    await user.upload(input, file);
+
+    await waitFor(() => {
+      expect(bodyInput.value).toContain('<img src="https://assets.example.com/photo.jpg"');
+      expect(bodyInput.value).toContain('itemprop="image"');
+    });
+  });
+
+  it('webm動画をアップロードすると video タグが挿入されること', async () => {
+    const user = userEvent.setup();
+    (api.post as any).mockResolvedValue({ uploaded: 'https://assets.example.com/video.webm' });
+
+    render(AppEditor, { id: null, onSave: () => {} });
+
+    const bodyInput = screen.getByPlaceholderText('本文') as HTMLTextAreaElement;
+    const uploadButton = screen.getByRole('button', { name: /写真/ });
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    const originalCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tagName) => {
+      if (tagName === 'input') return input;
+      return originalCreateElement(tagName);
+    });
+
+    await user.click(uploadButton);
+
+    const file = new File(['hello'], 'video.webm', { type: 'video/webm' });
+    await user.upload(input, file);
+
+    await waitFor(() => {
+      expect(bodyInput.value).toContain('<video src="https://assets.example.com/video.webm"');
+      expect(bodyInput.value).toContain('autoplay loop muted playsinline');
+    });
+  });
 });

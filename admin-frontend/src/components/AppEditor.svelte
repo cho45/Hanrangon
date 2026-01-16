@@ -295,7 +295,12 @@
       uploading = true;
       try {
         const data = await api.post<{ uploaded: string }>('/admin/api/upload/image', formData);
-        const syntax = `<span itemscope itemtype="http://schema.org/Photograph"><a href="${data.uploaded}" class="picasa" itemprop="url"><img src="${data.uploaded}" alt="photo" itemprop="image"/></a></span>\n`;
+        let syntax = '';
+        if (data.uploaded.toLowerCase().endsWith('.webm')) {
+          syntax = `<video src="${data.uploaded}" autoplay loop muted playsinline style="max-width: 100%; height: auto;"></video>\n`;
+        } else {
+          syntax = `<span itemscope itemtype="http://schema.org/Photograph"><a href="${data.uploaded}" class="picasa" itemprop="url"><img src="${data.uploaded}" alt="photo" itemprop="image"/></a></span>\n`;
+        }
         insertText(syntax, true);
       } catch (err) {
         alert('アップロードに失敗しました');
