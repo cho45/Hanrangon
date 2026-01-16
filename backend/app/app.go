@@ -192,7 +192,8 @@ func (app *AppImpl) getPostprocessProcessor(ctx context.Context) (*BatchProcesso
 
 	if app.postprocessProcessor == nil {
 		// 常駐プロセスはリクエストの ctx に縛られないように Background を使う
-		p, err := app.PostprocessBatch(context.Background(), 30*time.Minute)
+		idleTimeout := time.Duration(app.config.PostprocessIdleTimeout) * time.Second
+		p, err := app.PostprocessBatch(context.Background(), idleTimeout)
 		if err != nil {
 			return nil, err
 		}

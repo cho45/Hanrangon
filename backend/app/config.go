@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -46,6 +47,8 @@ type Config struct {
 	// Cloudflare API Configuration (for Analytics)
 	CFAPIToken  string `toml:"cf_api_token"`
 	CFAccountID string `toml:"cf_account_id"`
+
+	PostprocessIdleTimeout int `toml:"postprocess_idle_timeout"` // seconds
 }
 
 func LoadConfig() *Config {
@@ -124,6 +127,11 @@ func LoadConfig() *Config {
 	if env := os.Getenv("HANRANGON_NODE_PATH"); env != "" {
 		cfg.NodePath = env
 	}
+	if env := os.Getenv("HANRANGON_POSTPROCESS_IDLE_TIMEOUT"); env != "" {
+		if val, err := strconv.Atoi(env); err == nil {
+			cfg.PostprocessIdleTimeout = val
+		}
+	}
 
 	// Image Tools Environment Overrides
 	if env := os.Getenv("HANRANGON_OXIPNG_PATH"); env != "" {
@@ -156,6 +164,14 @@ func LoadConfig() *Config {
 	// デフォルトは development (開発効率優先)
 	if cfg.Environment == "" {
 		cfg.Environment = "development"
+	}
+
+	if cfg.PostprocessIdleTimeout == 0 {
+		if cfg.IsDevelopment() {
+			cfg.PostprocessIdleTimeout = 20
+		} else {
+			cfg.PostprocessIdleTimeout = 1800
+		}
 	}
 
 	return cfg
