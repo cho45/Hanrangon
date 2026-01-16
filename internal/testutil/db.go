@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"testing"
 
 	"github.com/cho45/hanrangon/backend/model/imagesdb"
@@ -39,6 +40,11 @@ var schemaFiles = map[dbType]string{
 	workerDB: "backend/db/schema/worker.sql",
 	imagesDB: "backend/db/schema/images.sql",
 }
+
+var (
+	schemaCache      = make(map[dbType]string)
+	schemaCacheMutex sync.RWMutex
+)
 
 // DBs holds all test databases and their query objects
 type DBs struct {
@@ -78,16 +84,31 @@ func newTestDB(t *testing.T, typ dbType) *sql.DB {
 		t.Fatalf("failed to open %s db: %v", typ, err)
 	}
 
-	// Read schema file from project root
-	projectRoot := getProjectRoot()
-	schemaPath := filepath.Join(projectRoot, schemaFiles[typ])
-	schema, err := os.ReadFile(schemaPath)
-	if err != nil {
-		t.Fatalf("failed to read %s schema from %s: %v", typ, schemaPath, err)
+	// Read schema file from cache or disk
+	schemaCacheMutex.RLock()
+	schema, ok := schemaCache[typ]
+	schemaCacheMutex.RUnlock()
+
+	if !ok {
+		schemaCacheMutex.Lock()
+		// Double-check after acquiring lock
+		schema, ok = schemaCache[typ]
+		if !ok {
+			projectRoot := getProjectRoot()
+			schemaPath := filepath.Join(projectRoot, schemaFiles[typ])
+			bytes, err := os.ReadFile(schemaPath)
+			if err != nil {
+				schemaCacheMutex.Unlock()
+				t.Fatalf("failed to read %s schema from %s: %v", typ, schemaPath, err)
+			}
+			schema = string(bytes)
+			schemaCache[typ] = schema
+		}
+		schemaCacheMutex.Unlock()
 	}
 
 	// Apply schema
-	if _, err := db.Exec(string(schema)); err != nil {
+	if _, err := db.Exec(schema); err != nil {
 		t.Fatalf("failed to apply %s schema: %v", typ, err)
 	}
 

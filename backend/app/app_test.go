@@ -24,8 +24,8 @@ import (
 )
 
 // Pre-computed bcrypt hash for "testpass" to avoid expensive hashing in every test
-// Generated with: bcrypt.GenerateFromPassword([]byte("testpass"), bcrypt.DefaultCost)
-const testPasswordHash = "$2a$10$f8mVUKq.YADiBTfHoML1auyxudHtJpUD1xXHRDbWBWD5cBvjboS.S"
+// Generated with: bcrypt.GenerateFromPassword([]byte("testpass"), 4)
+const testPasswordHash = "$2a$04$ktO6bm8EWpWv7bUaC.SmlubIT6pATTI/.OEUKTTrQTq7UHNQ3oDyq"
 
 func setupTest(t *testing.T) *testEnv {
 	t.Helper()
