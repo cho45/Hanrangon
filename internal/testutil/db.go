@@ -107,6 +107,25 @@ func newTestDB(t *testing.T, typ dbType) *sql.DB {
 		schemaCacheMutex.Unlock()
 	}
 
+	// Optimize SQLite for testing (in-memory database)
+	// These settings sacrifice durability for speed, which is fine for ephemeral test databases
+	// Note: journal_mode=OFF disables rollback, so we use MEMORY instead
+	if _, err := db.Exec("PRAGMA journal_mode = MEMORY"); err != nil {
+		t.Fatalf("failed to set journal_mode pragma: %v", err)
+	}
+	if _, err := db.Exec("PRAGMA synchronous = OFF"); err != nil {
+		t.Fatalf("failed to set synchronous pragma: %v", err)
+	}
+	if _, err := db.Exec("PRAGMA cache_size = 10000"); err != nil {
+		t.Fatalf("failed to set cache_size pragma: %v", err)
+	}
+	if _, err := db.Exec("PRAGMA locking_mode = EXCLUSIVE"); err != nil {
+		t.Fatalf("failed to set locking_mode pragma: %v", err)
+	}
+	if _, err := db.Exec("PRAGMA temp_store = MEMORY"); err != nil {
+		t.Fatalf("failed to set temp_store pragma: %v", err)
+	}
+
 	// Apply schema
 	if _, err := db.Exec(schema); err != nil {
 		t.Fatalf("failed to apply %s schema: %v", typ, err)

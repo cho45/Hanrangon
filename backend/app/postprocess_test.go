@@ -9,6 +9,7 @@ import (
 )
 
 func TestPostprocess(t *testing.T) {
+	t.Parallel()
 	env := setupTest(t)
 	defer env.close()
 
@@ -35,6 +36,7 @@ func TestPostprocess(t *testing.T) {
 }
 
 func TestPostprocessIdleTimeout(t *testing.T) {
+	t.Parallel()
 	env := setupTest(t)
 	defer env.close()
 
@@ -72,6 +74,7 @@ func TestPostprocessIdleTimeout(t *testing.T) {
 }
 
 func TestPostprocessCancel(t *testing.T) {
+	t.Parallel()
 	env := setupTest(t)
 	defer env.close()
 
@@ -100,6 +103,7 @@ func TestPostprocessCancel(t *testing.T) {
 }
 
 func TestPostprocessProgress(t *testing.T) {
+	t.Parallel()
 	env := setupTest(t)
 	defer env.close()
 
@@ -151,6 +155,7 @@ loop:
 }
 
 func TestPostprocessProgressBlocking(t *testing.T) {
+	t.Parallel()
 	env := setupTest(t)
 	defer env.close()
 
@@ -185,6 +190,7 @@ func TestPostprocessProgressBlocking(t *testing.T) {
 }
 
 func TestPostprocessConcurrent(t *testing.T) {
+	t.Parallel()
 	env := setupTest(t)
 	defer env.close()
 
@@ -219,6 +225,7 @@ func TestPostprocessConcurrent(t *testing.T) {
 
 // TestPostprocessProcessCrash はプロセスが強制終了された場合のリトライを検証
 func TestPostprocessProcessCrash(t *testing.T) {
+	t.Parallel()
 	env := setupTest(t)
 	defer env.close()
 
@@ -261,6 +268,7 @@ func TestPostprocessProcessCrash(t *testing.T) {
 
 // TestPostprocessLargeHTML は大きな HTML の処理を検証
 func TestPostprocessLargeHTML(t *testing.T) {
+	t.Parallel()
 	env := setupTest(t)
 	defer env.close()
 
@@ -293,6 +301,7 @@ func TestPostprocessLargeHTML(t *testing.T) {
 // このテストは Node.js 側が壊れた JSON を返すケースをシミュレートできないため、
 // 代わりにタイムアウトが適切に機能することを検証する
 func TestPostprocessTimeout(t *testing.T) {
+	t.Parallel()
 	env := setupTest(t)
 	defer env.close()
 
@@ -314,6 +323,7 @@ func TestPostprocessTimeout(t *testing.T) {
 
 // TestPostprocessMemoryLeak はメモリリークがないことを検証
 func TestPostprocessMemoryLeak(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping memory leak test in short mode")
 	}
@@ -361,6 +371,7 @@ func TestPostprocessMemoryLeak(t *testing.T) {
 
 // TestPostprocessCloseWhileProcessing はプロセス中に Close が呼ばれた場合の動作を検証
 func TestPostprocessCloseWhileProcessing(t *testing.T) {
+	t.Parallel()
 	env := setupTest(t)
 	defer env.close()
 
