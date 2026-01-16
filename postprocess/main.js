@@ -177,16 +177,12 @@ if (batchMode) {
   }
 
   let idleTimer;
-  let activeRequests = 0;
   const resetIdleTimer = () => {
     if (idleTimer) clearTimeout(idleTimer);
-    // リクエスト処理中はタイマーをセットしない（アイドル状態のみカウント）
-    if (activeRequests === 0) {
-      idleTimer = setTimeout(() => {
-        console.error(`[main] Idle timeout reached (${idleTimeout}ms), exiting...`);
-        process.exit(0);
-      }, idleTimeout);
-    }
+    idleTimer = setTimeout(() => {
+      console.error(`[main] Idle timeout reached (${idleTimeout}ms), exiting...`);
+      process.exit(0);
+    }, idleTimeout);
   };
 
   resetIdleTimer();
@@ -201,15 +197,12 @@ if (batchMode) {
     for await (const line of rl) {
       if (!line.trim()) continue;
 
-      // リクエスト開始：アクティブカウントを増やしてタイマーをキャンセル
-      activeRequests++;
       resetIdleTimer();
 
       let dispatcher;
       try {
         const input = JSON.parse(line);
         dispatcher = new BatchDispatcher(input.id);
-        // 逐次実行: 前のリクエストが完了するまで次のリクエストは読み取られない
         await processHTML(input.params?.html || input.html, baseURL, dispatcher);
       } catch (error) {
         if (dispatcher) {
@@ -217,10 +210,6 @@ if (batchMode) {
         } else {
           stderr.write(`Error processing line: ${error.message}\n`);
         }
-      } finally {
-        // リクエスト完了：アクティブカウントを減らしてタイマーを再設定
-        activeRequests--;
-        resetIdleTimer();
       }
     }
   })();
