@@ -77,6 +77,7 @@ export interface Config {
    */
   CFAPIToken: string;
   CFAccountID: string;
+  PostprocessIdleTimeout: number /* int */; // seconds
 }
 
 //////////
