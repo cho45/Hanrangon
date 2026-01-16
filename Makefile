@@ -1,7 +1,7 @@
 BINARY_NAME=hanrangon
 GO_TAGS=sqlite_math_functions
 
-.PHONY: all build test test-go admin-test generate generate-icons fmt clean postprocess-test setup watch run lint
+.PHONY: all build test test-go test-go-profile admin-test generate generate-icons fmt clean postprocess-test setup watch run lint
 
 all: build
 
@@ -39,6 +39,9 @@ test: generate
 
 test-go:
 	go test -v -tags "$(GO_TAGS)" ./...
+
+test-go-profile:
+	node scripts/profile-go-test.js
 
 generate: generate-sql generate-types
 
