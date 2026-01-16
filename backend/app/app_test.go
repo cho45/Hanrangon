@@ -21,8 +21,11 @@ import (
 	"github.com/cho45/hanrangon/internal/testutil"
 	"github.com/labstack/echo/v4"
 	_ "github.com/mattn/go-sqlite3"
-	"golang.org/x/crypto/bcrypt"
 )
+
+// Pre-computed bcrypt hash for "testpass" to avoid expensive hashing in every test
+// Generated with: bcrypt.GenerateFromPassword([]byte("testpass"), bcrypt.DefaultCost)
+const testPasswordHash = "$2a$10$f8mVUKq.YADiBTfHoML1auyxudHtJpUD1xXHRDbWBWD5cBvjboS.S"
 
 func setupTest(t *testing.T) *testEnv {
 	t.Helper()
@@ -36,13 +39,11 @@ func setupTest(t *testing.T) *testEnv {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("testpass"), bcrypt.DefaultCost)
-
 	// デフォルト設定をロードしてからテスト用にオーバーライド
 	config := LoadConfig()
 	config.UploadDir = tmpDir
 	config.Username = "testuser"
-	config.Password = string(hashedPassword)
+	config.Password = testPasswordHash
 	config.SessionSecret = "testsecret"
 	config.BaseURL = "http://localhost:5555"
 
