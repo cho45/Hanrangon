@@ -263,4 +263,23 @@ describe('AppEditor', () => {
       expect(screen.queryByText('読み込み中...')).toBeNull();
     });
   });
+
+  it('本文の入力に応じて文字数が正しく表示されること', async () => {
+    const user = userEvent.setup();
+    render(AppEditor, { id: null, onSave: () => {} });
+
+    const bodyInput = screen.getByPlaceholderText('本文') as HTMLTextAreaElement;
+    const charCount = screen.getByText(/文字/);
+
+    expect(charCount.textContent).toBe('0 文字');
+
+    await user.type(bodyInput, 'Hello');
+    expect(charCount.textContent).toBe('5 文字');
+
+    await user.type(bodyInput, ' 世界');
+    expect(charCount.textContent).toBe('8 文字');
+
+    await user.clear(bodyInput);
+    expect(charCount.textContent).toBe('0 文字');
+  });
 });

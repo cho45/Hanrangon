@@ -48,8 +48,8 @@
       const parsed = await api.get<Entry>(`/admin/api/entry/${id}`);
       entry = parsed;
       form.id = parsed.id;
-      form.title = parsed.title;
-      form.body = parsed.body;
+      form.title = parsed.title ?? '';
+      form.body = parsed.body ?? '';
       form.format = parsed.format || 'Hatena';
       form.status = parsed.status;
       if (parsed.publish_at?.Valid) {
@@ -428,6 +428,7 @@
       <button type="button" onclick={openUploadDialog} disabled={uploading}>
         {uploading ? '⌛ アップロード中...' : '📷 写真'}
       </button>
+      <span class="char-count">{(form.body ?? '').length} 文字</span>
       <select bind:value={form.format} class="format-select">
         {#each ['Hatena', 'Markdown', 'HTML', 'tDiary'] as fmt}
           <option value={fmt}>{fmt}</option>
@@ -691,9 +692,14 @@
     cursor: pointer;
   }
 
-  .format-select {
+  .char-count {
     margin-left: auto;
-    border: 1px solid #dfe5e7;
+    align-self: center;
+    font-size: 0.8em;
+    color: #666;
+  }
+
+  .format-select {
     border-radius: 3px;
     padding: 0 8px;
   }
