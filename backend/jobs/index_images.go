@@ -11,6 +11,7 @@ import (
 	_ "image/png"
 	"log"
 	"math"
+	"math/bits"
 	"net/http"
 	"net/url"
 	"os"
@@ -165,6 +166,14 @@ func (j *IndexImagesJob) syncInternal(ctx context.Context, qtx imagesdb.Querier,
 		if err := qtx.DeleteNgramsByImageIDs(ctx, idsToDelete); err != nil {
 			return err
 		}
+		for _, id := range idsToDelete {
+			if err := qtx.DeleteSimilarImagesByImageID(ctx, imagesdb.DeleteSimilarImagesByImageIDParams{
+				ImageID:        id,
+				SimilarImageID: id,
+			}); err != nil {
+				return err
+			}
+		}
 		if err := qtx.DeleteImagesByIDs(ctx, idsToDelete); err != nil {
 			return err
 		}
@@ -280,6 +289,9 @@ func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []in
 			// 単語にオフセット 'i' を含めることで、色空間内の同じ絶対位置にあるパターンのみが一致するようにする。
 			for i := 0; i <= 64-12; i++ {
 				pattern := int64((res.sig >> i) & 0xFFF)
+				if pattern == 0 {
+					continue
+				}
 				word := (int64(i) << 12) | pattern
 
 				if err := qtx.CreateNgram(ctx, imagesdb.CreateNgramParams{
@@ -289,10 +301,76 @@ func (j *IndexImagesJob) FillImagesForEntries(ctx context.Context, entryIDs []in
 					return err
 				}
 			}
+
+			// キャッシュの更新（双方向）
+			if err := j.UpdateSimilarImagesCache(ctx, qtx, res.imgRecord.ID); err != nil {
+				return err
+			}
 		}
 	}
 
 	return tx.Commit()
+}
+
+func (j *IndexImagesJob) UpdateSimilarImagesCache(ctx context.Context, qtx imagesdb.Querier, imageID int64) error {
+	// 1. 古いキャッシュを削除
+	if err := qtx.DeleteSimilarImagesByImageID(ctx, imagesdb.DeleteSimilarImagesByImageIDParams{
+		ImageID:        imageID,
+		SimilarImageID: imageID,
+	}); err != nil {
+		return err
+	}
+
+	// 2. 類似画像を検索（上位20件）
+	similars, err := qtx.ListSimilarImagesByImageIDs(ctx, []int64{imageID})
+	if err != nil {
+		return err
+	}
+
+	targetImg, err := qtx.GetImage(ctx, imageID)
+	if err != nil {
+		return err
+	}
+	s1 := binary.BigEndian.Uint64(targetImg.Sig)
+
+	count := 0
+	for _, sim := range similars {
+		if count >= 20 {
+			break
+		}
+
+		s2 := binary.BigEndian.Uint64(sim.Sig)
+		intersection := bits.OnesCount64(s1 & s2)
+		union := bits.OnesCount64(s1 | s2)
+		jaccard := 0.0
+		if union > 0 {
+			jaccard = float64(intersection) / float64(union)
+		}
+
+		if jaccard < 0.25 {
+			continue
+		}
+
+		if err := qtx.UpsertSimilarImage(ctx, imagesdb.UpsertSimilarImageParams{
+			ImageID:        imageID,
+			SimilarImageID: sim.ID,
+			Score:          sim.Score,
+			Jaccard:        jaccard,
+		}); err != nil {
+			return err
+		}
+		if err := qtx.UpsertSimilarImage(ctx, imagesdb.UpsertSimilarImageParams{
+			ImageID:        sim.ID,
+			SimilarImageID: imageID,
+			Score:          sim.Score,
+			Jaccard:        jaccard,
+		}); err != nil {
+			return err
+		}
+		count++
+	}
+
+	return nil
 }
 
 func (j *IndexImagesJob) CalculateColorSignatureFromImage(img image.Image) uint64 {

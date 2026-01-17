@@ -13,9 +13,11 @@ type Querier interface {
 	CountUnindexedImages(ctx context.Context) (int64, error)
 	CreateImage(ctx context.Context, arg CreateImageParams) (int64, error)
 	CreateNgram(ctx context.Context, arg CreateNgramParams) error
+	DeleteAllSimilarImages(ctx context.Context) error
 	DeleteImagesByIDs(ctx context.Context, ids []int64) error
 	DeleteNgramsByImageID(ctx context.Context, imageID int64) error
 	DeleteNgramsByImageIDs(ctx context.Context, ids []int64) error
+	DeleteSimilarImagesByImageID(ctx context.Context, arg DeleteSimilarImagesByImageIDParams) error
 	GetImage(ctx context.Context, id int64) (Image, error)
 	ListAllEntryIDsInImages(ctx context.Context) ([]int64, error)
 	ListEntryIDsWithUnindexedImages(ctx context.Context) ([]int64, error)
@@ -23,7 +25,10 @@ type Querier interface {
 	ListImagesByEntryID(ctx context.Context, entryID int64) ([]Image, error)
 	ListImagesByEntryIDs(ctx context.Context, entryIds []int64) ([]Image, error)
 	ListSimilarImagesByImageIDs(ctx context.Context, imageIds []int64) ([]ListSimilarImagesByImageIDsRow, error)
+	ListSimilarImagesFromCache(ctx context.Context, imageID int64) ([]ListSimilarImagesFromCacheRow, error)
+	ListSimilarImagesFromCacheBulk(ctx context.Context, imageIds []int64) ([]ListSimilarImagesFromCacheBulkRow, error)
 	UpdateImageSig(ctx context.Context, arg UpdateImageSigParams) error
+	UpsertSimilarImage(ctx context.Context, arg UpsertSimilarImageParams) error
 }
 
 var _ Querier = (*Queries)(nil)

@@ -63,6 +63,15 @@ func (q *Queries) CreateNgram(ctx context.Context, arg CreateNgramParams) error 
 	return err
 }
 
+const deleteAllSimilarImages = `-- name: DeleteAllSimilarImages :exec
+DELETE FROM similar_images
+`
+
+func (q *Queries) DeleteAllSimilarImages(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteAllSimilarImages)
+	return err
+}
+
 const deleteImagesByIDs = `-- name: DeleteImagesByIDs :exec
 DELETE FROM images WHERE id IN (/*SLICE:ids*/?)
 `
@@ -107,6 +116,20 @@ func (q *Queries) DeleteNgramsByImageIDs(ctx context.Context, ids []int64) error
 		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
 	}
 	_, err := q.db.ExecContext(ctx, query, queryParams...)
+	return err
+}
+
+const deleteSimilarImagesByImageID = `-- name: DeleteSimilarImagesByImageID :exec
+DELETE FROM similar_images WHERE image_id = ? OR similar_image_id = ?
+`
+
+type DeleteSimilarImagesByImageIDParams struct {
+	ImageID        int64 `json:"image_id"`
+	SimilarImageID int64 `json:"similar_image_id"`
+}
+
+func (q *Queries) DeleteSimilarImagesByImageID(ctx context.Context, arg DeleteSimilarImagesByImageIDParams) error {
+	_, err := q.db.ExecContext(ctx, deleteSimilarImagesByImageID, arg.ImageID, arg.SimilarImageID)
 	return err
 }
 
@@ -370,6 +393,133 @@ func (q *Queries) ListSimilarImagesByImageIDs(ctx context.Context, imageIds []in
 	return items, nil
 }
 
+const listSimilarImagesFromCache = `-- name: ListSimilarImagesFromCache :many
+SELECT
+    i.id,
+    i.uri,
+    i.entry_id,
+    i.sig,
+    s.score,
+    s.jaccard
+FROM
+    similar_images AS s
+JOIN
+    images AS i ON i.id = s.similar_image_id
+WHERE
+    s.image_id = ?
+ORDER BY
+    s.jaccard DESC
+`
+
+type ListSimilarImagesFromCacheRow struct {
+	ID      int64   `json:"id"`
+	Uri     string  `json:"uri"`
+	EntryID int64   `json:"entry_id"`
+	Sig     []byte  `json:"sig"`
+	Score   int64   `json:"score"`
+	Jaccard float64 `json:"jaccard"`
+}
+
+func (q *Queries) ListSimilarImagesFromCache(ctx context.Context, imageID int64) ([]ListSimilarImagesFromCacheRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSimilarImagesFromCache, imageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSimilarImagesFromCacheRow
+	for rows.Next() {
+		var i ListSimilarImagesFromCacheRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Uri,
+			&i.EntryID,
+			&i.Sig,
+			&i.Score,
+			&i.Jaccard,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSimilarImagesFromCacheBulk = `-- name: ListSimilarImagesFromCacheBulk :many
+SELECT
+    s.image_id AS search_image_id,
+    i.id,
+    i.uri,
+    i.entry_id,
+    i.sig,
+    s.score,
+    s.jaccard
+FROM
+    similar_images AS s
+JOIN
+    images AS i ON i.id = s.similar_image_id
+WHERE
+    s.image_id IN (/*SLICE:image_ids*/?)
+ORDER BY
+    s.jaccard DESC
+`
+
+type ListSimilarImagesFromCacheBulkRow struct {
+	SearchImageID int64   `json:"search_image_id"`
+	ID            int64   `json:"id"`
+	Uri           string  `json:"uri"`
+	EntryID       int64   `json:"entry_id"`
+	Sig           []byte  `json:"sig"`
+	Score         int64   `json:"score"`
+	Jaccard       float64 `json:"jaccard"`
+}
+
+func (q *Queries) ListSimilarImagesFromCacheBulk(ctx context.Context, imageIds []int64) ([]ListSimilarImagesFromCacheBulkRow, error) {
+	query := listSimilarImagesFromCacheBulk
+	var queryParams []interface{}
+	if len(imageIds) > 0 {
+		for _, v := range imageIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:image_ids*/?", strings.Repeat(",?", len(imageIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:image_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSimilarImagesFromCacheBulkRow
+	for rows.Next() {
+		var i ListSimilarImagesFromCacheBulkRow
+		if err := rows.Scan(
+			&i.SearchImageID,
+			&i.ID,
+			&i.Uri,
+			&i.EntryID,
+			&i.Sig,
+			&i.Score,
+			&i.Jaccard,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateImageSig = `-- name: UpdateImageSig :exec
 UPDATE images SET sig = ? WHERE id = ?
 `
@@ -381,5 +531,27 @@ type UpdateImageSigParams struct {
 
 func (q *Queries) UpdateImageSig(ctx context.Context, arg UpdateImageSigParams) error {
 	_, err := q.db.ExecContext(ctx, updateImageSig, arg.Sig, arg.ID)
+	return err
+}
+
+const upsertSimilarImage = `-- name: UpsertSimilarImage :exec
+INSERT OR REPLACE INTO similar_images (image_id, similar_image_id, score, jaccard)
+VALUES (?, ?, ?, ?)
+`
+
+type UpsertSimilarImageParams struct {
+	ImageID        int64   `json:"image_id"`
+	SimilarImageID int64   `json:"similar_image_id"`
+	Score          int64   `json:"score"`
+	Jaccard        float64 `json:"jaccard"`
+}
+
+func (q *Queries) UpsertSimilarImage(ctx context.Context, arg UpsertSimilarImageParams) error {
+	_, err := q.db.ExecContext(ctx, upsertSimilarImage,
+		arg.ImageID,
+		arg.SimilarImageID,
+		arg.Score,
+		arg.Jaccard,
+	)
 	return err
 }

@@ -63,6 +63,51 @@ JOIN
 ORDER BY
     t.score DESC;
 
+-- name: UpsertSimilarImage :exec
+INSERT OR REPLACE INTO similar_images (image_id, similar_image_id, score, jaccard)
+VALUES (?, ?, ?, ?);
+
+-- name: ListSimilarImagesFromCache :many
+SELECT
+    i.id,
+    i.uri,
+    i.entry_id,
+    i.sig,
+    s.score,
+    s.jaccard
+FROM
+    similar_images AS s
+JOIN
+    images AS i ON i.id = s.similar_image_id
+WHERE
+    s.image_id = ?
+ORDER BY
+    s.jaccard DESC;
+
+-- name: ListSimilarImagesFromCacheBulk :many
+SELECT
+    s.image_id AS search_image_id,
+    i.id,
+    i.uri,
+    i.entry_id,
+    i.sig,
+    s.score,
+    s.jaccard
+FROM
+    similar_images AS s
+JOIN
+    images AS i ON i.id = s.similar_image_id
+WHERE
+    s.image_id IN (sqlc.slice('image_ids'))
+ORDER BY
+    s.jaccard DESC;
+
+-- name: DeleteSimilarImagesByImageID :exec
+DELETE FROM similar_images WHERE image_id = ? OR similar_image_id = ?;
+
+-- name: DeleteAllSimilarImages :exec
+DELETE FROM similar_images;
+
 -- name: GetImage :one
 SELECT * FROM images WHERE id = ?;
 

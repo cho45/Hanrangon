@@ -170,12 +170,8 @@ export interface ImageProcessor {
 //////////
 // source: image_similarity.go
 
-/**
- * ScoredSimilarImage represents a similar image with its Jaccard similarity score.
- */
 export interface ScoredSimilarImage {
-  ListSimilarImagesByImageIDsRow: any /* imagesdb.ListSimilarImagesByImageIDsRow */;
-  jaccard: number /* float64 */;
+  ListSimilarImagesFromCacheBulkRow: any /* imagesdb.ListSimilarImagesFromCacheBulkRow */;
 }
 
 //////////

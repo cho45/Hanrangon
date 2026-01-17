@@ -14,3 +14,14 @@ CREATE TABLE ngram (
 	PRIMARY KEY (word, image_id)
 ) WITHOUT ROWID;
 CREATE INDEX index_ngram_image_id ON ngram (image_id);
+
+CREATE TABLE similar_images (
+	image_id INTEGER NOT NULL,
+	similar_image_id INTEGER NOT NULL,
+	score INTEGER NOT NULL,
+	jaccard REAL NOT NULL,
+	PRIMARY KEY (image_id, similar_image_id),
+	FOREIGN KEY (image_id) REFERENCES images(id),
+	FOREIGN KEY (similar_image_id) REFERENCES images(id)
+);
+CREATE INDEX index_similar_images_image_id_jaccard ON similar_images (image_id, jaccard DESC);

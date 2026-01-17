@@ -15,3 +15,10 @@ type Ngram struct {
 	Word    int64 `json:"word"`
 	ImageID int64 `json:"image_id"`
 }
+
+type SimilarImage struct {
+	ImageID        int64   `json:"image_id"`
+	SimilarImageID int64   `json:"similar_image_id"`
+	Score          int64   `json:"score"`
+	Jaccard        float64 `json:"jaccard"`
+}

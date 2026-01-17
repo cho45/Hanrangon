@@ -19,6 +19,10 @@ export interface CreateNgramParams {
   image_id: number /* int64 */;
   word: number /* int64 */;
 }
+export interface DeleteSimilarImagesByImageIDParams {
+  image_id: number /* int64 */;
+  similar_image_id: number /* int64 */;
+}
 export interface ListImagesParams {
   limit: number /* int64 */;
   offset: number /* int64 */;
@@ -31,9 +35,32 @@ export interface ListSimilarImagesByImageIDsRow {
   sig: string;
   score: number /* int64 */;
 }
+export interface ListSimilarImagesFromCacheRow {
+  id: number /* int64 */;
+  uri: string;
+  entry_id: number /* int64 */;
+  sig: string;
+  score: number /* int64 */;
+  jaccard: number /* float64 */;
+}
+export interface ListSimilarImagesFromCacheBulkRow {
+  search_image_id: number /* int64 */;
+  id: number /* int64 */;
+  uri: string;
+  entry_id: number /* int64 */;
+  sig: string;
+  score: number /* int64 */;
+  jaccard: number /* float64 */;
+}
 export interface UpdateImageSigParams {
   sig: string;
   id: number /* int64 */;
+}
+export interface UpsertSimilarImageParams {
+  image_id: number /* int64 */;
+  similar_image_id: number /* int64 */;
+  score: number /* int64 */;
+  jaccard: number /* float64 */;
 }
 
 //////////
@@ -48,6 +75,12 @@ export interface Image {
 export interface Ngram {
   word: number /* int64 */;
   image_id: number /* int64 */;
+}
+export interface SimilarImage {
+  image_id: number /* int64 */;
+  similar_image_id: number /* int64 */;
+  score: number /* int64 */;
+  jaccard: number /* float64 */;
 }
 
 //////////

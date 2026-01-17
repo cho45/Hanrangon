@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/cho45/hanrangon/backend/model/imagesdb"
 	"github.com/cho45/hanrangon/backend/model/maindb"
 )
 
@@ -134,6 +135,56 @@ func BenchmarkHandleOGP(b *testing.B) {
 
 		if rec.Code != http.StatusOK {
 			b.Fatalf("expected status 200, got %d", rec.Code)
+		}
+	}
+}
+
+// BenchmarkFindSimilarImagesBulk は画像類似度検索のベンチマーク
+func BenchmarkFindSimilarImagesBulk(b *testing.B) {
+	env := setupBenchmark(b)
+	defer env.close()
+
+	ctx := context.Background()
+
+	// テスト用画像を20枚作成
+	const numImages = 20
+	var images []imagesdb.Image
+	for i := 0; i < numImages; i++ {
+		// 実際にはDBにレコードがある必要がある
+		params := imagesdb.CreateImageParams{
+			Uri:     fmt.Sprintf("/images/entry/bench-%d.png", i),
+			EntryID: int64(i + 1),
+			Sig:     []byte{byte(i), byte(i), byte(i), byte(i), byte(i), byte(i), byte(i), byte(i)},
+		}
+		imgID, err := env.app.ImagesDB().Q.CreateImage(ctx, params)
+		if err != nil {
+			b.Fatal(err)
+		}
+		images = append(images, imagesdb.Image{
+			ID:      imgID,
+			Uri:     params.Uri,
+			EntryID: params.EntryID,
+			Sig:     params.Sig,
+		})
+
+		// キャッシュにダミーデータを20件ずつ入れる
+		for j := 0; j < 20; j++ {
+			env.app.ImagesDB().Q.UpsertSimilarImage(ctx, imagesdb.UpsertSimilarImageParams{
+				ImageID:        imgID,
+				SimilarImageID: int64(j + 100), // 適当なID
+				Score:          int64(j),
+				Jaccard:        0.5,
+			})
+		}
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		_, err := env.app.(*AppImpl).findSimilarImagesBulk(ctx, images)
+		if err != nil {
+			b.Fatal(err)
 		}
 	}
 }
