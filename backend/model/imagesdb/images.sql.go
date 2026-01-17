@@ -295,24 +295,30 @@ func (q *Queries) ListImagesByEntryIDs(ctx context.Context, entryIds []int64) ([
 
 const listSimilarImagesByImageIDs = `-- name: ListSimilarImagesByImageIDs :many
 SELECT
-    isw_search.image_id AS search_image_id,
+    t.search_image_id,
     i.id,
     i.uri,
     i.entry_id,
     i.sig,
-    COUNT(isw.word) as score
-FROM
-    images AS i
-JOIN 
-    ngram AS isw ON i.id = isw.image_id
-JOIN 
-    ngram AS isw_search ON isw.word = isw_search.word AND isw.image_id != isw_search.image_id
-WHERE
-    isw_search.image_id IN (/*SLICE:image_ids*/?)
-GROUP BY 
-    isw_search.image_id, i.id
-ORDER BY 
-    score DESC
+    t.score
+FROM (
+    SELECT
+        isw_search.image_id AS search_image_id,
+        isw.image_id AS target_image_id,
+        COUNT(*) AS score
+    FROM
+        ngram AS isw_search
+    JOIN
+        ngram AS isw ON isw_search.word = isw.word AND isw_search.image_id != isw.image_id
+    WHERE
+        isw_search.image_id IN (/*SLICE:image_ids*/?)
+    GROUP BY
+        isw_search.image_id, isw.image_id
+) AS t
+JOIN
+    images AS i ON i.id = t.target_image_id
+ORDER BY
+    t.score DESC
 `
 
 type ListSimilarImagesByImageIDsRow struct {
