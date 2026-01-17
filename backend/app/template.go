@@ -17,7 +17,7 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// TemplateMetadata holds metadata parsed from template front matter
+// TemplateMetadata はテンプレートのフロントマターから解析されたメタデータを保持
 type TemplateMetadata struct {
 	Links []struct {
 		URL         string `toml:"url"`
@@ -27,7 +27,7 @@ type TemplateMetadata struct {
 	} `toml:"links"`
 }
 
-// Templates manages HTML templates
+// Templates はHTMLテンプレートを管理
 type Templates struct {
 	config    *Config
 	templates map[string]*template.Template
@@ -36,7 +36,7 @@ type Templates struct {
 	mu        sync.RWMutex
 }
 
-// buildFuncMap builds the function map for templates
+// buildFuncMap はテンプレート用の関数マップを構築
 func buildFuncMap() template.FuncMap {
 	funcMap := sprig.FuncMap()
 
@@ -61,7 +61,7 @@ func buildFuncMap() template.FuncMap {
 	return funcMap
 }
 
-// loadTemplates loads each template as an isolated set to avoid cross-template name collisions (e.g., "head").
+// loadTemplates は各テンプレートを分離されたセットとして読み込み、テンプレート間の名前衝突（例："head"）を回避
 func (t *Templates) loadTemplates() (map[string]*template.Template, map[string]*TemplateMetadata, error) {
 	templates := make(map[string]*template.Template)
 	funcMap := buildFuncMap()
@@ -94,7 +94,15 @@ func (t *Templates) loadTemplates() (map[string]*template.Template, map[string]*
 		}
 
 		content := string(b)
+		// フロントマター形式の解析: "---\n"で始まる場合はTOMLメタデータを解析
+		// 形式:
+		//   ---
+		//   [links]
+		//   url = "..."
+		//   ---
+		//   テンプレート本文
 		if strings.HasPrefix(content, "---\n") {
+			// SplitNで3分割すると ["", "TOML", "テンプレート本文"] になる
 			parts := strings.SplitN(content, "---\n", 3)
 			if len(parts) == 3 {
 				var meta TemplateMetadata
@@ -107,7 +115,7 @@ func (t *Templates) loadTemplates() (map[string]*template.Template, map[string]*
 			}
 		}
 
-		// Each file is parsed into its own template set to isolate definitions like {{define "head"}}.
+		// 各ファイルを独自のテンプレートセットとして解析し、{{define "head"}}のような定義を分離
 		tmpl := template.New(rel).Funcs(funcMap)
 		_, err = tmpl.Parse(content)
 		if err != nil {
@@ -125,7 +133,7 @@ func (t *Templates) loadTemplates() (map[string]*template.Template, map[string]*
 	return templates, metadata, nil
 }
 
-// LoadTemplates is a thread-safe wrapper for loadTemplates.
+// LoadTemplates はloadTemplatesのスレッドセーフなラッパー
 func (t *Templates) LoadTemplates() (map[string]*template.Template, error) {
 	templates, metadata, err := t.loadTemplates()
 	if err != nil {
@@ -137,7 +145,7 @@ func (t *Templates) LoadTemplates() (map[string]*template.Template, error) {
 	return templates, nil
 }
 
-// InitTemplates initializes the template system
+// InitTemplates はテンプレートシステムを初期化
 func InitTemplates(config *Config) (*Templates, error) {
 	t := &Templates{
 		config:   config,
@@ -158,7 +166,7 @@ func InitTemplates(config *Config) (*Templates, error) {
 	return t, nil
 }
 
-// getTemplates returns the template map and metadata map, reloading in development mode.
+// getTemplates はテンプレートマップとメタデータマップを返す。開発モードでは再読み込み
 func (t *Templates) getTemplates() (map[string]*template.Template, map[string]*TemplateMetadata, error) {
 	if t.config.IsDevelopment() {
 		return t.loadTemplates()
@@ -174,7 +182,7 @@ func (t *Templates) getTemplates() (map[string]*template.Template, map[string]*T
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	// Double check
+	// ダブルチェック
 	if t.templates != nil {
 		return t.templates, t.metadata, nil
 	}
@@ -185,13 +193,13 @@ func (t *Templates) getTemplates() (map[string]*template.Template, map[string]*T
 	}
 	t.templates = tmpl
 	t.metadata = meta
-	// Clear merged cache when templates are reloaded
+	// テンプレート再読み込み時にマージ済みキャッシュをクリア
 	t.merged = make(map[string]*template.Template)
 	return t.templates, t.metadata, nil
 }
 
-// RenderWithLayout renders a template with the specified layout.
-// It merges the layout and content templates into a fresh set for isolation.
+// RenderWithLayout は指定されたレイアウトでテンプレートを描画
+// レイアウトとコンテンツテンプレートを新規セットにマージして分離
 func (t *Templates) RenderWithLayout(c echo.Context, layoutName, contentName string, data interface{}) error {
 	templates, metadata, err := t.getTemplates()
 	if err != nil {
@@ -223,27 +231,27 @@ func (t *Templates) RenderWithLayout(c echo.Context, layoutName, contentName str
 		return fmt.Errorf("layout template %s not found", layoutName)
 	}
 
-	// Create a new template set starting with the layout.
-	// Cloning layoutTmpl is important to avoid polluting the cached template.
+	// レイアウトから始まる新しいテンプレートセットを作成
+	// layoutTmplをクローン化することで、キャッシュされたテンプレートの汚染を防ぐことが重要
 	mergedTmpl, err := layoutTmpl.Clone()
 	if err != nil {
 		return err
 	}
 
-	// Merge all defined templates from the content template into the layout set.
-	// This allows the content to override templates like "head" defined in the layout.
+	// コンテンツテンプレートの定義済みテンプレートをすべてレイアウトセットにマージ
+	// これにより、コンテンツがレイアウトで定義された"head"のようなテンプレートを上書きできる
 	for _, sub := range contentTmpl.Templates() {
 		if sub.Name() == contentName {
 			continue
 		}
-		// Overwrite or add the definition to the layout set.
+		// レイアウトセットに定義を上書きまたは追加
 		_, err := mergedTmpl.AddParseTree(sub.Name(), sub.Tree)
 		if err != nil {
 			return err
 		}
 	}
 
-	// Inject the main body of the content template as "content" for the layout.
+	// コンテンツテンプレートの本文を"content"としてレイアウトに注入
 	_, err = mergedTmpl.AddParseTree("content", contentTmpl.Tree)
 	if err != nil {
 		return err
@@ -264,7 +272,7 @@ func (t *Templates) RenderWithLayout(c echo.Context, layoutName, contentName str
 	return err
 }
 
-// Render renders a template by name
+// Render は名前でテンプレートを描画
 func (t *Templates) Render(c echo.Context, name string, data interface{}) error {
 	templates, metadata, err := t.getTemplates()
 	if err != nil {
@@ -285,7 +293,7 @@ func (t *Templates) Render(c echo.Context, name string, data interface{}) error 
 	return err
 }
 
-// RenderTo renders a template to an io.Writer (no header setting)
+// RenderTo はio.Writerにテンプレートを描画（ヘッダー設定なし）
 func (t *Templates) RenderTo(w io.Writer, name string, data interface{}) error {
 	templates, _, err := t.getTemplates()
 	if err != nil {

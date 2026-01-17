@@ -233,7 +233,7 @@ export interface R2Storage {
 // source: template.go
 
 /**
- * TemplateMetadata holds metadata parsed from template front matter
+ * TemplateMetadata はテンプレートのフロントマターから解析されたメタデータを保持
  */
 export interface TemplateMetadata {
   Links: {
@@ -244,7 +244,7 @@ export interface TemplateMetadata {
   }[];
 }
 /**
- * Templates manages HTML templates
+ * Templates はHTMLテンプレートを管理
  */
 export interface Templates {
 }
