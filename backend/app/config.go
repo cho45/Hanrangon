@@ -181,3 +181,8 @@ func LoadConfig() *Config {
 func (c *Config) IsDevelopment() bool {
 	return c.Environment == "development"
 }
+
+// IsTest returns true if the environment is test
+func (c *Config) IsTest() bool {
+	return c.Environment == "test"
+}

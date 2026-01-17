@@ -32,24 +32,28 @@ func NewServer(app *AppImpl) *echo.Echo {
 
 	// Middleware
 	e.Use(session.Middleware(sessions.NewCookieStore([]byte(config.SessionSecret))))
-	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
-		LogStatus:   true,
-		LogURI:      true,
-		LogMethod:   true,
-		LogLatency:  true,
-		LogRemoteIP: true,
-		LogError:    true,
-		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
-			if v.Error != nil {
-				log.Printf("REQUEST ERROR: method=%s, uri=%s, status=%d, latency=%v, remote_ip=%s, error=%v",
-					v.Method, v.URI, v.Status, v.Latency, v.RemoteIP, v.Error)
-			} else {
-				log.Printf("REQUEST: method=%s, uri=%s, status=%d, latency=%v, remote_ip=%s",
-					v.Method, v.URI, v.Status, v.Latency, v.RemoteIP)
-			}
-			return nil
-		},
-	}))
+
+	// 開発環境のみ RequestLogger を有効化
+	if config.IsDevelopment() {
+		e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
+			LogStatus:   true,
+			LogURI:      true,
+			LogMethod:   true,
+			LogLatency:  true,
+			LogRemoteIP: true,
+			LogError:    true,
+			LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+				if v.Error != nil {
+					log.Printf("REQUEST ERROR: method=%s, uri=%s, status=%d, latency=%v, remote_ip=%s, error=%v",
+						v.Method, v.URI, v.Status, v.Latency, v.RemoteIP, v.Error)
+				} else {
+					log.Printf("REQUEST: method=%s, uri=%s, status=%d, latency=%v, remote_ip=%s",
+						v.Method, v.URI, v.Status, v.Latency, v.RemoteIP)
+				}
+				return nil
+			},
+		}))
+	}
 
 	// Custom HTTP Error Handler
 	e.HTTPErrorHandler = func(err error, c echo.Context) {

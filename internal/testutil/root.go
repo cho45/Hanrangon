@@ -20,4 +20,7 @@ func SetupEnvironment() {
 	configPath := filepath.Join(tmpDir, "hanrangon-test-config.toml")
 	_ = os.WriteFile(configPath, []byte(""), 0644)
 	os.Setenv("HANRANGON_CONFIG", configPath)
+
+	// テスト環境として明示的に設定
+	os.Setenv("HANRANGON_ENV", "test")
 }
