@@ -41,6 +41,7 @@ func (app *AppImpl) CSRF(next echo.HandlerFunc) echo.HandlerFunc {
 		cookie, err := c.Cookie(CSRFCookieName)
 		var sk string
 		if err != nil {
+			// 16バイト（128ビット）のエントロピーは予測不可能性として十分
 			sk, _ = GenerateRandomString(16)
 			newCookie := &http.Cookie{
 				Name:     CSRFCookieName,

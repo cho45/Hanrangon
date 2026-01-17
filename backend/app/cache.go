@@ -2,7 +2,6 @@ package app
 
 import (
 	"crypto/sha1"
-	"crypto/sha256"
 	"fmt"
 	"io"
 	"net/http"
@@ -31,7 +30,7 @@ func init() {
 	}
 	defer f.Close()
 
-	h := sha256.New()
+	h := sha1.New()
 	if _, err := io.Copy(h, f); err != nil {
 		AppHash = fmt.Sprintf("%d", time.Now().UnixNano())
 		return
@@ -39,6 +38,10 @@ func init() {
 
 	AppHash = fmt.Sprintf("%x", h.Sum(nil))
 }
+
+// AppHash はアプリケーションのバージョン識別子であり、セキュリティ用途ではない。
+// SHA1 (160 ビット) は識別子として十分な強度を持つ。
+// 将来的にセキュリティ用途で使用する場合は sha256 への変更を検討すること。
 
 // CheckCache は HTTP キャッシュヘッダー (ETag, Last-Modified) の処理と検証を行う。
 // リクエストが処理された（304 Not Modified を送信した）場合は true を、そうでない場合は false を返す。
@@ -103,6 +106,13 @@ func GenerateListETag(latestMod time.Time, count int, extra string, isAuth bool)
 	h := sha1.Sum([]byte(s))
 	return fmt.Sprintf(`"%x"`, h)
 }
+
+// SHA1 を使用する理由:
+// ETag の用途は衝突を回避することであり、セキュリティ上の要請はない。
+// SHA1 は 160 ビットのハッシュ空間を持ち、HTTP キャッシュ用途として
+// 衝突の可能性は実質的に無視できるレベル。
+// 歴史的な実装との互換性や、HTTP ヘッダサイズの観点から
+// SHA1 のまま運用を継続する。
 
 // GenerateEntryETag は単一エントリ用の Strong ETag を生成。
 func GenerateEntryETag(id int64, mod time.Time, isAuth bool) string {

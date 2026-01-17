@@ -120,6 +120,9 @@ func (p *ImageProcessor) processJPEG(ctx context.Context, srcPath string, filena
 		var stderr strings.Builder
 		cmd := exec.CommandContext(ctx, p.avifencPath, "--jobs", "3", "--speed", "8", "--yuv", "444", "-q", "60", srcPath, dstPath)
 		cmd.Stderr = &stderr
+		// 本番運用のサーバのCPU数が3。--jobs 3 は並列処理数。
+		// --speed 8 でほぼ最速設定とする（speed 6 と 7 の間に大きな壁があり、
+		// サーバのCPUがあまり高速ではないため、早さを重視）
 		if err := cmd.Run(); err == nil {
 			newFilename := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".avif"
 			p.logResult("avifenc", dstPath, originalSize)
@@ -135,6 +138,8 @@ func (p *ImageProcessor) processJPEG(ctx context.Context, srcPath string, filena
 		var stderr strings.Builder
 		cmd := exec.CommandContext(ctx, p.cavifPath, "--quiet", "--speed", "7", "--quality", "80", "-o", dstPath, srcPath)
 		cmd.Stderr = &stderr
+		// 早さを重視した設定（--speed 7 は高速モード）
+		// --quality 80 はavifencの -q 60 と同等品質を目指す
 		if err := cmd.Run(); err == nil {
 			newFilename := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".avif"
 			p.logResult("cavif", dstPath, originalSize)

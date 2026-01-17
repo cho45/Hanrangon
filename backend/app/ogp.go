@@ -57,6 +57,7 @@ func (p *opaquePaletted) Opaque() bool { return true }
 
 func getOGPPalette() color.Palette {
 	ogpPaletteOnce.Do(func() {
+		// 背景画像ogp_base.pngも含めて主要色を16色に制限（ファイルサイズ削減）
 		p := make(color.Palette, 0, 16)
 		p = append(p, color.RGBA{ogpBgR, ogpBgG, ogpBgB, 255})
 		for i := 0; i < 14; i++ {
@@ -101,7 +102,7 @@ func (app *AppImpl) loadOGPAssets() {
 		if fontBytes, err := os.ReadFile(fontPath); err == nil {
 			ogpFont, _ = opentype.Parse(fontBytes)
 		}
-		lut := make([]uint8, 32768)
+		lut := make([]uint8, 32*32*32)
 		for r := 0; r < 32; r++ {
 			for g := 0; g < 32; g++ {
 				for b := 0; b < 32; b++ {
@@ -264,7 +265,9 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 	if needsFade {
 		// フェード計算、アルファブレンディング（合成）、パレット変換（LUT）を 1 パスで実行
 		// textLayer (RGBA) を背景アセットに重ねつつ、その結果を直接 paletted (Index) に書き込む
-		fadeEnd, fadeLen := 1120, 120
+		const margin = 80
+		fadeEnd := 1200 - margin
+		fadeLen := 120
 		fadeStart := fadeEnd - fadeLen
 		tPix := textLayer.Pix
 		for y := 0; y < 630; y++ {

@@ -155,7 +155,7 @@ func (s *R2Storage) Upload(ctx context.Context, key string, body io.Reader, cont
 		Body:          bodyReader,
 		ContentType:   aws.String(contentType),
 		ContentLength: aws.Int64(contentLength),
-		CacheControl:  aws.String("public, max-age=31536000, immutable"), // 1年間キャッシュ
+		CacheControl:  aws.String("public, max-age=31536000, immutable"), // 1年間キャッシュ（最大限キャッシュさせるため）
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to upload to R2: %w", err)

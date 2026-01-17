@@ -85,6 +85,7 @@ func ExtractSummaryAndFirstImage(htmlContent string, length interface{}) (string
 				if hasAttr {
 					for {
 						key, val, more := tokenizer.TagAttr()
+						// string("src")の確保を回避して高速化
 						if len(key) == 3 && key[0] == 's' && key[1] == 'r' && key[2] == 'c' {
 							firstImage = string(val)
 							break

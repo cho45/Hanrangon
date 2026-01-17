@@ -139,6 +139,9 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 		}
 		targetDate = t.Format("2006-01-02")
 	} else {
+		// 初回ページ（最新の記事）を取得するための特殊な日付
+		// DB クエリの WHERE date < targetDate によって、
+		// 全ての日付より大きい値として最新記事を取得
 		targetDate = "9999-99-99"
 	}
 
