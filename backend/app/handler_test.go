@@ -112,6 +112,16 @@ func TestHandleIndex_SimilarImagesBulkFallback(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// 2.5 Add cache records (since we now use cache)
+	_, err = env.imagesDB.Exec(`
+		INSERT INTO similar_images (image_id, similar_image_id, score, jaccard) VALUES
+		(200, 201, 1, 1.0),
+		(201, 200, 1, 1.0)
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// 3. Request index page
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -323,6 +333,16 @@ func TestHandleEntry(t *testing.T) {
 			INSERT INTO ngram (image_id, word) VALUES
 			(10, 1),
 			(11, 1)
+		`)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// 2.5 Add cache records
+		_, err = env.imagesDB.Exec(`
+			INSERT INTO similar_images (image_id, similar_image_id, score, jaccard) VALUES
+			(10, 11, 1, 1.0),
+			(11, 10, 1, 1.0)
 		`)
 		if err != nil {
 			t.Fatal(err)

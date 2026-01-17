@@ -38,24 +38,75 @@ SELECT * FROM images WHERE entry_id = ?;
 
 -- name: ListSimilarImagesByImageIDs :many
 SELECT
-    isw_search.image_id AS search_image_id,
+    t.search_image_id,
     i.id,
     i.uri,
     i.entry_id,
     i.sig,
-    COUNT(isw.word) as score
+    t.score
+FROM (
+    SELECT
+        isw_search.image_id AS search_image_id,
+        isw.image_id AS target_image_id,
+        COUNT(*) AS score
+    FROM
+        ngram AS isw_search
+    JOIN
+        ngram AS isw ON isw_search.word = isw.word AND isw_search.image_id != isw.image_id
+    WHERE
+        isw_search.image_id IN (sqlc.slice('image_ids'))
+    GROUP BY
+        isw_search.image_id, isw.image_id
+) AS t
+JOIN
+    images AS i ON i.id = t.target_image_id
+ORDER BY
+    t.score DESC;
+
+-- name: UpsertSimilarImage :exec
+INSERT OR REPLACE INTO similar_images (image_id, similar_image_id, score, jaccard)
+VALUES (?, ?, ?, ?);
+
+-- name: ListSimilarImagesFromCache :many
+SELECT
+    i.id,
+    i.uri,
+    i.entry_id,
+    i.sig,
+    s.score,
+    s.jaccard
 FROM
-    images AS i
-JOIN 
-    ngram AS isw ON i.id = isw.image_id
-JOIN 
-    ngram AS isw_search ON isw.word = isw_search.word AND isw.image_id != isw_search.image_id
+    similar_images AS s
+JOIN
+    images AS i ON i.id = s.similar_image_id
 WHERE
-    isw_search.image_id IN (sqlc.slice('image_ids'))
-GROUP BY 
-    isw_search.image_id, i.id
-ORDER BY 
-    score DESC;
+    s.image_id = ?
+ORDER BY
+    s.jaccard DESC;
+
+-- name: ListSimilarImagesFromCacheBulk :many
+SELECT
+    s.image_id AS search_image_id,
+    i.id,
+    i.uri,
+    i.entry_id,
+    i.sig,
+    s.score,
+    s.jaccard
+FROM
+    similar_images AS s
+JOIN
+    images AS i ON i.id = s.similar_image_id
+WHERE
+    s.image_id IN (sqlc.slice('image_ids'))
+ORDER BY
+    s.jaccard DESC;
+
+-- name: DeleteSimilarImagesByImageID :exec
+DELETE FROM similar_images WHERE image_id = ? OR similar_image_id = ?;
+
+-- name: DeleteAllSimilarImages :exec
+DELETE FROM similar_images;
 
 -- name: GetImage :one
 SELECT * FROM images WHERE id = ?;
