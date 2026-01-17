@@ -157,7 +157,12 @@ func main() {
 
 	if !found {
 		fmt.Printf("Unknown command: %s\n\n", cmd)
-		_ = subcommands.Registered[len(subcommands.Registered)-1].Run(ctx, application, nil) // Run help
+		for _, sc := range subcommands.Registered {
+			if sc.Name == "help" {
+				_ = sc.Run(ctx, application, nil)
+				break
+			}
+		}
 		os.Exit(1)
 	}
 }
@@ -314,6 +319,7 @@ func RunServe(ctx context.Context, application *app.AppImpl) error {
 
 	// 8. 全 HTTP サーバーのシャットダウン
 	// 10秒のタイムアウト付きで、アクティブなコネクションの終了を待ちます。
+	// 親 ctx は既にキャンセル済みなので、独立した shutdown 用 context を作成
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
