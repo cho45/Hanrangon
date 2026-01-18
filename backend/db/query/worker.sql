@@ -5,25 +5,58 @@ INSERT INTO job_types (name) VALUES (?) ON CONFLICT(name) DO UPDATE SET name = n
 SELECT * FROM job_types WHERE id = ? LIMIT 1;
 
 -- name: EnqueueJob :one
-INSERT INTO jobs (job_type_id, arg, uniqkey, max_retries, created_at, run_after, status)
-VALUES (?, ?, ?, ?, ?, ?, 'pending')
-ON CONFLICT(job_type_id, uniqkey) DO UPDATE SET arg = excluded.arg, run_after = excluded.run_after, status = 'pending', grabbed_at = NULL, retry_count = 0
+INSERT INTO jobs (job_type_id, arg, uniqkey, max_retries, created_at, run_after, status, depends_on)
+VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
 RETURNING *;
 
 -- name: GetJobByID :one
 SELECT * FROM jobs WHERE id = ? LIMIT 1;
 
+-- name: GetJobsByIDs :many
+SELECT * FROM jobs WHERE id IN (sqlc.slice('ids'));
+
+-- name: GetJobByTypeAndUniqkey :one
+SELECT * FROM jobs WHERE job_type_id = ? AND uniqkey = ? LIMIT 1;
+
 -- name: FindNextJob :one
 SELECT * FROM jobs WHERE status = 'pending' AND run_after <= ? ORDER BY created_at ASC LIMIT 1;
 
--- name: GrabJob :exec
-UPDATE jobs SET status = 'running', grabbed_at = ? WHERE id = ?;
+-- name: GrabJob :execresult
+UPDATE jobs SET status = 'running', grabbed_at = :grabbed_at
+WHERE id = :id AND status = 'pending';
 
+-- Mark job as completed. Re-enqueued jobs during execution return to pending.
+-- See backend/jobqueue/queue_reenqueue_edge_cases_test.go for details.
 -- name: MarkJobCompleted :exec
-DELETE FROM jobs WHERE id = ?;
+UPDATE jobs
+SET
+    status = CASE WHEN created_at > grabbed_at THEN 'pending' ELSE 'completed' END,
+    finished_at = CASE WHEN created_at > grabbed_at THEN NULL ELSE ? END,
+    grabbed_at = NULL,
+    retry_count = CASE WHEN created_at > grabbed_at THEN 0 ELSE retry_count END
+WHERE id = ?;
 
 -- name: MarkJobFailed :exec
 UPDATE jobs SET status = CASE WHEN retry_count + 1 >= max_retries THEN 'failed' ELSE 'pending' END, retry_count = retry_count + 1, run_after = ?, error_message = ?, grabbed_at = NULL WHERE id = ?;
+
+-- name: MarkJobPermanentlyFailed :exec
+UPDATE jobs SET status = 'failed', error_message = ?, grabbed_at = NULL, finished_at = ? WHERE id = ?;
+
+-- name: UpdateJobForEnqueue :exec
+UPDATE jobs
+SET arg = ?,
+    depends_on = ?,
+    run_after = ?,
+    status = CASE WHEN status = 'running' THEN 'running' ELSE 'pending' END,
+    retry_count = 0,
+    created_at = ?
+WHERE id = ?;
+
+-- name: UpdateJobRunAfter :exec
+UPDATE jobs SET run_after = ? WHERE id = ?;
+
+-- name: CleanupJobs :exec
+DELETE FROM jobs WHERE status = 'completed' AND finished_at < ?;
 
 -- name: CountPendingJobs :one
 SELECT count(*) FROM jobs WHERE status = 'pending';
@@ -46,7 +79,21 @@ AND retry_count >= max_retries;
 SELECT count(*) FROM jobs;
 
 -- name: ListJobs :many
-SELECT j.*, jt.name as job_type_name
+SELECT 
+    j.id, 
+    j.job_type_id, 
+    j.arg, 
+    j.uniqkey, 
+    j.retry_count, 
+    j.max_retries, 
+    j.created_at, 
+    j.run_after, 
+    j.grabbed_at, 
+    j.status, 
+    j.error_message, 
+    j.depends_on, 
+    j.finished_at,
+    jt.name as job_type_name
 FROM jobs j
 JOIN job_types jt ON j.job_type_id = jt.id
 ORDER BY j.created_at DESC

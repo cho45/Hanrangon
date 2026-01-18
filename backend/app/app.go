@@ -496,28 +496,47 @@ func (app *AppImpl) PostprocessBatch(ctx context.Context, idleTimeout time.Durat
 }
 
 func (app *AppImpl) EnqueuePublishedEntryJobs(ctx context.Context, entryID int64) error {
-	// TF-IDF再計算ジョブをエンキュー
-	err := app.jobQueue.Enqueue(ctx, "RecalculateTFIDF",
+	// 1. 先行するジョブをエンキュー
+	// TF-IDF再計算ジョブ
+	j1, err := app.jobQueue.Enqueue(ctx, "RecalculateTFIDF",
 		map[string]interface{}{"entry_id": entryID},
 		fmt.Sprintf("recalc-tfidf-%d", entryID))
 	if err != nil {
 		return fmt.Errorf("failed to enqueue TF-IDF job: %w", err)
 	}
 
-	// Trackback更新ジョブをエンキュー
-	err = app.jobQueue.Enqueue(ctx, "UpdateTrackbacks",
+	// Trackback更新ジョブ
+	j2, err := app.jobQueue.Enqueue(ctx, "UpdateTrackbacks",
 		map[string]interface{}{"entry_id": entryID},
 		fmt.Sprintf("update-trackbacks-%d", entryID))
 	if err != nil {
 		return fmt.Errorf("failed to enqueue Trackback job: %w", err)
 	}
 
-	// 画像インデックスジョブをエンキュー
-	err = app.jobQueue.Enqueue(ctx, "IndexImages",
+	// 画像インデックスジョブ
+	j3, err := app.jobQueue.Enqueue(ctx, "IndexImages",
 		map[string]interface{}{"entry_id": entryID},
 		fmt.Sprintf("index-images-%d", entryID))
 	if err != nil {
 		return fmt.Errorf("failed to enqueue IndexImages job: %w", err)
+	}
+
+	// 2. 先行ジョブがすべて成功した後に実行される FinalizeEntry ジョブをエンキュー
+	dependsOn := &jobqueue.DependsOn{
+		Dependencies: []jobqueue.Dependency{
+			{ID: j1.ID, Condition: jobqueue.ConditionCompleted},
+			{ID: j2.ID, Condition: jobqueue.ConditionCompleted},
+			{ID: j3.ID, Condition: jobqueue.ConditionCompleted},
+		},
+		Strategy: jobqueue.StrategyAll,
+	}
+
+	_, err = app.jobQueue.EnqueueWithDepends(ctx, "FinalizeEntry",
+		map[string]interface{}{"entry_id": entryID},
+		fmt.Sprintf("finalize-entry-%d", entryID),
+		dependsOn)
+	if err != nil {
+		return fmt.Errorf("failed to enqueue FinalizeEntry job: %w", err)
 	}
 
 	return nil

@@ -22,6 +22,8 @@ export interface Job {
   grabbed_at: any /* sql.NullTime */;
   status: string;
   error_message: any /* sql.NullString */;
+  depends_on: any /* sql.NullString */;
+  finished_at: any /* sql.NullTime */;
 }
 export interface JobType {
   id: number /* int64 */;
@@ -43,6 +45,11 @@ export interface EnqueueJobParams {
   max_retries: number /* int64 */;
   created_at: string;
   run_after: string;
+  depends_on: any /* sql.NullString */;
+}
+export interface GetJobByTypeAndUniqkeyParams {
+  job_type_id: number /* int64 */;
+  uniqkey: any /* sql.NullString */;
 }
 export interface GrabJobParams {
   grabbed_at: any /* sql.NullTime */;
@@ -64,10 +71,32 @@ export interface ListJobsRow {
   grabbed_at: any /* sql.NullTime */;
   status: string;
   error_message: any /* sql.NullString */;
+  depends_on: any /* sql.NullString */;
+  finished_at: any /* sql.NullTime */;
   job_type_name: string;
+}
+export interface MarkJobCompletedParams {
+  finished_at: any /* sql.NullTime */;
+  id: number /* int64 */;
 }
 export interface MarkJobFailedParams {
   run_after: string;
   error_message: any /* sql.NullString */;
+  id: number /* int64 */;
+}
+export interface MarkJobPermanentlyFailedParams {
+  error_message: any /* sql.NullString */;
+  finished_at: any /* sql.NullTime */;
+  id: number /* int64 */;
+}
+export interface UpdateJobForEnqueueParams {
+  arg: string;
+  depends_on: any /* sql.NullString */;
+  run_after: string;
+  created_at: string;
+  id: number /* int64 */;
+}
+export interface UpdateJobRunAfterParams {
+  run_after: string;
   id: number /* int64 */;
 }

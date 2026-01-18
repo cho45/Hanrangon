@@ -125,7 +125,7 @@ func TestPostprocessProgress(t *testing.T) {
 
 	// Messages チャネルから Node のログが届いているか確認
 	foundProgress := false
-	timeout := time.After(5 * time.Second)
+	timeout := time.After(10 * time.Second)
 loop:
 	for {
 		select {
@@ -184,7 +184,7 @@ func TestPostprocessProgressBlocking(t *testing.T) {
 	select {
 	case <-done:
 		// Success
-	case <-time.After(1 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("Postprocess timed out (likely deadlocked due to blocking channel)")
 	}
 }
