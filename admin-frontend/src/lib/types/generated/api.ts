@@ -209,6 +209,10 @@ export const CSRFCookieName = "sk";
 /**
  * StorageClient はストレージ操作の抽象化インターフェース
  */
+export interface StorageObject {
+  Key: string;
+  Size: number /* int64 */;
+}
 export type StorageClient = any;
 /**
  * LocalStorage はローカルファイルシステムへの保存

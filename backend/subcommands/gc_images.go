@@ -112,7 +112,9 @@ func runListPhase(ctx context.Context, application app.App) error {
 	for _, obj := range orphans {
 		fmt.Fprintf(writer, "%s\t%d\n", obj.Key, obj.Size)
 	}
-	writer.Flush()
+	if err := writer.Flush(); err != nil {
+		return fmt.Errorf("failed to flush writer: %w", err)
+	}
 
 	log.Printf("Found %d orphan images (Total: %d bytes).", len(orphans), totalSize)
 	log.Printf("List saved to: %s", filename)

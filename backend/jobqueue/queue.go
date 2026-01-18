@@ -15,15 +15,15 @@ import (
 
 // Worker はジョブキューのワーカーを管理する
 type Worker struct {
-	db       *model.Database[*workerdb.Queries]
-	queries  *workerdb.Queries
+	db       *model.Database[workerdb.Querier]
+	queries  workerdb.Querier
 	registry *Registry
 	interval time.Duration
 	wg       sync.WaitGroup
 }
 
 // NewWorker は新しいWorkerを作成する
-func NewWorker(db *model.Database[*workerdb.Queries], queries *workerdb.Queries, registry *Registry) *Worker {
+func NewWorker(db *model.Database[workerdb.Querier], queries workerdb.Querier, registry *Registry) *Worker {
 	return &Worker{
 		db:       db,
 		queries:  queries,

@@ -47,7 +47,7 @@ func TestIndexImagesJob_UniqueConstraintError(t *testing.T) {
 	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
 
 	registry := jobqueue.NewRegistry()
-	worker := jobqueue.NewWorker(model.NewDatabase[*workerdb.Queries](workerDB, func(tx model.DBTX) *workerdb.Queries { return workerdb.New(tx.(workerdb.DBTX)) }), workerDBWrapper.Q.(*workerdb.Queries), registry)
+	worker := jobqueue.NewWorker(workerDBWrapper, workerDBWrapper.Q, registry)
 
 	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, calc, sim, searcher, worker)
 	job := NewIndexImagesJob(application)

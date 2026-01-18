@@ -39,7 +39,7 @@ func TestGCImages(t *testing.T) {
 	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
 
 	registry := jobqueue.NewRegistry()
-	worker := jobqueue.NewWorker(workerDB, workerDBWrapper.Q, registry)
+	worker := jobqueue.NewWorker(workerDBWrapper, workerDBWrapper.Q, registry)
 
 	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, calc, sim, searcher, worker)
 

@@ -62,7 +62,7 @@ func TestRunServe_GracefulShutdownOrder(t *testing.T) {
 	tfidfDB := model.NewDatabase[tfidfdb.Querier](db, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
 	workerDB := model.NewDatabase[workerdb.Querier](db, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
 	imagesDB := model.NewDatabase[imagesdb.Querier](db, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
-	worker := jobqueue.NewWorker(model.NewDatabase[*workerdb.Queries](db, func(tx model.DBTX) *workerdb.Queries { return workerdb.New(tx.(workerdb.DBTX)) }), workerDB.Q.(*workerdb.Queries), registry)
+	worker := jobqueue.NewWorker(workerDB, workerDB.Q, registry)
 
 	// Create minimal App
 	// We need to satisfy the App interface. Using app.NewApp with mostly nil/minimal values
@@ -153,7 +153,7 @@ func TestRunServe_MultipleListeners(t *testing.T) {
 	tfidfDB := model.NewDatabase[tfidfdb.Querier](db, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
 	workerDB := model.NewDatabase[workerdb.Querier](db, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
 	imagesDB := model.NewDatabase[imagesdb.Querier](db, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
-	worker := jobqueue.NewWorker(model.NewDatabase[*workerdb.Queries](db, func(tx model.DBTX) *workerdb.Queries { return workerdb.New(tx.(workerdb.DBTX)) }), workerDB.Q.(*workerdb.Queries), registry)
+	worker := jobqueue.NewWorker(workerDB, workerDB.Q, registry)
 	application := app.NewApp(config, mainDB, tfidfDB, workerDB, imagesDB, &tfidf.Calculator{}, &tfidf.SimilarityCalculator{}, &tfidf.Searcher{}, worker)
 
 	ctx, cancel := context.WithCancel(context.Background())

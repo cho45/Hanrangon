@@ -74,11 +74,11 @@ func setupWorkerTest(t *testing.T, registry *Registry) *workerTestEnv {
 	dbs := testutil.SetupAllDBs(t)
 	db, queries := dbs.Worker, dbs.WorkerQueries
 
-	workerDB := model.NewDatabase[*workerdb.Queries](
+	workerDB := model.NewDatabase[workerdb.Querier](
 		db,
-		func(d model.DBTX) *workerdb.Queries { return workerdb.New(d.(workerdb.DBTX)) },
+		func(d model.DBTX) workerdb.Querier { return workerdb.New(d.(workerdb.DBTX)) },
 	)
-	worker := NewWorker(workerDB, queries.(*workerdb.Queries), registry)
+	worker := NewWorker(workerDB, queries, registry)
 
 	// Worker制御用context
 	workerCtx, workerCancel := context.WithCancel(context.Background())
