@@ -9,6 +9,39 @@
   let offset = $state(0);
   let limit = 50;
 
+  let highlightedId = $state<number | null>(null);
+
+  function getDependsOn(job: Job) {
+    if (!job.depends_on?.Valid || !job.depends_on.String || job.depends_on.String === "null") return null;
+    try {
+      const parsed = JSON.parse(job.depends_on.String);
+      if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.dependencies)) {
+        return null;
+      }
+      return parsed as {
+        dependencies: { id: number; condition: string }[];
+        strategy: string;
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function findJob(id: number) {
+    return jobs.find((j) => j.id === id);
+  }
+
+  function scrollToJob(id: number) {
+    const el = document.getElementById(`job-${id}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      highlightedId = id;
+      setTimeout(() => {
+        if (highlightedId === id) highlightedId = null;
+      }, 2000);
+    }
+  }
+
   async function fetchJobs() {
     try {
       const data = await api.get<{ jobs: Job[], total: number }>('/admin/api/jobs', { limit, offset });
@@ -48,6 +81,19 @@
   <time class="time" datetime={iso}>{valid && iso ? formatTime(iso) : '-'}</time>
 {/snippet}
 
+{#snippet dependencyChip(depId: number, condition: string)}
+  {@const depJob = findJob(depId)}
+  <button class="dep-chip status-{depJob?.status || 'unknown'}" onclick={() => scrollToJob(depId)}>
+    <span class="dep-id">#{depId}</span>
+    {#if depJob}
+      <span class="dep-type">{depJob.job_type_name}</span>
+    {/if}
+    <span class="dep-cond" title="Condition: {condition}">
+      {condition === 'completed' ? '✅' : '🏁'}
+    </span>
+  </button>
+{/snippet}
+
 <div class="job-list">
   <div class="header">
     <h2>ジョブ一覧 ({total})</h2>
@@ -77,7 +123,7 @@
       </thead>
       <tbody>
         {#each jobs as job}
-          <tr>
+          <tr id="job-{job.id}" class:highlighted={highlightedId === job.id}>
             <td>{job.id}</td>
             <td><strong>{job.job_type_name}</strong></td>
             <td>
@@ -87,8 +133,16 @@
             <td>{@render time(job.created_at)}</td>
             <td>{@render time(job.finished_at.Time, job.finished_at.Valid)}</td>
             <td>
-              {#if job.depends_on?.Valid && job.depends_on.String !== "null"}
-                <div class="depends-on" title={job.depends_on.String}>{job.depends_on.String}</div>
+              {#if getDependsOn(job)}
+                {@const depInfo = getDependsOn(job)!}
+                <div class="depends-on">
+                  <div class="strategy">{(depInfo.strategy || 'all').toUpperCase()}</div>
+                  <div class="dep-list">
+                    {#each depInfo.dependencies as dep}
+                      {@render dependencyChip(dep.id, dep.condition)}
+                    {/each}
+                  </div>
+                </div>
               {:else}
                 -
               {/if}
@@ -151,6 +205,11 @@
     white-space: nowrap;
   }
 
+  tr.highlighted {
+    background-color: #fff9c4;
+    transition: background-color 0.3s ease;
+  }
+
   th {
     background: #f8f9fa;
     font-weight: bold;
@@ -182,10 +241,55 @@
   .status-failed { background: #ffebee; color: #c62828; }
 
   .depends-on {
-    font-size: 0.8rem;
-    font-family: monospace;
-    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
   }
+
+  .strategy {
+    font-size: 0.7rem;
+    font-weight: bold;
+    color: #757575;
+  }
+
+  .dep-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .dep-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    border-radius: 12px;
+    border: 1px solid #ddd;
+    background: #f5f5f5;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .dep-chip:hover {
+    background: #eeeeee;
+    border-color: #999;
+  }
+
+  .dep-id {
+    font-weight: bold;
+    color: #666;
+  }
+
+  .dep-type {
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .dep-chip.status-completed { background: #e8f5e9; border-color: #81c784; }
+  .dep-chip.status-failed { background: #ffebee; border-color: #e57373; }
+  .dep-chip.status-running { background: #fff3e0; border-color: #ffb74d; }
 
   .error-text {
     font-size: 0.8rem;

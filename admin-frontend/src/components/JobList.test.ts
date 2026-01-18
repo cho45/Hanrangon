@@ -20,7 +20,7 @@ const mockJobs = [
     retry_count: 0,
     created_at: '2025-01-15T10:00:00Z',
     finished_at: { Time: '', Valid: false },
-    depends_on: { String: '', Valid: false },
+    depends_on: { String: '{"dependencies":[{"id":0,"condition":"completed"}],"strategy":"all"}', Valid: true },
     error_message: { String: '', Valid: false }
   },
   {
@@ -32,6 +32,16 @@ const mockJobs = [
     finished_at: { Time: '2025-01-15T11:05:00Z', Valid: true },
     depends_on: { String: '{"dependencies":[{"id":1,"condition":"completed"}]}', Valid: true },
     error_message: { String: 'Something went wrong', Valid: true }
+  },
+  {
+    id: 3,
+    job_type_name: 'InvalidJsonJob',
+    status: 'pending',
+    retry_count: 0,
+    created_at: '2025-01-15T12:00:00Z',
+    finished_at: { Time: '', Valid: false },
+    depends_on: { String: 'invalid-json', Valid: true },
+    error_message: { String: '', Valid: false }
   }
 ];
 
@@ -52,9 +62,16 @@ describe('JobList', () => {
     
     await waitFor(() => {
       expect(screen.getByText('ジョブ一覧 (2)')).toBeTruthy();
-      expect(screen.getByText('TestJob')).toBeTruthy();
+      expect(screen.getAllByText('TestJob').length).toBeGreaterThan(0);
       expect(screen.getByText('ErrorJob')).toBeTruthy();
       expect(screen.getByText('Something went wrong')).toBeTruthy();
+      
+      // 依存関係の表示を確認
+      expect(screen.getAllByText('ALL').length).toBeGreaterThan(0);
+      expect(screen.getByText('#1')).toBeTruthy();
+      
+      // 不正なJSONでもエラーにならず表示されること
+      expect(screen.getByText('InvalidJsonJob')).toBeTruthy();
     });
   });
 
@@ -107,7 +124,7 @@ describe('JobList', () => {
 
     render(JobList);
 
-    await waitFor(() => expect(screen.getByText('TestJob')).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText('TestJob').length).toBeGreaterThan(0));
 
     const refreshButton = screen.getByRole('button', { name: '更新' });
     await user.click(refreshButton);
