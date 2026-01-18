@@ -21,6 +21,8 @@ import (
 	"github.com/cho45/hanrangon/internal/testutil"
 	"github.com/labstack/echo/v4"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Pre-computed bcrypt hash for "testpass" to avoid expensive hashing in every test
@@ -244,8 +246,67 @@ func TestPublishScheduledEntries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to count jobs: %v", err)
 	}
-	// UpdateTrackbacks, IndexImages, RecalculateTFIDF = 3 jobs
-	if count != 3 {
-		t.Errorf("expected 3 jobs, got %d", count)
+	// UpdateTrackbacks, IndexImages, RecalculateTFIDF, FinalizeEntry = 4 jobs
+	if count != 4 {
+		t.Errorf("expected 4 jobs, got %d", count)
+	}
+}
+
+func TestApp_EnqueuePublishedEntryJobs(t *testing.T) {
+	e := setupTest(t)
+	defer e.close()
+	ctx := context.Background()
+
+	entryID := int64(123)
+
+	err := e.app.EnqueuePublishedEntryJobs(ctx, entryID)
+	require.NoError(t, err)
+
+	// ジョブが4つエンキューされていることを確認
+	count, err := e.app.WorkerDB().Q.CountJobs(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(4), count)
+
+	// 各ジョブの内容と依存関係を確認
+	jobs, err := e.app.WorkerDB().Q.ListJobs(ctx, workerdb.ListJobsParams{Limit: 10, Offset: 0})
+	require.NoError(t, err)
+
+	var finalizeJob *workerdb.ListJobsRow
+	var otherJobs []workerdb.ListJobsRow
+	jobNames := make(map[string]bool)
+
+	for _, j := range jobs {
+		if j.JobTypeName == "FinalizeEntry" {
+			j := j
+			finalizeJob = &j
+		} else {
+			otherJobs = append(otherJobs, j)
+			jobNames[j.JobTypeName] = true
+		}
+	}
+
+	// 期待されるジョブが含まれているか
+	assert.True(t, jobNames["RecalculateTFIDF"])
+	assert.True(t, jobNames["UpdateTrackbacks"])
+	assert.True(t, jobNames["IndexImages"])
+	require.NotNil(t, finalizeJob)
+
+	// FinalizeEntry の依存関係を確認
+	require.True(t, finalizeJob.DependsOn.Valid)
+	dependsOn, err := jobqueue.ParseDependsOn(finalizeJob.DependsOn.String)
+	require.NoError(t, err)
+
+	assert.Equal(t, jobqueue.StrategyAll, dependsOn.Strategy)
+	assert.Len(t, dependsOn.Dependencies, 3)
+
+	// 依存先 ID が他の3つのジョブのいずれかと一致するか
+	otherJobIDs := make(map[int64]bool)
+	for _, j := range otherJobs {
+		otherJobIDs[j.ID] = true
+	}
+
+	for _, dep := range dependsOn.Dependencies {
+		assert.True(t, otherJobIDs[dep.ID], "Dependency ID %d should match one of the precursor jobs", dep.ID)
+		assert.Equal(t, jobqueue.ConditionCompleted, dep.Condition)
 	}
 }

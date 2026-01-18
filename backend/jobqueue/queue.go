@@ -321,29 +321,29 @@ func (w *Worker) CleanupCompletedJobs(ctx context.Context) error {
 }
 
 // Enqueue はジョブをキューに追加する
-func (w *Worker) Enqueue(ctx context.Context, jobTypeName string, arg interface{}, uniqkey string) error {
+func (w *Worker) Enqueue(ctx context.Context, jobTypeName string, arg interface{}, uniqkey string) (workerdb.Job, error) {
 	return w.EnqueueWithDepends(ctx, jobTypeName, arg, uniqkey, nil)
 }
 
 // EnqueueWithDepends は依存関係を指定してジョブをキューに追加する
-func (w *Worker) EnqueueWithDepends(ctx context.Context, jobTypeName string, arg interface{}, uniqkey string, dependsOn *DependsOn) error {
+func (w *Worker) EnqueueWithDepends(ctx context.Context, jobTypeName string, arg interface{}, uniqkey string, dependsOn *DependsOn) (workerdb.Job, error) {
 	// ジョブタイプを取得または作成
 	jobType, err := w.queries.GetOrCreateJobType(ctx, jobTypeName)
 	if err != nil {
-		return fmt.Errorf("failed to get or create job type: %w", err)
+		return workerdb.Job{}, fmt.Errorf("failed to get or create job type: %w", err)
 	}
 
 	// 引数をJSONにシリアライズ
 	argJSON, err := json.Marshal(arg)
 	if err != nil {
-		return fmt.Errorf("failed to marshal job arg: %w", err)
+		return workerdb.Job{}, fmt.Errorf("failed to marshal job arg: %w", err)
 	}
 
 	// トランザクションを開始
 	// トランザクション開始時に即座に書き込みロックを取得する (Read-Modify-Write を安全に行うため)
 	tx, err := w.db.BeginImmediate(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to begin immediate transaction: %w", err)
+		return workerdb.Job{}, fmt.Errorf("failed to begin immediate transaction: %w", err)
 	}
 	defer tx.Rollback()
 
@@ -355,6 +355,8 @@ func (w *Worker) EnqueueWithDepends(ctx context.Context, jobTypeName string, arg
 	}
 
 	now := time.Now()
+
+	var job workerdb.Job
 
 	// 既存のジョブをチェック
 	existing, err := queries.GetJobByTypeAndUniqkey(ctx, workerdb.GetJobByTypeAndUniqkeyParams{
@@ -382,9 +384,14 @@ func (w *Worker) EnqueueWithDepends(ctx context.Context, jobTypeName string, arg
 			ID:        existing.ID,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to update job %d: %w", existing.ID, err)
+			return workerdb.Job{}, fmt.Errorf("failed to update job %d: %w", existing.ID, err)
 		}
 		log.Printf("Updated existing job: id=%d, type=%s, uniqkey=%s", existing.ID, jobTypeName, uniqkey)
+
+		job, err = queries.GetJobByID(ctx, existing.ID)
+		if err != nil {
+			return workerdb.Job{}, fmt.Errorf("failed to get updated job %d: %w", existing.ID, err)
+		}
 	case sql.ErrNoRows:
 		// 新規エンキュー
 		dependsJSON := "null"
@@ -393,7 +400,7 @@ func (w *Worker) EnqueueWithDepends(ctx context.Context, jobTypeName string, arg
 			dependsJSON = string(b)
 		}
 
-		_, err = queries.EnqueueJob(ctx, workerdb.EnqueueJobParams{
+		job, err = queries.EnqueueJob(ctx, workerdb.EnqueueJobParams{
 			JobTypeID:  jobType.ID,
 			Arg:        string(argJSON),
 			Uniqkey:    uniqkeyNull,
@@ -403,15 +410,15 @@ func (w *Worker) EnqueueWithDepends(ctx context.Context, jobTypeName string, arg
 			DependsOn:  sql.NullString{String: dependsJSON, Valid: true},
 		})
 		if err != nil {
-			return fmt.Errorf("failed to enqueue new job: %w", err)
+			return workerdb.Job{}, fmt.Errorf("failed to enqueue new job: %w", err)
 		}
-		log.Printf("Enqueued new job: type=%s, uniqkey=%s", jobTypeName, uniqkey)
+		log.Printf("Enqueued new job: id=%d, type=%s, uniqkey=%s", job.ID, jobTypeName, uniqkey)
 	default:
-		return fmt.Errorf("failed to check existing job: %w", err)
+		return workerdb.Job{}, fmt.Errorf("failed to check existing job: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
+		return workerdb.Job{}, fmt.Errorf("failed to commit transaction: %w", err)
 	}
-	return nil
+	return job, nil
 }

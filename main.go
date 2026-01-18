@@ -209,6 +209,7 @@ func RunServe(ctx context.Context, application *app.AppImpl) error {
 	registry.Register(jobs.NewRecalculateTFIDFJob(application))
 	registry.Register(jobs.NewUpdateTrackbacksJob(application))
 	registry.Register(jobs.NewIndexImagesJob(application))
+	registry.Register(jobs.NewFinalizeEntryJob(application))
 
 	// 2. ジョブワーカーの開始
 	// SQLite を使用したジョブキューのポーリングを開始します。

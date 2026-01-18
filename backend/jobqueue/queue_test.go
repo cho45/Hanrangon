@@ -105,7 +105,7 @@ func TestWorker_Enqueue(t *testing.T) {
 	ctx := context.Background()
 
 	// ジョブをエンキュー
-	err := env.Worker.Enqueue(ctx, "TestJob", map[string]string{"key": "value"}, "")
+	_, err := env.Worker.Enqueue(ctx, "TestJob", map[string]string{"key": "value"}, "")
 	if err != nil {
 		t.Fatalf("failed to enqueue job: %v", err)
 	}
@@ -134,12 +134,12 @@ func TestWorker_EnqueueWithUniqkey(t *testing.T) {
 	ctx := context.Background()
 
 	// 同じuniqkeyで2回エンキュー
-	err := env.Worker.Enqueue(ctx, "TestJob", map[string]string{"key": "value1"}, "unique-1")
+	_, err := env.Worker.Enqueue(ctx, "TestJob", map[string]string{"key": "value1"}, "unique-1")
 	if err != nil {
 		t.Fatalf("failed to enqueue job: %v", err)
 	}
 
-	err = env.Worker.Enqueue(ctx, "TestJob", map[string]string{"key": "value2"}, "unique-1")
+	_, err = env.Worker.Enqueue(ctx, "TestJob", map[string]string{"key": "value2"}, "unique-1")
 	if err != nil {
 		t.Fatalf("failed to enqueue job: %v", err)
 	}
@@ -172,7 +172,7 @@ func TestWorker_ProcessNextJob_Success(t *testing.T) {
 	ctx := context.Background()
 
 	// ジョブをエンキュー
-	err := env.Worker.Enqueue(ctx, "TestJob", map[string]string{"key": "value"}, "")
+	_, err := env.Worker.Enqueue(ctx, "TestJob", map[string]string{"key": "value"}, "")
 	if err != nil {
 		t.Fatalf("failed to enqueue job: %v", err)
 	}
@@ -216,7 +216,7 @@ func TestWorker_ProcessNextJob_Failure(t *testing.T) {
 	ctx := context.Background()
 
 	// ジョブをエンキュー
-	err := env.Worker.Enqueue(ctx, "TestJob", map[string]string{"key": "value"}, "")
+	_, err := env.Worker.Enqueue(ctx, "TestJob", map[string]string{"key": "value"}, "")
 	if err != nil {
 		t.Fatalf("failed to enqueue job: %v", err)
 	}
@@ -270,7 +270,7 @@ func TestWorker_ExponentialBackoff(t *testing.T) {
 	ctx := context.Background()
 
 	// ジョブをエンキュー
-	err := env.Worker.Enqueue(ctx, "TestJob", map[string]string{"key": "value"}, "")
+	_, err := env.Worker.Enqueue(ctx, "TestJob", map[string]string{"key": "value"}, "")
 	require.NoError(t, err)
 
 	// テストケース: retry_count → 期待されるバックオフ間隔
@@ -348,7 +348,7 @@ func TestWorker_ProcessNextJob_MaxRetries(t *testing.T) {
 	ctx := context.Background()
 
 	// ジョブをエンキュー
-	err := env.Worker.Enqueue(ctx, "TestJob", map[string]string{"key": "value"}, "")
+	_, err := env.Worker.Enqueue(ctx, "TestJob", map[string]string{"key": "value"}, "")
 	require.NoError(t, err)
 
 	// 最大リトライ回数まで実行
@@ -390,7 +390,7 @@ func TestWorker_ProcessNextJob_JobNotRegistered(t *testing.T) {
 	ctx := context.Background()
 
 	// 未登録のジョブをエンキュー
-	err := env.Worker.Enqueue(ctx, "UnknownJob", map[string]string{"key": "value"}, "")
+	_, err := env.Worker.Enqueue(ctx, "UnknownJob", map[string]string{"key": "value"}, "")
 	require.NoError(t, err)
 
 	// ジョブを処理（失敗するはず）
@@ -418,7 +418,7 @@ func TestWorker_ProcessNextJob_Panic(t *testing.T) {
 	ctx := context.Background()
 
 	// ジョブをエンキュー
-	err := env.Worker.Enqueue(ctx, "TestJob", map[string]string{"key": "value"}, "")
+	_, err := env.Worker.Enqueue(ctx, "TestJob", map[string]string{"key": "value"}, "")
 	require.NoError(t, err)
 
 	// パニックがリカバーされることを確認
@@ -455,9 +455,9 @@ func TestWorker_Integration(t *testing.T) {
 	ctx := context.Background()
 
 	// 複数のジョブをエンキュー
-	env.Worker.Enqueue(ctx, "Job1", nil, "")
-	env.Worker.Enqueue(ctx, "Job2", nil, "")
-	env.Worker.Enqueue(ctx, "Job1", nil, "")
+	_, _ = env.Worker.Enqueue(ctx, "Job1", nil, "")
+	_, _ = env.Worker.Enqueue(ctx, "Job2", nil, "")
+	_, _ = env.Worker.Enqueue(ctx, "Job1", nil, "")
 
 	// 全てのジョブを処理
 	for i := 0; i < 3; i++ {
@@ -535,10 +535,10 @@ func TestWorker_EnqueueWithUniqkey_DifferentJobTypes(t *testing.T) {
 	ctx := context.Background()
 
 	// 異なるジョブタイプで同じuniqkeyを使用
-	err := env.Worker.Enqueue(ctx, "Job1", map[string]string{"key": "value1"}, "unique-key")
+	_, err := env.Worker.Enqueue(ctx, "Job1", map[string]string{"key": "value1"}, "unique-key")
 	require.NoError(t, err)
 
-	err = env.Worker.Enqueue(ctx, "Job2", map[string]string{"key": "value2"}, "unique-key")
+	_, err = env.Worker.Enqueue(ctx, "Job2", map[string]string{"key": "value2"}, "unique-key")
 	require.NoError(t, err)
 
 	// 両方のジョブが存在することを確認（異なるjob_type_idなので重複排除されない）
@@ -560,7 +560,7 @@ func TestWorker_RecoverStuckJobs(t *testing.T) {
 	ctx := context.Background()
 
 	// ジョブをエンキュー
-	err := env.Worker.Enqueue(ctx, "TestJob", map[string]string{"key": "value"}, "")
+	_, err := env.Worker.Enqueue(ctx, "TestJob", map[string]string{"key": "value"}, "")
 	require.NoError(t, err)
 
 	// ジョブをrunningに変更し、grabbed_atを6分前に設定（スタック状態にする）
@@ -593,7 +593,7 @@ func TestWorker_RecoverStuckJobs_MaxRetriesReached(t *testing.T) {
 	ctx := context.Background()
 
 	// ジョブをエンキュー
-	err := env.Worker.Enqueue(ctx, "TestJob", map[string]string{"key": "value"}, "")
+	_, err := env.Worker.Enqueue(ctx, "TestJob", map[string]string{"key": "value"}, "")
 	require.NoError(t, err)
 
 	// ジョブをrunningに変更し、grabbed_atを6分前、retry_countをmax_retries（5）に設定
@@ -625,7 +625,7 @@ func TestWorker_RecoverStuckJobs_NotStuck(t *testing.T) {
 	ctx := context.Background()
 
 	// ジョブをエンキュー
-	err := env.Worker.Enqueue(ctx, "TestJob", map[string]string{"key": "value"}, "")
+	_, err := env.Worker.Enqueue(ctx, "TestJob", map[string]string{"key": "value"}, "")
 	require.NoError(t, err)
 
 	// ジョブをrunningに変更するが、grabbed_atは現在時刻（スタックしていない）
@@ -676,7 +676,7 @@ func TestWorker_JobTimeout_Default(t *testing.T) {
 	ctx := context.Background()
 
 	// Enqueue job
-	err := env.Worker.Enqueue(ctx, "TestJob", map[string]string{"key": "value"}, "")
+	_, err := env.Worker.Enqueue(ctx, "TestJob", map[string]string{"key": "value"}, "")
 	require.NoError(t, err)
 
 	// Process job
@@ -737,7 +737,7 @@ func TestWorker_JobTimeout_Custom(t *testing.T) {
 	ctx := context.Background()
 
 	// Enqueue job
-	err := env.Worker.Enqueue(ctx, "TestJobWithTimeout", map[string]string{"key": "value"}, "")
+	_, err := env.Worker.Enqueue(ctx, "TestJobWithTimeout", map[string]string{"key": "value"}, "")
 	require.NoError(t, err)
 
 	// Process job
@@ -773,7 +773,7 @@ func TestWorker_JobTimeout_Exceeded(t *testing.T) {
 	ctx := context.Background()
 
 	// Enqueue job
-	err := env.Worker.Enqueue(ctx, "TestJobWithTimeout", map[string]string{"key": "value"}, "")
+	_, err := env.Worker.Enqueue(ctx, "TestJobWithTimeout", map[string]string{"key": "value"}, "")
 	require.NoError(t, err)
 
 	// Process job (should timeout)
@@ -823,7 +823,7 @@ func TestWorker_GracefulShutdown_RunningJobCompletes(t *testing.T) {
 	ctx := context.Background()
 
 	// Enqueue a job
-	err := env.Worker.Enqueue(ctx, "LongJob", nil, "")
+	_, err := env.Worker.Enqueue(ctx, "LongJob", nil, "")
 	require.NoError(t, err)
 
 	env.Worker.interval = 10 * time.Millisecond
@@ -875,7 +875,7 @@ func TestWorker_GracefulShutdown_NoNewJobs(t *testing.T) {
 
 	// Enqueue 3 jobs
 	for i := 0; i < 3; i++ {
-		env.Worker.Enqueue(ctx, "QuickJob", nil, fmt.Sprintf("job-%d", i))
+		_, _ = env.Worker.Enqueue(ctx, "QuickJob", nil, fmt.Sprintf("job-%d", i))
 	}
 
 	env.Worker.interval = 10 * time.Millisecond
@@ -1107,7 +1107,7 @@ func TestWorker_Dependencies_Merge(t *testing.T) {
 		Strategy: StrategyAll,
 	}
 
-	err = env.Worker.EnqueueWithDepends(ctx, "TestJob", map[string]string{"key": "value"}, "child-1", dependsOn1)
+	_, err = env.Worker.EnqueueWithDepends(ctx, "TestJob", map[string]string{"key": "value"}, "child-1", dependsOn1)
 	require.NoError(t, err)
 
 	// Enqueue again with second dependency (should merge)
@@ -1118,7 +1118,7 @@ func TestWorker_Dependencies_Merge(t *testing.T) {
 		Strategy: StrategyAll,
 	}
 
-	err = env.Worker.EnqueueWithDepends(ctx, "TestJob", map[string]string{"key": "updated"}, "child-1", dependsOn2)
+	_, err = env.Worker.EnqueueWithDepends(ctx, "TestJob", map[string]string{"key": "updated"}, "child-1", dependsOn2)
 	require.NoError(t, err)
 
 	// Verify dependencies were merged
@@ -1362,7 +1362,7 @@ func TestWorker_MarkJobCompleted_ReEnqueued(t *testing.T) {
 	ctx := context.Background()
 
 	// Enqueue initial job
-	err := env.Worker.Enqueue(ctx, "ReEnqueueJob", nil, "re-enqueue-test")
+	_, err := env.Worker.Enqueue(ctx, "ReEnqueueJob", nil, "re-enqueue-test")
 	require.NoError(t, err)
 
 	// Start worker
@@ -1374,7 +1374,7 @@ func TestWorker_MarkJobCompleted_ReEnqueued(t *testing.T) {
 
 	// Re-enqueue the same job while it's running
 	// This will update created_at to be > grabbed_at
-	err = env.Worker.Enqueue(ctx, "ReEnqueueJob", nil, "re-enqueue-test")
+	_, err = env.Worker.Enqueue(ctx, "ReEnqueueJob", nil, "re-enqueue-test")
 	require.NoError(t, err)
 
 	// Allow first execution to complete
@@ -1725,7 +1725,7 @@ func TestWorker_UpdateJobForEnqueue_Running(t *testing.T) {
 	ctx := context.Background()
 
 	// Enqueue job
-	err := env.Worker.Enqueue(ctx, "LongRunningJob", nil, "running-update-test")
+	_, err := env.Worker.Enqueue(ctx, "LongRunningJob", nil, "running-update-test")
 	require.NoError(t, err)
 
 	// Start worker
@@ -1893,7 +1893,7 @@ func TestWorker_EnqueueWithDepends_Concurrency(t *testing.T) {
 	}
 
 	// First enqueue
-	err = env.Worker.EnqueueWithDepends(ctx, "DependentJob", nil, "reused-child", dependsOn)
+	_, err = env.Worker.EnqueueWithDepends(ctx, "DependentJob", nil, "reused-child", dependsOn)
 	require.NoError(t, err)
 
 	// Get the job
@@ -1905,7 +1905,7 @@ func TestWorker_EnqueueWithDepends_Concurrency(t *testing.T) {
 	firstJobID := job1.ID
 
 	// Second enqueue with same uniqkey should update the existing job
-	err = env.Worker.EnqueueWithDepends(ctx, "DependentJob", map[string]string{"updated": "true"}, "reused-child", dependsOn)
+	_, err = env.Worker.EnqueueWithDepends(ctx, "DependentJob", map[string]string{"updated": "true"}, "reused-child", dependsOn)
 	require.NoError(t, err)
 
 	// Verify only one job exists with the uniqkey
