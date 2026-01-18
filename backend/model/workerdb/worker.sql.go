@@ -8,8 +8,18 @@ package workerdb
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"time"
 )
+
+const cleanupJobs = `-- name: CleanupJobs :exec
+DELETE FROM jobs WHERE status = 'completed' AND finished_at < ?
+`
+
+func (q *Queries) CleanupJobs(ctx context.Context, finishedAt sql.NullTime) error {
+	_, err := q.db.ExecContext(ctx, cleanupJobs, finishedAt)
+	return err
+}
 
 const countJobs = `-- name: CountJobs :one
 SELECT count(*) FROM jobs
@@ -34,10 +44,9 @@ func (q *Queries) CountPendingJobs(ctx context.Context) (int64, error) {
 }
 
 const enqueueJob = `-- name: EnqueueJob :one
-INSERT INTO jobs (job_type_id, arg, uniqkey, max_retries, created_at, run_after, status)
-VALUES (?, ?, ?, ?, ?, ?, 'pending')
-ON CONFLICT(job_type_id, uniqkey) DO UPDATE SET arg = excluded.arg, run_after = excluded.run_after, status = 'pending', grabbed_at = NULL, retry_count = 0
-RETURNING id, job_type_id, arg, uniqkey, retry_count, max_retries, created_at, run_after, grabbed_at, status, error_message
+INSERT INTO jobs (job_type_id, arg, uniqkey, max_retries, created_at, run_after, status, depends_on)
+VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+RETURNING id, job_type_id, arg, uniqkey, retry_count, max_retries, created_at, run_after, grabbed_at, status, error_message, depends_on, finished_at
 `
 
 type EnqueueJobParams struct {
@@ -47,6 +56,7 @@ type EnqueueJobParams struct {
 	MaxRetries int64          `json:"max_retries"`
 	CreatedAt  time.Time      `json:"created_at"`
 	RunAfter   time.Time      `json:"run_after"`
+	DependsOn  sql.NullString `json:"depends_on"`
 }
 
 func (q *Queries) EnqueueJob(ctx context.Context, arg EnqueueJobParams) (Job, error) {
@@ -57,6 +67,7 @@ func (q *Queries) EnqueueJob(ctx context.Context, arg EnqueueJobParams) (Job, er
 		arg.MaxRetries,
 		arg.CreatedAt,
 		arg.RunAfter,
+		arg.DependsOn,
 	)
 	var i Job
 	err := row.Scan(
@@ -71,6 +82,8 @@ func (q *Queries) EnqueueJob(ctx context.Context, arg EnqueueJobParams) (Job, er
 		&i.GrabbedAt,
 		&i.Status,
 		&i.ErrorMessage,
+		&i.DependsOn,
+		&i.FinishedAt,
 	)
 	return i, err
 }
@@ -89,7 +102,7 @@ func (q *Queries) FailStuckJobs(ctx context.Context) error {
 }
 
 const findNextJob = `-- name: FindNextJob :one
-SELECT id, job_type_id, arg, uniqkey, retry_count, max_retries, created_at, run_after, grabbed_at, status, error_message FROM jobs WHERE status = 'pending' AND run_after <= ? ORDER BY created_at ASC LIMIT 1
+SELECT id, job_type_id, arg, uniqkey, retry_count, max_retries, created_at, run_after, grabbed_at, status, error_message, depends_on, finished_at FROM jobs WHERE status = 'pending' AND run_after <= ? ORDER BY created_at ASC LIMIT 1
 `
 
 func (q *Queries) FindNextJob(ctx context.Context, runAfter time.Time) (Job, error) {
@@ -107,12 +120,14 @@ func (q *Queries) FindNextJob(ctx context.Context, runAfter time.Time) (Job, err
 		&i.GrabbedAt,
 		&i.Status,
 		&i.ErrorMessage,
+		&i.DependsOn,
+		&i.FinishedAt,
 	)
 	return i, err
 }
 
 const getJobByID = `-- name: GetJobByID :one
-SELECT id, job_type_id, arg, uniqkey, retry_count, max_retries, created_at, run_after, grabbed_at, status, error_message FROM jobs WHERE id = ? LIMIT 1
+SELECT id, job_type_id, arg, uniqkey, retry_count, max_retries, created_at, run_after, grabbed_at, status, error_message, depends_on, finished_at FROM jobs WHERE id = ? LIMIT 1
 `
 
 func (q *Queries) GetJobByID(ctx context.Context, id int64) (Job, error) {
@@ -130,6 +145,38 @@ func (q *Queries) GetJobByID(ctx context.Context, id int64) (Job, error) {
 		&i.GrabbedAt,
 		&i.Status,
 		&i.ErrorMessage,
+		&i.DependsOn,
+		&i.FinishedAt,
+	)
+	return i, err
+}
+
+const getJobByTypeAndUniqkey = `-- name: GetJobByTypeAndUniqkey :one
+SELECT id, job_type_id, arg, uniqkey, retry_count, max_retries, created_at, run_after, grabbed_at, status, error_message, depends_on, finished_at FROM jobs WHERE job_type_id = ? AND uniqkey = ? LIMIT 1
+`
+
+type GetJobByTypeAndUniqkeyParams struct {
+	JobTypeID int64          `json:"job_type_id"`
+	Uniqkey   sql.NullString `json:"uniqkey"`
+}
+
+func (q *Queries) GetJobByTypeAndUniqkey(ctx context.Context, arg GetJobByTypeAndUniqkeyParams) (Job, error) {
+	row := q.db.QueryRowContext(ctx, getJobByTypeAndUniqkey, arg.JobTypeID, arg.Uniqkey)
+	var i Job
+	err := row.Scan(
+		&i.ID,
+		&i.JobTypeID,
+		&i.Arg,
+		&i.Uniqkey,
+		&i.RetryCount,
+		&i.MaxRetries,
+		&i.CreatedAt,
+		&i.RunAfter,
+		&i.GrabbedAt,
+		&i.Status,
+		&i.ErrorMessage,
+		&i.DependsOn,
+		&i.FinishedAt,
 	)
 	return i, err
 }
@@ -145,6 +192,57 @@ func (q *Queries) GetJobTypeByID(ctx context.Context, id int64) (JobType, error)
 	return i, err
 }
 
+const getJobsByIDs = `-- name: GetJobsByIDs :many
+SELECT id, job_type_id, arg, uniqkey, retry_count, max_retries, created_at, run_after, grabbed_at, status, error_message, depends_on, finished_at FROM jobs WHERE id IN (/*SLICE:ids*/?)
+`
+
+func (q *Queries) GetJobsByIDs(ctx context.Context, ids []int64) ([]Job, error) {
+	query := getJobsByIDs
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Job
+	for rows.Next() {
+		var i Job
+		if err := rows.Scan(
+			&i.ID,
+			&i.JobTypeID,
+			&i.Arg,
+			&i.Uniqkey,
+			&i.RetryCount,
+			&i.MaxRetries,
+			&i.CreatedAt,
+			&i.RunAfter,
+			&i.GrabbedAt,
+			&i.Status,
+			&i.ErrorMessage,
+			&i.DependsOn,
+			&i.FinishedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getOrCreateJobType = `-- name: GetOrCreateJobType :one
 INSERT INTO job_types (name) VALUES (?) ON CONFLICT(name) DO UPDATE SET name = name RETURNING id, name
 `
@@ -156,8 +254,9 @@ func (q *Queries) GetOrCreateJobType(ctx context.Context, name string) (JobType,
 	return i, err
 }
 
-const grabJob = `-- name: GrabJob :exec
-UPDATE jobs SET status = 'running', grabbed_at = ? WHERE id = ?
+const grabJob = `-- name: GrabJob :execresult
+UPDATE jobs SET status = 'running', grabbed_at = ?1
+WHERE id = ?2 AND status = 'pending'
 `
 
 type GrabJobParams struct {
@@ -165,13 +264,26 @@ type GrabJobParams struct {
 	ID        int64        `json:"id"`
 }
 
-func (q *Queries) GrabJob(ctx context.Context, arg GrabJobParams) error {
-	_, err := q.db.ExecContext(ctx, grabJob, arg.GrabbedAt, arg.ID)
-	return err
+func (q *Queries) GrabJob(ctx context.Context, arg GrabJobParams) (sql.Result, error) {
+	return q.db.ExecContext(ctx, grabJob, arg.GrabbedAt, arg.ID)
 }
 
 const listJobs = `-- name: ListJobs :many
-SELECT j.id, j.job_type_id, j.arg, j.uniqkey, j.retry_count, j.max_retries, j.created_at, j.run_after, j.grabbed_at, j.status, j.error_message, jt.name as job_type_name
+SELECT 
+    j.id, 
+    j.job_type_id, 
+    j.arg, 
+    j.uniqkey, 
+    j.retry_count, 
+    j.max_retries, 
+    j.created_at, 
+    j.run_after, 
+    j.grabbed_at, 
+    j.status, 
+    j.error_message, 
+    j.depends_on, 
+    j.finished_at,
+    jt.name as job_type_name
 FROM jobs j
 JOIN job_types jt ON j.job_type_id = jt.id
 ORDER BY j.created_at DESC
@@ -195,6 +307,8 @@ type ListJobsRow struct {
 	GrabbedAt    sql.NullTime   `json:"grabbed_at"`
 	Status       string         `json:"status"`
 	ErrorMessage sql.NullString `json:"error_message"`
+	DependsOn    sql.NullString `json:"depends_on"`
+	FinishedAt   sql.NullTime   `json:"finished_at"`
 	JobTypeName  string         `json:"job_type_name"`
 }
 
@@ -219,6 +333,8 @@ func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]ListJobsR
 			&i.GrabbedAt,
 			&i.Status,
 			&i.ErrorMessage,
+			&i.DependsOn,
+			&i.FinishedAt,
 			&i.JobTypeName,
 		); err != nil {
 			return nil, err
@@ -235,11 +351,22 @@ func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]ListJobsR
 }
 
 const markJobCompleted = `-- name: MarkJobCompleted :exec
-DELETE FROM jobs WHERE id = ?
+UPDATE jobs
+SET
+    status = CASE WHEN created_at > grabbed_at THEN 'pending' ELSE 'completed' END,
+    finished_at = CASE WHEN created_at > grabbed_at THEN NULL ELSE ? END,
+    grabbed_at = NULL,
+    retry_count = CASE WHEN created_at > grabbed_at THEN 0 ELSE retry_count END
+WHERE id = ?
 `
 
-func (q *Queries) MarkJobCompleted(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, markJobCompleted, id)
+type MarkJobCompletedParams struct {
+	FinishedAt sql.NullTime `json:"finished_at"`
+	ID         int64        `json:"id"`
+}
+
+func (q *Queries) MarkJobCompleted(ctx context.Context, arg MarkJobCompletedParams) error {
+	_, err := q.db.ExecContext(ctx, markJobCompleted, arg.FinishedAt, arg.ID)
 	return err
 }
 
@@ -258,6 +385,21 @@ func (q *Queries) MarkJobFailed(ctx context.Context, arg MarkJobFailedParams) er
 	return err
 }
 
+const markJobPermanentlyFailed = `-- name: MarkJobPermanentlyFailed :exec
+UPDATE jobs SET status = 'failed', error_message = ?, grabbed_at = NULL, finished_at = ? WHERE id = ?
+`
+
+type MarkJobPermanentlyFailedParams struct {
+	ErrorMessage sql.NullString `json:"error_message"`
+	FinishedAt   sql.NullTime   `json:"finished_at"`
+	ID           int64          `json:"id"`
+}
+
+func (q *Queries) MarkJobPermanentlyFailed(ctx context.Context, arg MarkJobPermanentlyFailedParams) error {
+	_, err := q.db.ExecContext(ctx, markJobPermanentlyFailed, arg.ErrorMessage, arg.FinishedAt, arg.ID)
+	return err
+}
+
 const recoverStuckJobs = `-- name: RecoverStuckJobs :exec
 UPDATE jobs
 SET status = 'pending', grabbed_at = NULL, retry_count = retry_count + 1
@@ -268,5 +410,49 @@ AND retry_count < max_retries
 
 func (q *Queries) RecoverStuckJobs(ctx context.Context) error {
 	_, err := q.db.ExecContext(ctx, recoverStuckJobs)
+	return err
+}
+
+const updateJobForEnqueue = `-- name: UpdateJobForEnqueue :exec
+UPDATE jobs
+SET arg = ?,
+    depends_on = ?,
+    run_after = ?,
+    status = CASE WHEN status = 'running' THEN 'running' ELSE 'pending' END,
+    retry_count = 0,
+    created_at = ?
+WHERE id = ?
+`
+
+type UpdateJobForEnqueueParams struct {
+	Arg       string         `json:"arg"`
+	DependsOn sql.NullString `json:"depends_on"`
+	RunAfter  time.Time      `json:"run_after"`
+	CreatedAt time.Time      `json:"created_at"`
+	ID        int64          `json:"id"`
+}
+
+func (q *Queries) UpdateJobForEnqueue(ctx context.Context, arg UpdateJobForEnqueueParams) error {
+	_, err := q.db.ExecContext(ctx, updateJobForEnqueue,
+		arg.Arg,
+		arg.DependsOn,
+		arg.RunAfter,
+		arg.CreatedAt,
+		arg.ID,
+	)
+	return err
+}
+
+const updateJobRunAfter = `-- name: UpdateJobRunAfter :exec
+UPDATE jobs SET run_after = ? WHERE id = ?
+`
+
+type UpdateJobRunAfterParams struct {
+	RunAfter time.Time `json:"run_after"`
+	ID       int64     `json:"id"`
+}
+
+func (q *Queries) UpdateJobRunAfter(ctx context.Context, arg UpdateJobRunAfterParams) error {
+	_, err := q.db.ExecContext(ctx, updateJobRunAfter, arg.RunAfter, arg.ID)
 	return err
 }

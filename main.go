@@ -102,7 +102,7 @@ func main() {
 	registry := jobqueue.NewRegistry()
 
 	// 7. Worker作成 (まだStartしない)
-	worker := jobqueue.NewWorker(workerDB, workerDBWrapper.Q, registry)
+	worker := jobqueue.NewWorker(model.NewDatabase[*workerdb.Queries](workerDB, func(tx model.DBTX) *workerdb.Queries { return workerdb.New(tx.(workerdb.DBTX)) }), workerDBWrapper.Q.(*workerdb.Queries), registry)
 
 	// 8. App作成
 	application := app.NewApp(

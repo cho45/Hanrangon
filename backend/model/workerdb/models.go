@@ -21,6 +21,8 @@ type Job struct {
 	GrabbedAt    sql.NullTime   `json:"grabbed_at"`
 	Status       string         `json:"status"`
 	ErrorMessage sql.NullString `json:"error_message"`
+	DependsOn    sql.NullString `json:"depends_on"`
+	FinishedAt   sql.NullTime   `json:"finished_at"`
 }
 
 type JobType struct {

@@ -44,7 +44,7 @@ func TestIndexImages_Missing(t *testing.T) {
 	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
 
 	registry := jobqueue.NewRegistry()
-	worker := jobqueue.NewWorker(workerDB, workerDBWrapper.Q, registry)
+	worker := jobqueue.NewWorker(model.NewDatabase[*workerdb.Queries](workerDB, func(tx model.DBTX) *workerdb.Queries { return workerdb.New(tx.(workerdb.DBTX)) }), workerDBWrapper.Q.(*workerdb.Queries), registry)
 
 	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, calc, sim, searcher, worker)
 	// Create a test image

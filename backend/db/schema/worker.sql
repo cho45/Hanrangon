@@ -23,6 +23,9 @@ CREATE TABLE jobs (
     status TEXT NOT NULL DEFAULT 'pending',  -- pending, running, completed, failed
     error_message TEXT,
 
+    depends_on TEXT,                -- 依存関係定義 (JSON)
+    finished_at DATETIME,           -- 完了時刻
+
     FOREIGN KEY (job_type_id) REFERENCES job_types(id),
     UNIQUE(job_type_id, uniqkey)
 );

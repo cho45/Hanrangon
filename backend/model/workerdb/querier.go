@@ -6,23 +6,30 @@ package workerdb
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
 type Querier interface {
+	CleanupJobs(ctx context.Context, finishedAt sql.NullTime) error
 	CountJobs(ctx context.Context) (int64, error)
 	CountPendingJobs(ctx context.Context) (int64, error)
 	EnqueueJob(ctx context.Context, arg EnqueueJobParams) (Job, error)
 	FailStuckJobs(ctx context.Context) error
 	FindNextJob(ctx context.Context, runAfter time.Time) (Job, error)
 	GetJobByID(ctx context.Context, id int64) (Job, error)
+	GetJobByTypeAndUniqkey(ctx context.Context, arg GetJobByTypeAndUniqkeyParams) (Job, error)
 	GetJobTypeByID(ctx context.Context, id int64) (JobType, error)
+	GetJobsByIDs(ctx context.Context, ids []int64) ([]Job, error)
 	GetOrCreateJobType(ctx context.Context, name string) (JobType, error)
-	GrabJob(ctx context.Context, arg GrabJobParams) error
+	GrabJob(ctx context.Context, arg GrabJobParams) (sql.Result, error)
 	ListJobs(ctx context.Context, arg ListJobsParams) ([]ListJobsRow, error)
-	MarkJobCompleted(ctx context.Context, id int64) error
+	MarkJobCompleted(ctx context.Context, arg MarkJobCompletedParams) error
 	MarkJobFailed(ctx context.Context, arg MarkJobFailedParams) error
+	MarkJobPermanentlyFailed(ctx context.Context, arg MarkJobPermanentlyFailedParams) error
 	RecoverStuckJobs(ctx context.Context) error
+	UpdateJobForEnqueue(ctx context.Context, arg UpdateJobForEnqueueParams) error
+	UpdateJobRunAfter(ctx context.Context, arg UpdateJobRunAfterParams) error
 }
 
 var _ Querier = (*Queries)(nil)
