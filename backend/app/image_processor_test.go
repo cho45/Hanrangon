@@ -6,9 +6,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/cho45/hanrangon/internal/testutil"
 )
 
 func TestImageProcessor_Process(t *testing.T) {
+	testutil.SetupEnvironment()
 	p := NewImageProcessor(LoadConfig())
 	ctx := context.Background()
 

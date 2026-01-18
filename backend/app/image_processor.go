@@ -18,21 +18,30 @@ type ImageProcessor struct {
 	avifencPath   string
 	jpegoptimPath string
 	jpegtranPath  string
+	skipLog       bool
 }
 
 func NewImageProcessor(cfg *Config) *ImageProcessor {
-	p := &ImageProcessor{}
+	p := &ImageProcessor{
+		skipLog: cfg.IsTest(),
+	}
 
 	findTool := func(name, cfgPath string) string {
 		if cfgPath != "" {
 			if path, err := exec.LookPath(cfgPath); err == nil {
-				log.Printf("[INFO] %s found (config): %s", name, path)
+				if !p.skipLog {
+					log.Printf("[INFO] %s found (config): %s", name, path)
+				}
 				return path
 			}
-			log.Printf("[WARN] %s configured but not found: %s", name, cfgPath)
+			if !p.skipLog {
+				log.Printf("[WARN] %s configured but not found: %s", name, cfgPath)
+			}
 		}
 		if path, err := exec.LookPath(name); err == nil {
-			log.Printf("[INFO] %s found (path): %s", name, path)
+			if !p.skipLog {
+				log.Printf("[INFO] %s found (path): %s", name, path)
+			}
 			return path
 		}
 		return ""
@@ -185,9 +194,10 @@ func (p *ImageProcessor) processJPEG(ctx context.Context, srcPath string, filena
 }
 
 func (p *ImageProcessor) logResult(tool string, path string, originalSize int64) {
-	if originalSize <= 0 {
+	if originalSize <= 0 || p.skipLog {
 		return
 	}
+
 	info, err := os.Stat(path)
 	if err != nil {
 		return
