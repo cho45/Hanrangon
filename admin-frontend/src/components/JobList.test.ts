@@ -16,6 +16,7 @@ const mockJobs = [
   {
     id: 1,
     job_type_name: 'TestJob',
+    uniqkey: { String: 'unique-1', Valid: true },
     status: 'pending',
     retry_count: 0,
     created_at: '2025-01-15T10:00:00Z',
@@ -63,6 +64,7 @@ describe('JobList', () => {
     await waitFor(() => {
       expect(screen.getByText('ジョブ一覧 (2)')).toBeTruthy();
       expect(screen.getAllByText('TestJob').length).toBeGreaterThan(0);
+      expect(screen.getByText('unique-1')).toBeTruthy();
       expect(screen.getByText('ErrorJob')).toBeTruthy();
       expect(screen.getByText('Something went wrong')).toBeTruthy();
       

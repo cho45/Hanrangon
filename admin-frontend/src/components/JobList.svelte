@@ -112,7 +112,7 @@
       <thead>
         <tr>
           <th>ID</th>
-          <th>Type</th>
+          <th>Type / Uniqkey</th>
           <th>Status</th>
           <th>Retry</th>
           <th>Created At</th>
@@ -125,7 +125,14 @@
         {#each jobs as job}
           <tr id="job-{job.id}" class:highlighted={highlightedId === job.id}>
             <td>{job.id}</td>
-            <td><strong>{job.job_type_name}</strong></td>
+            <td>
+              <div class="type-uniqkey">
+                <strong>{job.job_type_name}</strong>
+                {#if job.uniqkey?.Valid}
+                  <span class="uniqkey" title={job.uniqkey.String}>{job.uniqkey.String}</span>
+                {/if}
+              </div>
+            </td>
             <td>
               {@render statusBadge(job.status)}
             </td>
@@ -217,7 +224,7 @@
   }
 
   th:nth-child(1), td:nth-child(1) { width: 60px; }
-  th:nth-child(2), td:nth-child(2) { width: 150px; }
+  th:nth-child(2), td:nth-child(2) { width: 200px; }
   th:nth-child(3), td:nth-child(3) { width: 100px; }
   th:nth-child(4), td:nth-child(4) { width: 60px; }
   th:nth-child(5), td:nth-child(5) { width: 180px; }
@@ -227,6 +234,18 @@
   .time {
     font-family: monospace;
     font-size: 0.85rem;
+  }
+
+  .type-uniqkey {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .uniqkey {
+    font-size: 0.7rem;
+    color: #757575;
+    font-family: monospace;
   }
 
   .status {
