@@ -25,6 +25,8 @@ SELECT * FROM jobs WHERE status = 'pending' AND run_after <= ? ORDER BY created_
 UPDATE jobs SET status = 'running', grabbed_at = :grabbed_at
 WHERE id = :id AND status = 'pending';
 
+-- Mark job as completed. Re-enqueued jobs during execution return to pending.
+-- See backend/jobqueue/queue_reenqueue_edge_cases_test.go for details.
 -- name: MarkJobCompleted :exec
 UPDATE jobs
 SET

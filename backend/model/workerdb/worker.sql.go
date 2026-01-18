@@ -365,6 +365,8 @@ type MarkJobCompletedParams struct {
 	ID         int64        `json:"id"`
 }
 
+// Mark job as completed. Re-enqueued jobs during execution return to pending.
+// See backend/jobqueue/queue_reenqueue_edge_cases_test.go for details.
 func (q *Queries) MarkJobCompleted(ctx context.Context, arg MarkJobCompletedParams) error {
 	_, err := q.db.ExecContext(ctx, markJobCompleted, arg.FinishedAt, arg.ID)
 	return err

@@ -24,6 +24,8 @@ type Querier interface {
 	GetOrCreateJobType(ctx context.Context, name string) (JobType, error)
 	GrabJob(ctx context.Context, arg GrabJobParams) (sql.Result, error)
 	ListJobs(ctx context.Context, arg ListJobsParams) ([]ListJobsRow, error)
+	// Mark job as completed. Re-enqueued jobs during execution return to pending.
+	// See backend/jobqueue/queue_reenqueue_edge_cases_test.go for details.
 	MarkJobCompleted(ctx context.Context, arg MarkJobCompletedParams) error
 	MarkJobFailed(ctx context.Context, arg MarkJobFailedParams) error
 	MarkJobPermanentlyFailed(ctx context.Context, arg MarkJobPermanentlyFailedParams) error
