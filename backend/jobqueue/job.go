@@ -17,14 +17,6 @@ const (
 	ConditionFinished  Condition = "finished"  // 親が終了（成功または失敗）した場合
 )
 
-// OnFail は親が失敗した時の振る舞い
-type OnFail string
-
-const (
-	OnFailFail   OnFail = "fail"   // 親が失敗したら自分も失敗にする
-	OnFailIgnore OnFail = "ignore" // 親が失敗しても条件が満たされれば実行する
-)
-
 // Strategy は複数の依存関係がある場合の評価戦略
 type Strategy string
 
@@ -37,7 +29,6 @@ const (
 type Dependency struct {
 	ID        int64     `json:"id"`
 	Condition Condition `json:"condition"`
-	OnFail    OnFail    `json:"on_fail"`
 }
 
 // DependsOn はジョブ全体の依存関係定義
@@ -66,47 +57,59 @@ func (d *DependsOn) Evaluate(parentJobs map[int64]workerdb.Job) EvaluateResult {
 		strategy = StrategyAll
 	}
 
-	readyCount := 0
+	satisfiedCount := 0
+	impossibleCount := 0
+
 	for _, dep := range d.Dependencies {
 		parent, ok := parentJobs[dep.ID]
 
 		// 親が見つからない場合は正常終了（クリーンアップ済み）とみなす
 		if !ok {
-			readyCount++
+			satisfiedCount++
 			continue
 		}
 
-		isFinished := parent.Status == "completed" || parent.Status == "failed"
 		isCompleted := parent.Status == "completed"
 		isFailed := parent.Status == "failed"
 
-		// 失敗伝播のチェック
-		if isFailed && dep.OnFail == OnFailFail {
-			return EvaluateFail
-		}
-
 		satisfied := false
+		impossible := false
+
 		switch dep.Condition {
 		case ConditionCompleted:
 			satisfied = isCompleted
+			impossible = isFailed
 		case ConditionFinished:
-			satisfied = isFinished
+			satisfied = isCompleted || isFailed
+			impossible = false
 		default:
 			satisfied = isCompleted
+			impossible = isFailed
 		}
 
 		if satisfied {
-			readyCount++
+			satisfiedCount++
+		}
+		if impossible {
+			impossibleCount++
 		}
 	}
 
 	switch strategy {
 	case StrategyAny:
-		if readyCount > 0 {
+		if satisfiedCount > 0 {
 			return EvaluateReady
 		}
+		// 全ての依存先が実行不可能になった場合のみ、自分も失敗とする
+		if impossibleCount == len(d.Dependencies) {
+			return EvaluateFail
+		}
 	case StrategyAll:
-		if readyCount == len(d.Dependencies) {
+		// 一つでも実行不可能な依存先があれば、自分も失敗とする
+		if impossibleCount > 0 {
+			return EvaluateFail
+		}
+		if satisfiedCount == len(d.Dependencies) {
 			return EvaluateReady
 		}
 	}

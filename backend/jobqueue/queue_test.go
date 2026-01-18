@@ -945,7 +945,7 @@ func TestWorker_EnqueueWithDepends(t *testing.T) {
 	// Enqueue child job with dependency
 	dependsOn := &DependsOn{
 		Dependencies: []Dependency{
-			{ID: parentJob.ID, Condition: ConditionCompleted, OnFail: OnFailFail},
+			{ID: parentJob.ID, Condition: ConditionCompleted},
 		},
 		Strategy: StrategyAll,
 	}
@@ -1023,7 +1023,7 @@ func TestWorker_DependencyEvaluation_Failed_Fail(t *testing.T) {
 	// Enqueue child job with dependency that should fail when parent fails
 	dependsOn := &DependsOn{
 		Dependencies: []Dependency{
-			{ID: parentJob.ID, Condition: ConditionCompleted, OnFail: OnFailFail},
+			{ID: parentJob.ID, Condition: ConditionCompleted},
 		},
 		Strategy: StrategyAll,
 	}
@@ -1102,7 +1102,7 @@ func TestWorker_Dependencies_Merge(t *testing.T) {
 	// Enqueue child job with first dependency
 	dependsOn1 := &DependsOn{
 		Dependencies: []Dependency{
-			{ID: parent1.ID, Condition: ConditionCompleted, OnFail: OnFailFail},
+			{ID: parent1.ID, Condition: ConditionCompleted},
 		},
 		Strategy: StrategyAll,
 	}
@@ -1113,7 +1113,7 @@ func TestWorker_Dependencies_Merge(t *testing.T) {
 	// Enqueue again with second dependency (should merge)
 	dependsOn2 := &DependsOn{
 		Dependencies: []Dependency{
-			{ID: parent2.ID, Condition: ConditionCompleted, OnFail: OnFailFail},
+			{ID: parent2.ID, Condition: ConditionCompleted},
 		},
 		Strategy: StrategyAll,
 	}
@@ -1185,8 +1185,8 @@ func TestWorker_DependencyEvaluation_StrategyAny(t *testing.T) {
 	// Enqueue child job with Strategy=any
 	dependsOn := &DependsOn{
 		Dependencies: []Dependency{
-			{ID: parentJob.ID, Condition: ConditionCompleted, OnFail: OnFailFail},
-			{ID: missingParentID, Condition: ConditionCompleted, OnFail: OnFailFail},
+			{ID: parentJob.ID, Condition: ConditionCompleted},
+			{ID: missingParentID, Condition: ConditionCompleted},
 		},
 		Strategy: StrategyAny,
 	}
@@ -1268,7 +1268,7 @@ func TestWorker_CircularDependency(t *testing.T) {
 
 	// Now make job2 depend on job1
 	dependsOn1 := &DependsOn{
-		Dependencies: []Dependency{{ID: job1.ID, Condition: ConditionCompleted, OnFail: OnFailFail}},
+		Dependencies: []Dependency{{ID: job1.ID, Condition: ConditionCompleted}},
 		Strategy:     StrategyAll,
 	}
 	dependsJSON1, _ := json.Marshal(dependsOn1)
@@ -1284,7 +1284,7 @@ func TestWorker_CircularDependency(t *testing.T) {
 
 	// Make job1 depend on job2 (circular)
 	dependsOn2 := &DependsOn{
-		Dependencies: []Dependency{{ID: job2.ID, Condition: ConditionCompleted, OnFail: OnFailFail}},
+		Dependencies: []Dependency{{ID: job2.ID, Condition: ConditionCompleted}},
 		Strategy:     StrategyAll,
 	}
 	dependsJSON2, _ := json.Marshal(dependsOn2)
@@ -1528,11 +1528,11 @@ func TestWorker_DependencyEvaluation_Failed_Ignore(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Enqueue child job with dependency that uses OnFailIgnore
-	// Child should execute even when parent fails, because we're ignoring parent failure
+	// Enqueue child job with dependency that uses ConditionFinished
+	// Child should execute even when parent fails, because ConditionFinished only waits for parent to finish
 	dependsOn := &DependsOn{
 		Dependencies: []Dependency{
-			{ID: parentJob.ID, Condition: ConditionFinished, OnFail: OnFailIgnore},
+			{ID: parentJob.ID, Condition: ConditionFinished},
 		},
 		Strategy: StrategyAll,
 	}
@@ -1656,8 +1656,8 @@ func TestWorker_DependencyEvaluation_ConditionFinished(t *testing.T) {
 	// Child should execute when both parents are finished (regardless of success/failure)
 	dependsOn := &DependsOn{
 		Dependencies: []Dependency{
-			{ID: failingParentJob.ID, Condition: ConditionFinished, OnFail: OnFailIgnore},
-			{ID: successfulParentJob.ID, Condition: ConditionFinished, OnFail: OnFailIgnore},
+			{ID: failingParentJob.ID, Condition: ConditionFinished},
+			{ID: successfulParentJob.ID, Condition: ConditionFinished},
 		},
 		Strategy: StrategyAll,
 	}
@@ -1887,7 +1887,7 @@ func TestWorker_EnqueueWithDepends_Concurrency(t *testing.T) {
 	// This tests that the transaction logic correctly handles re-enqueuing
 	dependsOn := &DependsOn{
 		Dependencies: []Dependency{
-			{ID: parentJob.ID, Condition: ConditionCompleted, OnFail: OnFailFail},
+			{ID: parentJob.ID, Condition: ConditionCompleted},
 		},
 		Strategy: StrategyAll,
 	}
