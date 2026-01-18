@@ -70,6 +70,8 @@
           <th>Status</th>
           <th>Retry</th>
           <th>Created At</th>
+          <th>Finished At</th>
+          <th>Depends On</th>
           <th>Error</th>
         </tr>
       </thead>
@@ -83,6 +85,14 @@
             </td>
             <td>{job.retry_count}</td>
             <td>{@render time(job.created_at)}</td>
+            <td>{@render time(job.finished_at.Time, job.finished_at.Valid)}</td>
+            <td>
+              {#if job.depends_on?.Valid && job.depends_on.String !== "null"}
+                <div class="depends-on" title={job.depends_on.String}>{job.depends_on.String}</div>
+              {:else}
+                -
+              {/if}
+            </td>
             <td class="error">
               {#if job.error_message?.Valid}
                 <div class="error-text" title={job.error_message.String}>{job.error_message.String}</div>
@@ -152,6 +162,8 @@
   th:nth-child(3), td:nth-child(3) { width: 100px; }
   th:nth-child(4), td:nth-child(4) { width: 60px; }
   th:nth-child(5), td:nth-child(5) { width: 180px; }
+  th:nth-child(6), td:nth-child(6) { width: 180px; }
+  th:nth-child(7), td:nth-child(7) { width: 150px; }
 
   .time {
     font-family: monospace;
@@ -168,6 +180,12 @@
   .status-pending { background: #e3f2fd; color: #1976d2; }
   .status-running { background: #e8f5e9; color: #2e7d32; }
   .status-failed { background: #ffebee; color: #c62828; }
+
+  .depends-on {
+    font-size: 0.8rem;
+    font-family: monospace;
+    max-width: 100%;
+  }
 
   .error-text {
     font-size: 0.8rem;

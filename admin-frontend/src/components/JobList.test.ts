@@ -19,6 +19,8 @@ const mockJobs = [
     status: 'pending',
     retry_count: 0,
     created_at: '2025-01-15T10:00:00Z',
+    finished_at: { Time: '', Valid: false },
+    depends_on: { String: '', Valid: false },
     error_message: { String: '', Valid: false }
   },
   {
@@ -27,6 +29,8 @@ const mockJobs = [
     status: 'failed',
     retry_count: 3,
     created_at: '2025-01-15T11:00:00Z',
+    finished_at: { Time: '2025-01-15T11:05:00Z', Valid: true },
+    depends_on: { String: '{"dependencies":[{"id":1,"condition":"completed"}]}', Valid: true },
     error_message: { String: 'Something went wrong', Valid: true }
   }
 ];
