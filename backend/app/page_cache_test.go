@@ -43,7 +43,7 @@ func TestPageCacheMiddleware_EndToEnd(t *testing.T) {
 	env.server.ServeHTTP(rec2, req2)
 
 	assert.Equal(t, http.StatusOK, rec2.Code)
-	assert.Equal(t, "HIT", rec2.Header().Get("X-Cache"))
+	assert.Contains(t, rec2.Header().Get("X-Cache"), "HIT")
 	assert.Equal(t, rec1.Body.String(), rec2.Body.String())
 
 	// 3. エントリ更新 (無効化)
@@ -96,7 +96,8 @@ func TestPageCacheMiddleware_CompressionConsistency(t *testing.T) {
 	env.server.ServeHTTP(rec2, req2)
 
 	assert.Equal(t, http.StatusOK, rec2.Code)
-	assert.Equal(t, "HIT", rec2.Header().Get("X-Cache"))
+	assert.Contains(t, rec2.Header().Get("X-Cache"), "HIT")
+	// Gzip を要求していないので Content-Encoding はなし (HIT-RAW または HIT-GZ を解凍して返却)
 	assert.Equal(t, "", rec2.Header().Get("Content-Encoding"))
 
 	// 中身が正しいプレーンテキストであることを検証
@@ -110,7 +111,7 @@ func TestPageCacheMiddleware_CompressionConsistency(t *testing.T) {
 	env.server.ServeHTTP(rec3, req3)
 
 	assert.Equal(t, http.StatusOK, rec3.Code)
-	assert.Equal(t, "HIT", rec3.Header().Get("X-Cache"))
+	assert.Contains(t, rec3.Header().Get("X-Cache"), "HIT")
 	assert.Equal(t, "gzip", rec3.Header().Get("Content-Encoding"))
 
 	// 解凍して中身を検証
@@ -144,7 +145,7 @@ func TestPageCacheMiddleware_InvalidationScenario(t *testing.T) {
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec2 := httptest.NewRecorder()
 	env.server.ServeHTTP(rec2, req2)
-	assert.Equal(t, "HIT", rec2.Header().Get("X-Cache"))
+	assert.Contains(t, rec2.Header().Get("X-Cache"), "HIT")
 
 	// 4. エントリ更新 (FinalizeEntry ジョブを模倣)
 	err = env.app.CacheService().InvalidateBySourceID(context.Background(), "entry:100")

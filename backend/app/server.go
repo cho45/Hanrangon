@@ -104,12 +104,6 @@ func NewServer(app *AppImpl) *echo.Echo {
 	}
 
 	e.Use(middleware.Recover())
-	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
-		Level: 1, // BestSpeed
-		// 1KB未満のレスポンスは、圧縮によるサイズ削減効果よりも
-		// Gzipライター確保のメモリ/CPUコストの方が大きいため除外する。
-		MinLength: 1024,
-	}))
 	e.Use(app.PageCacheMiddleware())
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
