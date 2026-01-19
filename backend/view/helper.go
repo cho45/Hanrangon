@@ -10,12 +10,18 @@ import (
 )
 
 // FormatDate formats a date string from "2006-01-02" to "2006年 01月 02日"
+// 固定長フォーマット (YYYY-MM-DD) を前提としてインデックスアクセスで最適化
 func FormatDate(dateStr string) string {
-	parts := strings.Split(dateStr, "-")
-	if len(parts) != 3 {
-		return dateStr
+	if len(dateStr) != 10 { // YYYY-MM-DD
+		// フォールバック: 不正なフォーマットの場合は Split を使用
+		parts := strings.Split(dateStr, "-")
+		if len(parts) != 3 {
+			return dateStr
+		}
+		return parts[0] + "年 " + parts[1] + "月 " + parts[2] + "日"
 	}
-	return parts[0] + "年 " + parts[1] + "月 " + parts[2] + "日"
+	// YYYY-MM-DD: インデックスアクセスで Split を回避
+	return dateStr[0:4] + "年 " + dateStr[5:7] + "月 " + dateStr[8:10] + "日"
 }
 
 // DatePath converts a date string from "2006-01-02" to "/2006/01/02/"
