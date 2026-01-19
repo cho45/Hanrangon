@@ -8,11 +8,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/cho45/hanrangon/backend/model"
 	"github.com/cho45/hanrangon/backend/model/cachedb"
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func setupCacheDB(t *testing.T) (*sql.DB, *cachedb.Queries) {
+func setupCacheDB(t *testing.T) (*sql.DB, *model.Database[cachedb.Querier]) {
 	t.Helper()
 
 	tmpDir := t.TempDir()
@@ -34,15 +35,15 @@ func setupCacheDB(t *testing.T) (*sql.DB, *cachedb.Queries) {
 		t.Fatalf("Failed to execute schema: %v", err)
 	}
 
-	queries := cachedb.New(db)
-	return db, queries
+	wrapper := model.NewDatabase[cachedb.Querier](db, func(tx model.DBTX) cachedb.Querier { return cachedb.New(tx) })
+	return db, wrapper
 }
 
 func TestCacheService_SetAndGet(t *testing.T) {
-	db, queries := setupCacheDB(t)
+	db, wrapper := setupCacheDB(t)
 	defer db.Close()
 
-	service := NewCacheService(queries)
+	service := NewCacheService(wrapper)
 	ctx := context.Background()
 
 	// キャッシュ保存 + 依存関係登録
@@ -66,10 +67,10 @@ func TestCacheService_SetAndGet(t *testing.T) {
 }
 
 func TestCacheService_InvalidateByKey(t *testing.T) {
-	db, queries := setupCacheDB(t)
+	db, wrapper := setupCacheDB(t)
 	defer db.Close()
 
-	service := NewCacheService(queries)
+	service := NewCacheService(wrapper)
 	ctx := context.Background()
 
 	// キャッシュ保存
@@ -94,10 +95,10 @@ func TestCacheService_InvalidateByKey(t *testing.T) {
 }
 
 func TestCacheService_InvalidateBySourceID(t *testing.T) {
-	db, queries := setupCacheDB(t)
+	db, wrapper := setupCacheDB(t)
 	defer db.Close()
 
-	service := NewCacheService(queries)
+	service := NewCacheService(wrapper)
 	ctx := context.Background()
 
 	// 複数のキャッシュを保存、同じ source_id を持つ
@@ -139,10 +140,10 @@ func TestCacheService_InvalidateBySourceID(t *testing.T) {
 }
 
 func TestCacheService_TriggerCascade(t *testing.T) {
-	db, queries := setupCacheDB(t)
+	db, wrapper := setupCacheDB(t)
 	defer db.Close()
 
-	service := NewCacheService(queries)
+	service := NewCacheService(wrapper)
 	ctx := context.Background()
 
 	// キャッシュ保存
@@ -160,17 +161,17 @@ func TestCacheService_TriggerCascade(t *testing.T) {
 	}
 
 	// cache が削除されていることを確認
-	_, err := queries.GetCache(ctx, key)
+	_, err := wrapper.Q.GetCache(ctx, key)
 	if err != sql.ErrNoRows {
 		t.Errorf("cache should be deleted by TRIGGER, got: %v", err)
 	}
 }
 
 func TestCacheService_MultipleSourceIDs(t *testing.T) {
-	db, queries := setupCacheDB(t)
+	db, wrapper := setupCacheDB(t)
 	defer db.Close()
 
-	service := NewCacheService(queries)
+	service := NewCacheService(wrapper)
 	ctx := context.Background()
 
 	// 複数の source_id を持つキャッシュ
@@ -195,10 +196,10 @@ func TestCacheService_MultipleSourceIDs(t *testing.T) {
 }
 
 func TestCacheService_OverwriteCache(t *testing.T) {
-	db, queries := setupCacheDB(t)
+	db, wrapper := setupCacheDB(t)
 	defer db.Close()
 
-	service := NewCacheService(queries)
+	service := NewCacheService(wrapper)
 	ctx := context.Background()
 
 	key := "/test/page"
@@ -246,10 +247,10 @@ func TestCacheService_OverwriteCache(t *testing.T) {
 }
 
 func TestCacheService_InvalidateNonExistent(t *testing.T) {
-	db, queries := setupCacheDB(t)
+	db, wrapper := setupCacheDB(t)
 	defer db.Close()
 
-	service := NewCacheService(queries)
+	service := NewCacheService(wrapper)
 	ctx := context.Background()
 
 	// 存在しないキーの無効化 - エラーにならない
@@ -264,10 +265,10 @@ func TestCacheService_InvalidateNonExistent(t *testing.T) {
 }
 
 func TestCacheService_EmptySourceIDs(t *testing.T) {
-	db, queries := setupCacheDB(t)
+	db, wrapper := setupCacheDB(t)
 	defer db.Close()
 
-	service := NewCacheService(queries)
+	service := NewCacheService(wrapper)
 	ctx := context.Background()
 
 	key := "/test/page"
@@ -308,10 +309,10 @@ func TestCacheService_EmptySourceIDs(t *testing.T) {
 }
 
 func TestCacheService_EmptyContent(t *testing.T) {
-	db, queries := setupCacheDB(t)
+	db, wrapper := setupCacheDB(t)
 	defer db.Close()
 
-	service := NewCacheService(queries)
+	service := NewCacheService(wrapper)
 	ctx := context.Background()
 
 	key := "/test/empty"
@@ -334,10 +335,10 @@ func TestCacheService_EmptyContent(t *testing.T) {
 }
 
 func TestCacheService_ConcurrentWrite(t *testing.T) {
-	db, queries := setupCacheDB(t)
+	db, wrapper := setupCacheDB(t)
 	defer db.Close()
 
-	service := NewCacheService(queries)
+	service := NewCacheService(wrapper)
 	ctx := context.Background()
 
 	key := "/test/concurrent"
@@ -374,10 +375,10 @@ func TestCacheService_ConcurrentWrite(t *testing.T) {
 }
 
 func TestCacheService_NilSourceIDs(t *testing.T) {
-	db, queries := setupCacheDB(t)
+	db, wrapper := setupCacheDB(t)
 	defer db.Close()
 
-	service := NewCacheService(queries)
+	service := NewCacheService(wrapper)
 	ctx := context.Background()
 
 	key := "/test/nil"
@@ -395,10 +396,10 @@ func TestCacheService_NilSourceIDs(t *testing.T) {
 }
 
 func TestCacheService_IndexPageScenario(t *testing.T) {
-	db, queries := setupCacheDB(t)
+	db, wrapper := setupCacheDB(t)
 	defer db.Close()
 
-	service := NewCacheService(queries)
+	service := NewCacheService(wrapper)
 	ctx := context.Background()
 
 	// シナリオ: Indexページは最新5件のエントリを表示
@@ -500,10 +501,10 @@ func TestCacheService_IndexPageScenario(t *testing.T) {
 }
 
 func TestCacheService_MultiplePagesDependOnSameEntry(t *testing.T) {
-	db, queries := setupCacheDB(t)
+	db, wrapper := setupCacheDB(t)
 	defer db.Close()
 
-	service := NewCacheService(queries)
+	service := NewCacheService(wrapper)
 	ctx := context.Background()
 
 	// エントリ123が複数のページで表示されている

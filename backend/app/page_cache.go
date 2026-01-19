@@ -85,7 +85,7 @@ func (app *AppImpl) PageCacheMiddleware() echo.MiddlewareFunc {
 			wrapper := &responseWriterWrapper{ResponseWriter: origWriter, recorder: rec}
 			c.Response().Writer = wrapper
 			defer func() {
-				wrapper.Close()
+				_ = wrapper.Close()
 				c.Response().Writer = origWriter
 			}()
 
@@ -141,7 +141,9 @@ func (app *AppImpl) PageCacheMiddleware() echo.MiddlewareFunc {
 func (app *AppImpl) serveGzip(c echo.Context, content []byte) error {
 	c.Response().Header().Set("Content-Encoding", "gzip")
 	gw := gzip.NewWriter(c.Response().Writer)
-	defer gw.Close()
+	defer func() {
+		_ = gw.Close()
+	}()
 	_, err := gw.Write(content)
 	return err
 }
@@ -172,7 +174,9 @@ func (app *AppImpl) decompressGzip(data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer gr.Close()
+	defer func() {
+		_ = gr.Close()
+	}()
 	return io.ReadAll(gr)
 }
 
@@ -183,7 +187,7 @@ type responseWriterWrapper struct {
 }
 
 func (w *responseWriterWrapper) Write(b []byte) (int, error) {
-	w.recorder.Write(b)
+	_, _ = w.recorder.Write(b)
 
 	// クライアントが Gzip を要求しており、かつ十分に長いデータであれば圧縮を開始
 	if w.Header().Get("Content-Encoding") == "gzip" {

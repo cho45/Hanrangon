@@ -5,52 +5,54 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/cho45/hanrangon/backend/model"
 	"github.com/cho45/hanrangon/backend/model/cachedb"
 )
 
 // CacheService はページキャッシュを管理するサービス
 type CacheService struct {
-	queries cachedb.Querier
+	db *model.Database[cachedb.Querier]
 }
 
 // NewCacheService は CacheService を生成
-func NewCacheService(queries cachedb.Querier) *CacheService {
+func NewCacheService(db *model.Database[cachedb.Querier]) *CacheService {
 	return &CacheService{
-		queries: queries,
+		db: db,
 	}
 }
 
 // Set はキャッシュを保存し、依存関係を登録
 func (s *CacheService) Set(ctx context.Context, key string, content []byte, sourceIDs []string) error {
-	// 既存のキャッシュと依存関係を削除 (TRIGGER で cache_relation も削除される)
-	if err := s.queries.DeleteCache(ctx, key); err != nil && err != sql.ErrNoRows {
-		return fmt.Errorf("failed to delete existing cache: %w", err)
-	}
-
-	// 新しいキャッシュを保存
-	if err := s.queries.InsertCache(ctx, cachedb.InsertCacheParams{
-		CacheKey: key,
-		Content:  content,
-	}); err != nil {
-		return fmt.Errorf("failed to insert cache: %w", err)
-	}
-
-	// 新しい依存関係を登録
-	for _, sourceID := range sourceIDs {
-		if err := s.queries.InsertCacheRelation(ctx, cachedb.InsertCacheRelationParams{
-			CacheKey: key,
-			SourceID: sourceID,
-		}); err != nil {
-			return fmt.Errorf("failed to insert cache relation: %w", err)
+	return s.db.WithTx(ctx, func(q cachedb.Querier) error {
+		// 既存の依存関係を明示的に削除 (トリガーによる連鎖削除の混乱を防ぐ)
+		if err := q.DeleteCacheRelationsByCacheKey(ctx, key); err != nil {
+			return fmt.Errorf("failed to delete old relations: %w", err)
 		}
-	}
 
-	return nil
+		// キャッシュを保存 (既存があれば置換)
+		if err := q.InsertCache(ctx, cachedb.InsertCacheParams{
+			CacheKey: key,
+			Content:  content,
+		}); err != nil {
+			return fmt.Errorf("failed to insert cache: %w", err)
+		}
+
+		// 新しい依存関係を登録
+		for _, sourceID := range sourceIDs {
+			if err := q.InsertCacheRelation(ctx, cachedb.InsertCacheRelationParams{
+				CacheKey: key,
+				SourceID: sourceID,
+			}); err != nil {
+				return fmt.Errorf("failed to insert cache relation: %w", err)
+			}
+		}
+		return nil
+	})
 }
 
 // Get はキャッシュを取得
 func (s *CacheService) Get(ctx context.Context, key string) ([]byte, error) {
-	content, err := s.queries.GetCache(ctx, key)
+	content, err := s.db.Q.GetCache(ctx, key)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, err
@@ -63,7 +65,7 @@ func (s *CacheService) Get(ctx context.Context, key string) ([]byte, error) {
 
 // InvalidateByKey はキーを指定してキャッシュを無効化
 func (s *CacheService) InvalidateByKey(ctx context.Context, key string) error {
-	if err := s.queries.DeleteCache(ctx, key); err != nil {
+	if err := s.db.Q.DeleteCache(ctx, key); err != nil {
 		return fmt.Errorf("failed to delete cache: %w", err)
 	}
 
@@ -73,7 +75,7 @@ func (s *CacheService) InvalidateByKey(ctx context.Context, key string) error {
 // InvalidateBySourceID は依存キーから一括無効化
 func (s *CacheService) InvalidateBySourceID(ctx context.Context, sourceID string) error {
 	// TRIGGER により cache も自動削除される
-	if err := s.queries.DeleteCacheRelationsBySourceID(ctx, sourceID); err != nil {
+	if err := s.db.Q.DeleteCacheRelationsBySourceID(ctx, sourceID); err != nil {
 		return fmt.Errorf("failed to delete cache relations: %w", err)
 	}
 

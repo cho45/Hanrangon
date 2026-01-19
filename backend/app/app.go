@@ -127,7 +127,7 @@ func NewApp(
 		storage:              storage,
 		imageProcessor:       NewImageProcessor(config),
 	}
-	app.cacheService = NewCacheService(cacheDB.Q)
+	app.cacheService = NewCacheService(cacheDB)
 	app.entryService = NewEntryService(app)
 	return app
 }
