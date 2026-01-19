@@ -54,9 +54,9 @@ func (app *AppImpl) GetR2Usage(ctx context.Context) (*R2UsageStats, error) {
 		return nil, fmt.Errorf("cloudflare API configuration incomplete")
 	}
 
-	// 直近7日間の統計を取得
+	// 当月の統計を取得 (UTC基準)
 	now := time.Now().UTC()
-	startTime := now.AddDate(0, 0, -7)
+	startTime := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 	formattedStart := startTime.Format(time.RFC3339)
 
 	query := `
