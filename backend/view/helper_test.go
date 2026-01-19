@@ -1,6 +1,7 @@
 package view
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -107,6 +108,24 @@ func TestNewViewEntry(t *testing.T) {
 				}
 				if ve.CreatedAtUnix != createdAt.Unix() {
 					t.Errorf("CreatedAtUnix = %v, want %v", ve.CreatedAtUnix, createdAt.Unix())
+				}
+
+				// Check JSON-LD
+				if ve.JSONLD == "" {
+					t.Error("JSONLD should not be empty")
+				}
+				var ld map[string]any
+				if err := json.Unmarshal([]byte(ve.JSONLD), &ld); err != nil {
+					t.Errorf("Failed to unmarshal JSONLD: %v", err)
+				}
+				if ld["@type"] != "BlogPosting" {
+					t.Errorf("JSONLD @type = %v, want BlogPosting", ld["@type"])
+				}
+				if ld["headline"] != "Test Entry" {
+					t.Errorf("JSONLD headline = %v, want Test Entry", ld["headline"])
+				}
+				if ld["datePublished"] != createdAt.UTC().Format(time.RFC3339) {
+					t.Errorf("JSONLD datePublished = %v", ld["datePublished"])
 				}
 			},
 		},
