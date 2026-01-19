@@ -145,6 +145,12 @@ func NewViewEntry(e maindb.Entry, baseURL string) ViewEntry {
 		ID:   canonicalURL,
 	})
 
+	// RFC3339フォーマットを事前計算して再利用
+	createdAtUTC := e.CreatedAt.UTC()
+	modifiedAtUTC := e.ModifiedAt.UTC()
+	createdAtRFC3339 := createdAtUTC.Format(time.RFC3339)
+	modifiedAtRFC3339 := modifiedAtUTC.Format(time.RFC3339)
+
 	// 構造体を使って JSON-LD を生成（固定部分はキャッシュ済み、sync.Pool でバッファ再利用）
 	jsonLDStr := marshalJSONLD(&blogPostingJSONLD{
 		Context:          "https://schema.org",
@@ -155,8 +161,8 @@ func NewViewEntry(e maindb.Entry, baseURL string) ViewEntry {
 		Image:            jsonLDImage,
 		Author:           jsonLDAuthor,
 		Publisher:        jsonLDPublisher,
-		DatePublished:    e.CreatedAt.UTC().Format(time.RFC3339),
-		DateModified:     e.ModifiedAt.UTC().Format(time.RFC3339),
+		DatePublished:    createdAtRFC3339,
+		DateModified:     modifiedAtRFC3339,
 	})
 
 	return ViewEntry{
@@ -170,8 +176,8 @@ func NewViewEntry(e maindb.Entry, baseURL string) ViewEntry {
 		DatePath:          DatePath(e.Date),
 		DisplayTime:       e.CreatedAt.Format("15:04"),
 		CreatedAtUnix:     e.CreatedAt.Unix(),
-		CreatedAtRFC3339:  e.CreatedAt.UTC().Format(time.RFC3339),
-		ModifiedAtRFC3339: e.ModifiedAt.UTC().Format(time.RFC3339),
+		CreatedAtRFC3339:  createdAtRFC3339,
+		ModifiedAtRFC3339: modifiedAtRFC3339,
 		FormattedBodyHTML: template.HTML(e.FormattedBody),
 		IsShortEntry:      isShortEntry,
 		JSONLD:            template.JS(jsonLDStr),
@@ -189,6 +195,25 @@ func NewViewEntries(entries []maindb.Entry, baseURL string) []ViewEntry {
 		}
 	}
 	return res
+}
+
+// NewViewEntryLight は SimilarEntries 用の軽量な ViewEntry を生成（JSON-LD なし）
+func NewViewEntryLight(e maindb.Entry) ViewEntry {
+	displayTitle, tags := maindb.ParseTitle(e.Title)
+	if displayTitle == "" {
+		displayTitle = "✖"
+	}
+
+	return ViewEntry{
+		Entry:            e,
+		DisplayTitle:     displayTitle,
+		Tags:             tags,
+		Summary:          e.Summary,
+		CreatedAtUnix:    e.CreatedAt.Unix(),
+		CreatedAtRFC3339: e.CreatedAt.UTC().Format(time.RFC3339),
+		DisplayTime:      e.CreatedAt.Format("15:04"),
+		// 以下のフィールドは SimilarEntries では不要だが、ゼロ値で問題ない
+	}
 }
 
 // ViewTrackback represents pre-calculated trackback data

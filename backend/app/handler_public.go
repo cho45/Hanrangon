@@ -456,7 +456,7 @@ func (app *AppImpl) populateSimilarEntries(ctx context.Context, entries []view.V
 				for _, rel := range related {
 					if re, ok := entryMap[rel.RelatedEntryID]; ok {
 						similarEntries = append(similarEntries, view.SimilarEntry{
-							ViewEntry: view.NewViewEntry(re, app.config.BaseURL),
+							ViewEntry: view.NewViewEntryLight(re),
 							Score:     rel.Score,
 						})
 					}
