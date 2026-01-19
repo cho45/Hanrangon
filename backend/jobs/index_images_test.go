@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/cho45/hanrangon/backend/app"
 	"github.com/cho45/hanrangon/backend/jobqueue"
@@ -21,6 +22,39 @@ import (
 	"github.com/cho45/hanrangon/internal/testutil"
 	_ "github.com/mattn/go-sqlite3"
 )
+
+// TestIndexImagesJob_Name はジョブ名が正しく返されることを検証する
+func TestIndexImagesJob_Name(t *testing.T) {
+	application, _ := setupTestApp(t)
+	job := NewIndexImagesJob(application)
+
+	got := job.Name()
+	want := "IndexImages"
+
+	if got != want {
+		t.Errorf("Name() = %q, want %q", got, want)
+	}
+}
+
+// TestIndexImagesJob_ImplementsJobHandlerWithTimeout はJobHandlerWithTimeoutインターフェースを実装していることを検証する
+func TestIndexImagesJob_ImplementsJobHandlerWithTimeout(t *testing.T) {
+	application, _ := setupTestApp(t)
+	//nolint:staticcheck // 明示的にインターフェースの実装を検証するため型を明示
+	var _ jobqueue.JobHandlerWithTimeout = NewIndexImagesJob(application)
+}
+
+// TestIndexImagesJob_Timeout はタイムアウトが正しく設定されることを検証する
+func TestIndexImagesJob_Timeout(t *testing.T) {
+	application, _ := setupTestApp(t)
+	job := NewIndexImagesJob(application)
+
+	got := job.Timeout()
+	want := 3 * time.Minute
+
+	if got != want {
+		t.Errorf("Timeout() = %v, want %v", got, want)
+	}
+}
 
 func createTestImage(t *testing.T, path string, seed int) {
 	f, err := os.Create(path)

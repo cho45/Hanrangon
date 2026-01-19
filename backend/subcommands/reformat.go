@@ -47,7 +47,22 @@ func Reformat(ctx context.Context, application app.App, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to query entries: %w", err)
 	}
-	defer rows.Close()
+	type entryData struct {
+		id     int64
+		path   string
+		body   string
+		format string
+	}
+	var entries []entryData
+	for rows.Next() {
+		var d entryData
+		if err := rows.Scan(&d.id, &d.path, &d.body, &d.format); err != nil {
+			rows.Close()
+			return fmt.Errorf("failed to scan entry: %w", err)
+		}
+		entries = append(entries, d)
+	}
+	rows.Close()
 
 	processor, err := application.PostprocessBatch(ctx, 30*time.Minute)
 	if err != nil {
@@ -56,21 +71,13 @@ func Reformat(ctx context.Context, application app.App, args []string) error {
 	defer func() { _ = processor.Close() }()
 
 	count := 0
-	for rows.Next() {
+	for _, d := range entries {
 		count++
-		var id int64
-		var path, body, format string
-		err := rows.Scan(&id, &path, &body, &format)
-		if err != nil {
-			log.Printf("  Error scanning entry: %v", err)
-			continue
-		}
+		log.Printf("[%d/%d] Reformatting id:%d path:%s", count, len(entries), d.id, d.path)
 
-		log.Printf("[%d] Reformatting id:%d path:%s", count, id, path)
-
-		formattedBody, err := formatter.Format(body, format)
+		formattedBody, err := formatter.Format(d.body, d.format)
 		if err != nil {
-			log.Printf("  Error formatting entry %d: %v", id, err)
+			log.Printf("  Error formatting entry %d: %v", d.id, err)
 			continue
 		}
 
@@ -78,20 +85,16 @@ func Reformat(ctx context.Context, application app.App, args []string) error {
 		// バッチ処理では個別の進捗報告は不要なので reporter は nil
 		processedBody, err := processor.Process(ctx, formattedBody, nil)
 		if err != nil {
-			log.Printf("  Error postprocessing entry %d: %v", id, err)
+			log.Printf("  Error postprocessing entry %d: %v", d.id, err)
 		} else {
 			formattedBody = processedBody
 		}
 
-		_, err = application.MainDB().ExecContext(ctx, "UPDATE entries SET formatted_body = ? WHERE id = ?", formattedBody, id)
+		_, err = application.MainDB().ExecContext(ctx, "UPDATE entries SET formatted_body = ? WHERE id = ?", formattedBody, d.id)
 		if err != nil {
-			log.Printf("  Error updating entry %d: %v", id, err)
+			log.Printf("  Error updating entry %d: %v", d.id, err)
 			continue
 		}
-	}
-
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("error during row iteration: %w", err)
 	}
 
 	log.Printf("Reformat completed. Processed %d entries.", count)

@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"image"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -67,4 +68,24 @@ func TestHandleOGP(t *testing.T) {
 			t.Errorf("want status 400 for invalid ID, got %d", rec.Code)
 		}
 	})
+}
+
+func TestOpaquePaletted_Opaque(t *testing.T) {
+	// Create a simple paletted image
+	paletted := image.NewPaletted(image.Rect(0, 0, 10, 10), getOGPPalette())
+
+	// Wrap it with opaquePaletted
+	opaqueImg := &opaquePaletted{Paletted: paletted}
+
+	// Test that Opaque() returns true
+	if !opaqueImg.Opaque() {
+		t.Error("opaquePaletted.Opaque() should return true")
+	}
+
+	// Verify it still works as an image.Image
+	var _ image.Image = opaqueImg
+	bounds := opaqueImg.Bounds()
+	if bounds.Dx() != 10 || bounds.Dy() != 10 {
+		t.Errorf("Image bounds incorrect: got %v", bounds)
+	}
 }

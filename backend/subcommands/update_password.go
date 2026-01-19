@@ -25,16 +25,23 @@ func init() {
 func UpdatePassword(ctx context.Context, application app.App, args []string) error {
 	fs := flag.NewFlagSet("update-password", flag.ExitOnError)
 	configPath := fs.String("config", "config.toml", "path to config file")
+	passwordFlag := fs.String("password", "", "new password (skips interactive prompt)")
 	fs.Parse(args)
 
-	fmt.Print("Enter new password: ")
-	bytePassword, err := term.ReadPassword(int(os.Stdin.Fd()))
-	if err != nil {
-		return fmt.Errorf("failed to read password: %w", err)
+	var password string
+	if *passwordFlag != "" {
+		password = *passwordFlag
+	} else {
+		fmt.Print("Enter new password: ")
+		bytePassword, err := term.ReadPassword(int(os.Stdin.Fd()))
+		if err != nil {
+			return fmt.Errorf("failed to read password: %w", err)
+		}
+		fmt.Println()
+		password = string(bytePassword)
 	}
-	fmt.Println()
 
-	password := strings.TrimSpace(string(bytePassword))
+	password = strings.TrimSpace(password)
 	if password == "" {
 		return fmt.Errorf("password cannot be empty")
 	}

@@ -126,7 +126,7 @@ func (app *AppImpl) HandleOGP(c echo.Context) error {
 	cachePath := filepath.Join(app.config.BaseDir, "var", "cache", "ogp", fmt.Sprintf("%d.png", id))
 	cc := c.Request().Header.Get("Cache-Control")
 	pragma := c.Request().Header.Get("Pragma")
-	noCache := (cc == "no-cache" || pragma == "no-cache") && app.config.IsDevelopment()
+	noCache := (cc == "no-cache" || pragma == "no-cache") && (app.config.IsDevelopment() || app.config.IsTest())
 
 	if !noCache {
 		if _, err := os.Stat(cachePath); err == nil {

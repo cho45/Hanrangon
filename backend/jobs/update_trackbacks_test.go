@@ -18,6 +18,26 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+// TestUpdateTrackbacksJob_Name はジョブ名が正しく返されることを検証する
+func TestUpdateTrackbacksJob_Name(t *testing.T) {
+	application, _ := setupTestApp(t)
+	job := NewUpdateTrackbacksJob(application)
+
+	got := job.Name()
+	want := "UpdateTrackbacks"
+
+	if got != want {
+		t.Errorf("Name() = %q, want %q", got, want)
+	}
+}
+
+// TestUpdateTrackbacksJob_ImplementsJobHandler はJobHandlerインターフェースを実装していることを検証する
+func TestUpdateTrackbacksJob_ImplementsJobHandler(t *testing.T) {
+	application, _ := setupTestApp(t)
+	//nolint:staticcheck // 明示的にインターフェースの実装を検証するため型を明示
+	var _ jobqueue.JobHandler = NewUpdateTrackbacksJob(application)
+}
+
 func setupTestApp(t *testing.T) (app.App, *sql.DB) {
 	t.Helper()
 	dbs := testutil.SetupAllDBs(t)

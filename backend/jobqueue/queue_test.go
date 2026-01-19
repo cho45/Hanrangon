@@ -1938,3 +1938,25 @@ func TestWorker_EnqueueWithDepends_Concurrency(t *testing.T) {
 
 	assert.Equal(t, 1, execCount, "Child job should be executed exactly once despite multiple enqueues")
 }
+
+func TestWorker_Registry(t *testing.T) {
+	registry := NewRegistry()
+	registry.Register(&TestJob{
+		name:      "TestJob",
+		executeFn: func(ctx context.Context, arg json.RawMessage) error { return nil },
+	})
+
+	env := setupWorkerTest(t, registry)
+	defer env.Cleanup()
+
+	// Registry() メソッドが正しくRegistryを返すことを確認
+	gotRegistry := env.Worker.Registry()
+	require.NotNil(t, gotRegistry, "Registry() should return non-nil registry")
+	assert.Equal(t, registry, gotRegistry, "Registry() should return the same registry instance")
+
+	// 返されたRegistryが実際に機能していることを確認
+	handler, ok := gotRegistry.Get("TestJob")
+	assert.True(t, ok, "Should find TestJob in returned registry")
+	assert.NotNil(t, handler, "Handler should not be nil")
+	assert.Equal(t, "TestJob", handler.Name(), "Handler should have correct name")
+}

@@ -41,11 +41,6 @@ const (
 	MinValidTermsForSimilarity = 20
 )
 
-// CalculateSimilarEntry は指定された単一エントリの類似エントリを計算
-func (s *SimilarityCalculator) CalculateSimilarEntry(ctx context.Context, entryID int64) error {
-	return s.CalculateSimilarEntries(ctx, []int64{entryID})
-}
-
 // CalculateSimilarEntries は複数のエントリの類似エントリを一括で計算
 func (s *SimilarityCalculator) CalculateSimilarEntries(ctx context.Context, entryIDs []int64) error {
 	tx, err := s.db.BeginTx(ctx, nil)

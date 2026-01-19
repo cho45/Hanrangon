@@ -310,3 +310,100 @@ func TestApp_EnqueuePublishedEntryJobs(t *testing.T) {
 		assert.Equal(t, jobqueue.ConditionCompleted, dep.Condition)
 	}
 }
+
+func TestCleanupProgressSession(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	// Create a progress session
+	sessionID := "test-session-123"
+	session := &ProgressSession{
+		ID:        sessionID,
+		CreatedAt: time.Now(),
+		Messages:  make(chan string, 10),
+		Done:      make(chan error, 1),
+	}
+
+	// Store the session
+	appImpl := env.app.(*AppImpl)
+	appImpl.progressSessions.Store(sessionID, session)
+
+	// Verify session exists
+	_, exists := appImpl.progressSessions.Load(sessionID)
+	if !exists {
+		t.Fatal("Session should exist before cleanup")
+	}
+
+	// Test cleanup
+	appImpl.cleanupProgressSession(sessionID)
+
+	// Verify session is deleted
+	_, exists = appImpl.progressSessions.Load(sessionID)
+	if exists {
+		t.Error("Session should be deleted after cleanup")
+	}
+
+	// Verify Messages channel is closed
+	_, ok := <-session.Messages
+	if ok {
+		t.Error("Messages channel should be closed after cleanup")
+	}
+
+	// Test cleanup of non-existent session (should not panic)
+	appImpl.cleanupProgressSession("non-existent-session")
+}
+
+func TestCleanupProgressSession_NonExistent(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	// Cleanup non-existent session should not panic
+	appImpl := env.app.(*AppImpl)
+	appImpl.cleanupProgressSession("non-existent-id")
+}
+
+func TestAppImpl_AccessorMethods(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	// Test all accessor methods return non-nil values
+	if env.app.MainDB() == nil {
+		t.Error("MainDB() returned nil")
+	}
+	if env.app.TFIDFDB() == nil {
+		t.Error("TFIDFDB() returned nil")
+	}
+	if env.app.WorkerDB() == nil {
+		t.Error("WorkerDB() returned nil")
+	}
+	if env.app.ImagesDB() == nil {
+		t.Error("ImagesDB() returned nil")
+	}
+	if env.app.Calculator() == nil {
+		t.Error("Calculator() returned nil")
+	}
+	if env.app.SimilarityCalculator() == nil {
+		t.Error("SimilarityCalculator() returned nil")
+	}
+	if env.app.Searcher() == nil {
+		t.Error("Searcher() returned nil")
+	}
+	if env.app.JobQueue() == nil {
+		t.Error("JobQueue() returned nil")
+	}
+	if env.app.Config() == nil {
+		t.Error("Config() returned nil")
+	}
+	if env.app.EntryService() == nil {
+		t.Error("EntryService() returned nil")
+	}
+
+	// Test AppImpl-specific methods (not in App interface)
+	appImpl := env.app.(*AppImpl)
+	if appImpl.Templates() == nil {
+		t.Error("Templates() returned nil")
+	}
+	if appImpl.Storage() == nil {
+		t.Error("Storage() returned nil")
+	}
+}

@@ -15,6 +15,25 @@ import fs from 'fs';
 const GO_TAGS = 'sqlite_math_functions';
 const COVER_PROFILE = 'cover.out';
 
+// extractReceiverType extracts receiver type from Go source at specific line
+function extractReceiverType(filePath, lineNum) {
+	try {
+		const content = fs.readFileSync(filePath, 'utf-8');
+		const lines = content.split('\n');
+		const targetLine = lines[parseInt(lineNum) - 1];
+
+		// Match: func (e Entry) MethodName or func (e *Entry) MethodName
+		const receiverMatch = targetLine.match(/^func\s+\((\w+)\s+\*?(\w+)\)\s+(\w+)/);
+		if (receiverMatch) {
+			return receiverMatch[2]; // Return type name
+		}
+
+		return null;
+	} catch (error) {
+		return null;
+	}
+}
+
 function runCommand(cmd, options = {}) {
 	if (!options.silent) {
 		console.log(`$ ${cmd}`);
@@ -67,6 +86,18 @@ function parseCoverageData(output) {
 
 		if (!pkgName) continue; // Skip if no package name
 
+		// Skip generated code and non-production code
+		const shouldSkip =
+			// sqlc generated code (*.sql.go, db.go, models.go, querier.go)
+			(pkgName.startsWith('backend/model') &&
+				(fileName.endsWith('.sql.go') || fileName === 'db.go' || fileName === 'models.go' || fileName === 'querier.go')) ||
+			// PoC and migration tools (not production code)
+			pkgName.startsWith('cmd/');
+
+		if (shouldSkip) {
+			continue;
+		}
+
 		if (!packages.has(pkgName)) {
 			packages.set(pkgName, {
 				name: pkgName,
@@ -81,10 +112,16 @@ function parseCoverageData(output) {
 		pkg.coverages.push(parseFloat(coverage));
 
 		if (parseFloat(coverage) === 0.0) {
+			// Extract receiver type for methods
+			// Convert Go package path to file system path
+			const fsPath = relativePath.concat(fileName).join('/');
+			const receiverType = extractReceiverType(fsPath, lineNum);
+
 			pkg.uncovered.push({
 				file: fileName,
 				line: lineNum,
-				name: funcName
+				name: funcName,
+				receiver: receiverType
 			});
 		}
 	}
@@ -176,7 +213,8 @@ function displayReport(packages, totalCoverage, classification) {
 
 			for (const [file, fns] of byFile) {
 				for (const fn of fns) {
-					console.log(`  ${file}:${fn.line}`.padEnd(35) + `${fn.name}()`);
+					const displayName = fn.receiver ? `(${fn.receiver}).${fn.name}()` : `${fn.name}()`;
+					console.log(`  ${file}:${fn.line}`.padEnd(35) + displayName);
 				}
 			}
 			console.log('');

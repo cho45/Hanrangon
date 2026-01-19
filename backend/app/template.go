@@ -3,7 +3,6 @@ package app
 import (
 	"fmt"
 	"html/template"
-	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -289,25 +288,6 @@ func (t *Templates) Render(c echo.Context, name string, data interface{}) error 
 	err = tmpl.ExecuteTemplate(c.Response(), name, data)
 	if err != nil {
 		log.Printf("Template execution error (Render): %v", err)
-	}
-	return err
-}
-
-// RenderTo はio.Writerにテンプレートを描画（ヘッダー設定なし）
-func (t *Templates) RenderTo(w io.Writer, name string, data interface{}) error {
-	templates, _, err := t.getTemplates()
-	if err != nil {
-		return err
-	}
-
-	tmpl := templates[name]
-	if tmpl == nil {
-		return fmt.Errorf("template %s not found", name)
-	}
-
-	err = tmpl.ExecuteTemplate(w, name, data)
-	if err != nil {
-		log.Printf("Template execution error (RenderTo): %v", err)
 	}
 	return err
 }

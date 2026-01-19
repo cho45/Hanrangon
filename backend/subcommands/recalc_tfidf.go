@@ -50,51 +50,53 @@ func RecalcTFIDF(ctx context.Context, application app.App, args []string) error 
 	if !*similarityOnly {
 		log.Printf("Phase 1: Extracting terms and updating term counts for %d entries...", total)
 
-		query := "SELECT id, title, body FROM entries ORDER BY id ASC"
+		query := "SELECT id FROM entries ORDER BY id ASC"
 		rows, err := application.MainDB().QueryContext(ctx, query)
 		if err != nil {
 			return fmt.Errorf("failed to query entries: %w", err)
 		}
-		defer rows.Close()
-
-		const chunkSize = 100
-		var chunk []tfidf.UpdateEntry
-
-		count := 0
 		for rows.Next() {
-			count++
 			var id int64
-			var title, body string
-			if err := rows.Scan(&id, &title, &body); err != nil {
-				log.Printf("  Error scanning entry: %v", err)
-				continue
-			}
-
-			if !*dryRun {
-				chunk = append(chunk, tfidf.UpdateEntry{ID: id, Title: title, Body: body})
-				if len(chunk) >= chunkSize {
-					log.Printf("  [%d/%d] Processing chunk of %d entries (last id:%d %s)", count, total, len(chunk), id, title)
-					if err := application.Calculator().UpdateTFIDFs(ctx, chunk); err != nil {
-						log.Printf("  Error updating TF-IDFs for chunk: %v", err)
-					}
-					chunk = nil
-				}
-			} else {
-				log.Printf("  [%d/%d] (dry-run) Processing id:%d %s", count, total, id, title)
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				return fmt.Errorf("failed to scan entry id: %w", err)
 			}
 			entryIDs = append(entryIDs, id)
 		}
+		rows.Close()
 
-		// Process remaining chunk
-		if len(chunk) > 0 {
-			log.Printf("  [%d/%d] Processing remaining chunk of %d entries", count, total, len(chunk))
-			if err := application.Calculator().UpdateTFIDFs(ctx, chunk); err != nil {
-				log.Printf("  Error updating TF-IDFs for remaining chunk: %v", err)
+		const chunkSize = 100
+		count := 0
+		for i := 0; i < len(entryIDs); i += chunkSize {
+			end := i + chunkSize
+			if end > len(entryIDs) {
+				end = len(entryIDs)
 			}
-		}
+			chunkIDs := entryIDs[i:end]
+			var chunk []tfidf.UpdateEntry
 
-		if err := rows.Err(); err != nil {
-			return fmt.Errorf("error during row iteration: %w", err)
+			for _, id := range chunkIDs {
+				count++
+				var title, body string
+				err := application.MainDB().QueryRowContext(ctx, "SELECT title, body FROM entries WHERE id = ?", id).Scan(&title, &body)
+				if err != nil {
+					log.Printf("  Error fetching entry %d: %v", id, err)
+					continue
+				}
+
+				if !*dryRun {
+					chunk = append(chunk, tfidf.UpdateEntry{ID: id, Title: title, Body: body})
+				} else {
+					log.Printf("  [%d/%d] (dry-run) Processing id:%d %s", count, total, id, title)
+				}
+			}
+
+			if len(chunk) > 0 {
+				log.Printf("  [%d/%d] Processing chunk of %d entries", end, total, len(chunk))
+				if err := application.Calculator().UpdateTFIDFs(ctx, chunk); err != nil {
+					log.Printf("  Error updating TF-IDFs for chunk: %v", err)
+				}
+			}
 		}
 		log.Printf("Phase 1 completed. Processed %d entries.", count)
 	} else {

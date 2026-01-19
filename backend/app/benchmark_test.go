@@ -48,8 +48,8 @@ func BenchmarkHandleIndex(b *testing.B) {
 	env := setupBenchmark(b)
 	defer env.close()
 
-	// テストデータを準備
-	createBenchEntries(b, env, 10)
+	// テストデータを準備 (より現実に近い件数にする)
+	createBenchEntries(b, env, 100)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 
