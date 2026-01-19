@@ -40,4 +40,6 @@ var/cache/
 
 tmp/
 *.prof
+coverage.out
+coverage.html
 scripts/node_modules

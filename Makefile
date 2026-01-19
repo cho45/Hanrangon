@@ -1,7 +1,7 @@
 BINARY_NAME=hanrangon
 GO_TAGS=sqlite_math_functions
 
-.PHONY: all build test test-go test-go-profile bench admin-test generate generate-icons fmt clean postprocess-test setup watch run lint
+.PHONY: all build test test-go test-go-profile cover-check bench admin-test generate generate-icons fmt clean postprocess-test setup watch run lint
 
 all: build
 
@@ -42,6 +42,9 @@ test-go:
 
 test-go-profile:
 	node scripts/profile-go-test.js
+
+cover-check:
+	node scripts/coverage-check.js
 
 bench:
 	@go test -bench=. -benchmem -benchtime=1s -tags "$(GO_TAGS)" ./backend/app -run=^$$ 2>&1 | awk '/^goos:/ || /^goarch:/ || /^pkg:/ || /^cpu:/ {print} /^Benchmark/ {name=$$1} /^[ \t]+[0-9]/ && /ns\/op/ {print name, $$0} /^PASS$$/ || /^FAIL/ {print}'
