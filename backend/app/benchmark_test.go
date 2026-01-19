@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
@@ -10,6 +11,40 @@ import (
 	"github.com/cho45/hanrangon/backend/model/imagesdb"
 	"github.com/cho45/hanrangon/backend/model/maindb"
 )
+
+// preallocRecorder は事前確保されたバッファを持つ ResponseRecorder
+// pprof 結果から bytes.growSlice のノイズを除去するために使用
+type preallocRecorder struct {
+	Code   int
+	header http.Header
+	Body   *bytes.Buffer
+}
+
+func newPreallocRecorder(size int) *preallocRecorder {
+	return &preallocRecorder{
+		Code:   http.StatusOK,
+		header: make(http.Header),
+		Body:   bytes.NewBuffer(make([]byte, 0, size)),
+	}
+}
+
+func (r *preallocRecorder) Header() http.Header {
+	return r.header
+}
+
+func (r *preallocRecorder) Write(b []byte) (int, error) {
+	return r.Body.Write(b)
+}
+
+func (r *preallocRecorder) WriteHeader(code int) {
+	r.Code = code
+}
+
+func (r *preallocRecorder) Reset() {
+	r.Code = http.StatusOK
+	r.Body.Reset()
+	clear(r.header)
+}
 
 // setupBenchmark はベンチマーク用のテスト環境を準備する
 // testing.B.N ループ内で繰返し呼ばれないよう、b.Helper() を使用して外部で初期化する
@@ -53,11 +88,14 @@ func BenchmarkHandleIndex(b *testing.B) {
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 
+	// レスポンスサイズに十分な容量を事前確保（grow を回避）
+	rec := newPreallocRecorder(512 * 1024)
+
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		rec := httptest.NewRecorder()
+		rec.Reset()
 		env.server.ServeHTTP(rec, req)
 
 		if rec.Code != http.StatusOK {
@@ -88,12 +126,13 @@ func BenchmarkHandlePath(b *testing.B) {
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/"+entry.Path, nil)
+	rec := newPreallocRecorder(128 * 1024)
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		rec := httptest.NewRecorder()
+		rec.Reset()
 		env.server.ServeHTTP(rec, req)
 
 		if rec.Code != http.StatusOK {
@@ -123,6 +162,9 @@ func BenchmarkHandleOGP(b *testing.B) {
 		b.Fatalf("failed to create entry: %v", err)
 	}
 
+	// OGP 画像は約 100KB 程度
+	rec := newPreallocRecorder(256 * 1024)
+
 	b.ResetTimer()
 	b.ReportAllocs()
 
@@ -130,7 +172,7 @@ func BenchmarkHandleOGP(b *testing.B) {
 		// キャッシュを無効化するために毎回 Cache-Control: no-cache を設定
 		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/images/ogp/%d", entry.ID), nil)
 		req.Header.Set("Cache-Control", "no-cache")
-		rec := httptest.NewRecorder()
+		rec.Reset()
 		env.server.ServeHTTP(rec, req)
 
 		if rec.Code != http.StatusOK {
@@ -196,12 +238,13 @@ func BenchmarkHandleStatic(b *testing.B) {
 
 	// 実際に存在する静的ファイルのパスを使用
 	req := httptest.NewRequest(http.MethodGet, "/images/favicon.ico", nil)
+	rec := newPreallocRecorder(64 * 1024)
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		rec := httptest.NewRecorder()
+		rec.Reset()
 		env.server.ServeHTTP(rec, req)
 
 		if rec.Code != http.StatusOK {

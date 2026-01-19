@@ -1,14 +1,94 @@
 package view
 
 import (
+	"bytes"
 	"encoding/json"
 	"encoding/xml"
 	"html/template"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cho45/hanrangon/backend/model/maindb"
 )
+
+// JSON-LD 用の構造体定義（固定部分をキャッシュして効率化）
+type blogPostingJSONLD struct {
+	Context          string          `json:"@context"`
+	Type             string          `json:"@type"`
+	MainEntityOfPage json.RawMessage `json:"mainEntityOfPage"`
+	Headline         string          `json:"headline"`
+	Description      string          `json:"description"`
+	Image            json.RawMessage `json:"image"`
+	Author           json.RawMessage `json:"author"`
+	Publisher        json.RawMessage `json:"publisher"`
+	DatePublished    string          `json:"datePublished"`
+	DateModified     string          `json:"dateModified"`
+}
+
+type mainEntityOfPage struct {
+	Type string `json:"@type"`
+	ID   string `json:"@id"`
+}
+
+// 固定部分を事前にシリアライズしてキャッシュ
+var (
+	jsonLDImage     json.RawMessage
+	jsonLDAuthor    json.RawMessage
+	jsonLDPublisher json.RawMessage
+)
+
+// JSON エンコード用バッファプール
+var jsonBufPool = sync.Pool{
+	New: func() any {
+		return bytes.NewBuffer(make([]byte, 0, 512))
+	},
+}
+
+func init() {
+	jsonLDImage, _ = json.Marshal(map[string]any{
+		"@type":  "ImageObject",
+		"url":    "https://www.lowreal.net/images/logo.png",
+		"width":  189,
+		"height": 105,
+	})
+	jsonLDAuthor, _ = json.Marshal(map[string]any{
+		"@type": "Person",
+		"name":  "cho45",
+		"url":   "https://www.lowreal.net/",
+	})
+	jsonLDPublisher, _ = json.Marshal(map[string]any{
+		"@type": "Organization",
+		"name":  "cho45",
+		"logo": map[string]any{
+			"@type":  "ImageObject",
+			"url":    "https://www.lowreal.net/images/logo.png",
+			"width":  189,
+			"height": 105,
+		},
+	})
+}
+
+// marshalJSONLD は blogPostingJSONLD を JSON 文字列に変換する（sync.Pool を使用）
+func marshalJSONLD(data *blogPostingJSONLD) string {
+	buf := jsonBufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+
+	enc := json.NewEncoder(buf)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(data)
+
+	// Encode は末尾に改行を追加するので除去
+	b := buf.Bytes()
+	if len(b) > 0 && b[len(b)-1] == '\n' {
+		b = b[:len(b)-1]
+	}
+
+	// string() でコピーしてからバッファを返却（1 alloc）
+	result := string(b)
+	jsonBufPool.Put(buf)
+	return result
+}
 
 // LayoutData holds data for the layout template
 type LayoutData struct {
@@ -58,40 +138,26 @@ func NewViewEntry(e maindb.Entry, baseURL string) ViewEntry {
 	}
 
 	canonicalURL := strings.TrimSuffix(baseURL, "/") + "/" + e.Path
-	jsonLD := map[string]any{
-		"@context": "https://schema.org",
-		"@type":    "BlogPosting",
-		"mainEntityOfPage": map[string]any{
-			"@type": "@WebPage",
-			"@id":   canonicalURL,
-		},
-		"headline":    displayTitle,
-		"description": e.Summary,
-		"image": map[string]any{
-			"@type":  "ImageObject",
-			"url":    "https://www.lowreal.net/images/logo.png",
-			"width":  189,
-			"height": 105,
-		},
-		"author": map[string]any{
-			"@type": "Person",
-			"name":  "cho45",
-			"url":   "https://www.lowreal.net/",
-		},
-		"publisher": map[string]any{
-			"@type": "Organization",
-			"name":  "cho45",
-			"logo": map[string]any{
-				"@type":  "ImageObject",
-				"url":    "https://www.lowreal.net/images/logo.png",
-				"width":  189,
-				"height": 105,
-			},
-		},
-		"datePublished": e.CreatedAt.UTC().Format(time.RFC3339),
-		"dateModified":  e.ModifiedAt.UTC().Format(time.RFC3339),
-	}
-	jsonLDBody, _ := json.Marshal(jsonLD)
+
+	// mainEntityOfPage を個別にシリアライズ
+	mainEntity, _ := json.Marshal(mainEntityOfPage{
+		Type: "WebPage",
+		ID:   canonicalURL,
+	})
+
+	// 構造体を使って JSON-LD を生成（固定部分はキャッシュ済み、sync.Pool でバッファ再利用）
+	jsonLDStr := marshalJSONLD(&blogPostingJSONLD{
+		Context:          "https://schema.org",
+		Type:             "BlogPosting",
+		MainEntityOfPage: mainEntity,
+		Headline:         displayTitle,
+		Description:      e.Summary,
+		Image:            jsonLDImage,
+		Author:           jsonLDAuthor,
+		Publisher:        jsonLDPublisher,
+		DatePublished:    e.CreatedAt.UTC().Format(time.RFC3339),
+		DateModified:     e.ModifiedAt.UTC().Format(time.RFC3339),
+	})
 
 	return ViewEntry{
 		Entry:             e,
@@ -108,7 +174,7 @@ func NewViewEntry(e maindb.Entry, baseURL string) ViewEntry {
 		ModifiedAtRFC3339: e.ModifiedAt.UTC().Format(time.RFC3339),
 		FormattedBodyHTML: template.HTML(e.FormattedBody),
 		IsShortEntry:      isShortEntry,
-		JSONLD:            template.JS(jsonLDBody),
+		JSONLD:            template.JS(jsonLDStr),
 	}
 }
 

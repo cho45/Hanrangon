@@ -1,7 +1,7 @@
 BINARY_NAME=hanrangon
 GO_TAGS=sqlite_math_functions
 
-.PHONY: all build test test-go test-go-profile cover-check bench admin-test generate generate-icons fmt clean postprocess-test setup watch run lint
+.PHONY: all build test test-go test-go-profile cover-check bench bench-profile admin-test generate generate-icons fmt clean postprocess-test setup watch run lint
 
 all: build
 
@@ -48,6 +48,16 @@ cover-check:
 
 bench:
 	@go test -bench=. -benchmem -benchtime=1s -tags "$(GO_TAGS)" ./backend/app -run=^$$ 2>&1 | node scripts/benchmark.js
+
+bench-profile:
+	@mkdir -p var/profile
+	go test -bench=$(or $(BENCH),BenchmarkHandleIndex) -benchmem -benchtime=3s -tags "$(GO_TAGS)" ./backend/app -run=^$$ \
+		-cpuprofile=var/profile/cpu.prof \
+		-memprofile=var/profile/mem.prof
+	@echo "\n=== CPU Profile (top 30) ==="
+	@go tool pprof -top -nodecount=30 var/profile/cpu.prof
+	@echo "\n=== Memory Profile (top 30) ==="
+	@go tool pprof -top -nodecount=30 var/profile/mem.prof
 
 generate: generate-sql generate-types
 
