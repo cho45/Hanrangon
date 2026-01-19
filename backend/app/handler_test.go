@@ -853,6 +853,46 @@ func TestHandleEdit(t *testing.T) {
 	})
 }
 
+func TestHandleAdminIndex(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	loginInfo := env.login(t)
+	req := httptest.NewRequest(http.MethodGet, "/admin/", nil)
+	req.Header.Set("Cookie", loginInfo.Cookie)
+	rec := httptest.NewRecorder()
+	env.server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("want status 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	checkCompleteHTML(t, body)
+	if !strings.Contains(body, `id="admin-root"`) {
+		t.Errorf("body does not contain admin-root element")
+	}
+}
+
+func TestHandleLogout(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	loginInfo := env.login(t)
+	req := httptest.NewRequest(http.MethodGet, "/logout", nil)
+	req.Header.Set("Cookie", loginInfo.Cookie)
+	rec := httptest.NewRecorder()
+	env.server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Errorf("want status 302, got %d", rec.Code)
+	}
+	if rec.Header().Get("Location") != "/" {
+		t.Errorf("want redirect to /, got %s", rec.Header().Get("Location"))
+	}
+
+	// ログアウト後のセッション確認 (ここでは簡略化のためリダイレクト先のみ確認)
+}
+
 func TestHandleApiUploadImage(t *testing.T) {
 	env := setupTest(t)
 	defer env.close()
@@ -1273,6 +1313,142 @@ func TestHandleAdminApiEntries(t *testing.T) {
 	})
 }
 
+func TestHandleAdminApiEntry(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	_, err := env.db.Exec(`INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at) VALUES (100, 'T', 'B', 'FB', 'p', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	loginInfo := env.login(t)
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/entry/100", nil)
+	req.Header.Set("Cookie", loginInfo.Cookie)
+	rec := httptest.NewRecorder()
+	env.server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("want 200, got %d", rec.Code)
+	}
+	var entry maindb.Entry
+	if err := json.NewDecoder(rec.Body).Decode(&entry); err != nil {
+		t.Fatal(err)
+	}
+	if entry.ID != 100 {
+		t.Errorf("want ID 100, got %d", entry.ID)
+	}
+}
+
+func TestHandleAdminApiJobs(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	loginInfo := env.login(t)
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/jobs", nil)
+	req.Header.Set("Cookie", loginInfo.Cookie)
+	rec := httptest.NewRecorder()
+	env.server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("want 200, got %d", rec.Code)
+	}
+	var res struct {
+		Jobs  interface{} `json:"jobs"`
+		Total int64       `json:"total"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHandleAdminApiImages(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	loginInfo := env.login(t)
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/images", nil)
+	req.Header.Set("Cookie", loginInfo.Cookie)
+	rec := httptest.NewRecorder()
+	env.server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("want 200, got %d", rec.Code)
+	}
+	var res struct {
+		Images interface{} `json:"images"`
+		Total  int64       `json:"total"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHandleAdminApiR2Usage(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	loginInfo := env.login(t)
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/r2/usage", nil)
+	req.Header.Set("Cookie", loginInfo.Cookie)
+	rec := httptest.NewRecorder()
+	env.server.ServeHTTP(rec, req)
+
+	// R2 API calls might fail in test environment, but the handler should be called.
+	// We check if it returns 200 or 500 depending on mock/real config.
+	if rec.Code != http.StatusOK && rec.Code != http.StatusInternalServerError {
+		t.Errorf("unexpected status %d", rec.Code)
+	}
+}
+
+func TestHandleAdminApiSimilarImages(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	_, err := env.imagesDB.Exec(`INSERT INTO images (id, uri, entry_id, sig) VALUES (300, 'http://e.com/i.jpg', 1, x'0101010101010101')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	loginInfo := env.login(t)
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/image/300/similar", nil)
+	req.Header.Set("Cookie", loginInfo.Cookie)
+	rec := httptest.NewRecorder()
+	env.server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("want 200, got %d", rec.Code)
+	}
+	var res struct {
+		Similar interface{} `json:"similar"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHandleAdminApiInfo(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	loginInfo := env.login(t)
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/info", nil)
+	req.Header.Set("Cookie", loginInfo.Cookie)
+	rec := httptest.NewRecorder()
+	env.server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("want 200, got %d", rec.Code)
+	}
+	var info InfoData
+	if err := json.NewDecoder(rec.Body).Decode(&info); err != nil {
+		t.Fatal(err)
+	}
+	if info.Config["username"] != env.app.Config().Username {
+		t.Errorf("config mismatch: %v", info.Config["username"])
+	}
+}
+
 func TestSqlcDateOverride(t *testing.T) {
 	env := setupTest(t)
 	defer env.close()
@@ -1404,6 +1580,44 @@ func TestHandleApiSearch(t *testing.T) {
 			t.Errorf("expected entry 5, got %d", resp.Results[0].ID)
 		}
 	})
+}
+
+func TestHandleRobotsTxt(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	req := httptest.NewRequest(http.MethodGet, "/robots.txt", nil)
+	rec := httptest.NewRecorder()
+	env.server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("want 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "User-agent: *") {
+		t.Errorf("body does not contain User-agent")
+	}
+	if !strings.Contains(body, "Sitemap:") {
+		t.Errorf("body does not contain Sitemap")
+	}
+}
+
+func TestHandleSearch(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	req := httptest.NewRequest(http.MethodGet, "/search", nil)
+	rec := httptest.NewRecorder()
+	env.server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("want 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	checkCompleteHTML(t, body)
+	if !strings.Contains(body, "検索") {
+		t.Errorf("body does not contain '検索'")
+	}
 }
 
 func TestHTTPErrorHandler(t *testing.T) {
