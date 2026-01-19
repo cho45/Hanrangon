@@ -10,11 +10,6 @@ import (
 	"testing"
 
 	"github.com/cho45/hanrangon/backend/app"
-	"github.com/cho45/hanrangon/backend/model"
-	"github.com/cho45/hanrangon/backend/model/imagesdb"
-	"github.com/cho45/hanrangon/backend/model/maindb"
-	"github.com/cho45/hanrangon/backend/model/tfidfdb"
-	"github.com/cho45/hanrangon/backend/model/workerdb"
 	"github.com/cho45/hanrangon/backend/tfidf"
 	"github.com/cho45/hanrangon/internal/testutil"
 )
@@ -40,7 +35,7 @@ func createSolidTestImage(t *testing.T, path string, c color.RGBA) {
 func TestIndexImagesJob_SimilarityCache(t *testing.T) {
 	dbs := testutil.SetupAllDBs(t)
 	defer dbs.Close()
-	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
+	db, tfidfDB, imagesDB := dbs.MainDB.DB, dbs.TFIDFDB.DB, dbs.ImagesDB.DB
 
 	tmpDir := t.TempDir()
 	config := app.LoadConfig()
@@ -48,16 +43,11 @@ func TestIndexImagesJob_SimilarityCache(t *testing.T) {
 	config.UploadURLPrefix = "/images/entry/"
 	config.UploadDir = tmpDir
 
-	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
-	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
-	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
-	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+	calc, _ := tfidf.NewCalculator(tfidfDB, dbs.TFIDFDB.Q, db, dbs.MainDB.Q)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, dbs.TFIDFDB.Q)
+	searcher := tfidf.NewSearcher(tfidfDB, dbs.TFIDFDB.Q, calc)
 
-	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfDBWrapper.Q, db, mainDBWrapper.Q)
-	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfDBWrapper.Q)
-	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
-
-	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, calc, sim, searcher, nil)
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, calc, sim, searcher, nil)
 	job := NewIndexImagesJob(application)
 
 	ctx := context.Background()

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/cho45/hanrangon/backend/model"
 	"github.com/cho45/hanrangon/backend/model/imagesdb"
 	"github.com/cho45/hanrangon/backend/model/maindb"
 	"github.com/cho45/hanrangon/backend/model/tfidfdb"
@@ -48,29 +49,25 @@ var (
 
 // DBs holds all test databases and their query objects
 type DBs struct {
-	Main          *sql.DB
-	MainQueries   maindb.Querier
-	TFIDF         *sql.DB
-	TFIDFQueries  tfidfdb.Querier
-	Worker        *sql.DB
-	WorkerQueries workerdb.Querier
-	Images        *sql.DB
-	ImagesQueries imagesdb.Querier
+	MainDB   *model.Database[maindb.Querier]
+	TFIDFDB  *model.Database[tfidfdb.Querier]
+	WorkerDB *model.Database[workerdb.Querier]
+	ImagesDB *model.Database[imagesdb.Querier]
 }
 
 // Close closes all databases
 func (d *DBs) Close() {
-	if d.Main != nil {
-		d.Main.Close()
+	if d.MainDB != nil {
+		d.MainDB.Close()
 	}
-	if d.TFIDF != nil {
-		d.TFIDF.Close()
+	if d.TFIDFDB != nil {
+		d.TFIDFDB.Close()
 	}
-	if d.Worker != nil {
-		d.Worker.Close()
+	if d.WorkerDB != nil {
+		d.WorkerDB.Close()
 	}
-	if d.Images != nil {
-		d.Images.Close()
+	if d.ImagesDB != nil {
+		d.ImagesDB.Close()
 	}
 }
 
@@ -138,19 +135,15 @@ func newTestDB(t *testing.T, typ dbType) *sql.DB {
 func SetupAllDBs(t *testing.T) *DBs {
 	t.Helper()
 
-	mainDB := newTestDB(t, mainDB)
-	tfidfDB := newTestDB(t, tfidfDB)
-	workerDB := newTestDB(t, workerDB)
-	imagesDB := newTestDB(t, imagesDB)
+	mainDBConn := newTestDB(t, mainDB)
+	tfidfDBConn := newTestDB(t, tfidfDB)
+	workerDBConn := newTestDB(t, workerDB)
+	imagesDBConn := newTestDB(t, imagesDB)
 
 	return &DBs{
-		Main:          mainDB,
-		MainQueries:   maindb.New(mainDB),
-		TFIDF:         tfidfDB,
-		TFIDFQueries:  tfidfdb.New(tfidfDB),
-		Worker:        workerDB,
-		WorkerQueries: workerdb.New(workerDB),
-		Images:        imagesDB,
-		ImagesQueries: imagesdb.New(imagesDB),
+		MainDB:   model.NewDatabase[maindb.Querier](mainDBConn, func(db model.DBTX) maindb.Querier { return maindb.New(db) }),
+		TFIDFDB:  model.NewDatabase[tfidfdb.Querier](tfidfDBConn, func(db model.DBTX) tfidfdb.Querier { return tfidfdb.New(db) }),
+		WorkerDB: model.NewDatabase[workerdb.Querier](workerDBConn, func(db model.DBTX) workerdb.Querier { return workerdb.New(db) }),
+		ImagesDB: model.NewDatabase[imagesdb.Querier](imagesDBConn, func(db model.DBTX) imagesdb.Querier { return imagesdb.New(db) }),
 	}
 }

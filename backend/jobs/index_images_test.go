@@ -13,11 +13,6 @@ import (
 
 	"github.com/cho45/hanrangon/backend/app"
 	"github.com/cho45/hanrangon/backend/jobqueue"
-	"github.com/cho45/hanrangon/backend/model"
-	"github.com/cho45/hanrangon/backend/model/imagesdb"
-	"github.com/cho45/hanrangon/backend/model/maindb"
-	"github.com/cho45/hanrangon/backend/model/tfidfdb"
-	"github.com/cho45/hanrangon/backend/model/workerdb"
 	"github.com/cho45/hanrangon/backend/tfidf"
 	"github.com/cho45/hanrangon/internal/testutil"
 	_ "github.com/mattn/go-sqlite3"
@@ -88,7 +83,7 @@ func TestIndexImagesJob_Execute(t *testing.T) {
 	// Setup databases
 	dbs := testutil.SetupAllDBs(t)
 	defer dbs.Close()
-	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
+	db, tfidfDB, imagesDB := dbs.MainDB.DB, dbs.TFIDFDB.DB, dbs.ImagesDB.DB
 
 	tmpDir, _ := os.MkdirTemp("", "hanrangon-index-test")
 	defer os.RemoveAll(tmpDir)
@@ -98,25 +93,19 @@ func TestIndexImagesJob_Execute(t *testing.T) {
 	config.UploadURLPrefix = "/images/entry/"
 	config.UploadDir = tmpDir
 
-	// Database wrappers
-	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
-	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
-	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
-	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
-
 	// TF-IDF calculator and similarity calculator
-	calc, err := tfidf.NewCalculator(tfidfDB, tfidfDBWrapper.Q, db, mainDBWrapper.Q)
+	calc, err := tfidf.NewCalculator(tfidfDB, dbs.TFIDFDB.Q, db, dbs.MainDB.Q)
 	if err != nil {
 		t.Fatalf("failed to create calculator: %v", err)
 	}
-	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfDBWrapper.Q)
-	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, dbs.TFIDFDB.Q)
+	searcher := tfidf.NewSearcher(tfidfDB, dbs.TFIDFDB.Q, calc)
 
 	// Create job queue
 	registry := jobqueue.NewRegistry()
-	worker := jobqueue.NewWorker(workerDBWrapper, workerDBWrapper.Q, registry)
+	worker := jobqueue.NewWorker(dbs.WorkerDB, dbs.WorkerDB.Q, registry)
 
-	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, calc, sim, searcher, worker)
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, calc, sim, searcher, worker)
 	job := NewIndexImagesJob(application)
 
 	// Create a dummy image
@@ -174,7 +163,7 @@ func TestIndexImagesJob_HandleLoadFailure(t *testing.T) {
 	// Setup databases
 	dbs := testutil.SetupAllDBs(t)
 	defer dbs.Close()
-	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
+	db, tfidfDB, imagesDB := dbs.MainDB.DB, dbs.TFIDFDB.DB, dbs.ImagesDB.DB
 
 	tmpDir, _ := os.MkdirTemp("", "hanrangon-index-test")
 	defer os.RemoveAll(tmpDir)
@@ -184,20 +173,14 @@ func TestIndexImagesJob_HandleLoadFailure(t *testing.T) {
 	config.UploadURLPrefix = "/images/entry/"
 	config.UploadDir = tmpDir
 
-	// Database wrappers
-	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
-	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
-	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
-	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
-
-	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfDBWrapper.Q, db, mainDBWrapper.Q)
-	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfDBWrapper.Q)
-	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
+	calc, _ := tfidf.NewCalculator(tfidfDB, dbs.TFIDFDB.Q, db, dbs.MainDB.Q)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, dbs.TFIDFDB.Q)
+	searcher := tfidf.NewSearcher(tfidfDB, dbs.TFIDFDB.Q, calc)
 
 	registry := jobqueue.NewRegistry()
-	worker := jobqueue.NewWorker(workerDBWrapper, workerDBWrapper.Q, registry)
+	worker := jobqueue.NewWorker(dbs.WorkerDB, dbs.WorkerDB.Q, registry)
 
-	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, calc, sim, searcher, worker)
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, calc, sim, searcher, worker)
 	job := NewIndexImagesJob(application)
 
 	ctx := context.Background()
@@ -236,7 +219,7 @@ func TestIndexImagesJob_HandleLoadFailure(t *testing.T) {
 func TestIndexImagesJob_TwoPhase(t *testing.T) {
 	dbs := testutil.SetupAllDBs(t)
 	defer dbs.Close()
-	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
+	db, tfidfDB, imagesDB := dbs.MainDB.DB, dbs.TFIDFDB.DB, dbs.ImagesDB.DB
 
 	tmpDir := t.TempDir()
 	config := app.LoadConfig()
@@ -244,19 +227,13 @@ func TestIndexImagesJob_TwoPhase(t *testing.T) {
 	config.UploadURLPrefix = "/images/entry/"
 	config.UploadDir = tmpDir
 
-	// Database wrappers
-	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
-	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
-	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
-	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
-
-	calc, _ := tfidf.NewCalculator(tfidfDB, tfidfDBWrapper.Q, db, mainDBWrapper.Q)
-	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfDBWrapper.Q)
-	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
+	calc, _ := tfidf.NewCalculator(tfidfDB, dbs.TFIDFDB.Q, db, dbs.MainDB.Q)
+	sim := tfidf.NewSimilarityCalculator(tfidfDB, dbs.TFIDFDB.Q)
+	searcher := tfidf.NewSearcher(tfidfDB, dbs.TFIDFDB.Q, calc)
 	registry := jobqueue.NewRegistry()
-	worker := jobqueue.NewWorker(workerDBWrapper, workerDBWrapper.Q, registry)
+	worker := jobqueue.NewWorker(dbs.WorkerDB, dbs.WorkerDB.Q, registry)
 
-	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, calc, sim, searcher, worker)
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, calc, sim, searcher, worker)
 	job := NewIndexImagesJob(application)
 
 	// Create a dummy image
@@ -354,16 +331,10 @@ func TestIndexImagesJob_TwoPhase(t *testing.T) {
 func TestIndexImagesJob_SyncRobustness(t *testing.T) {
 	dbs := testutil.SetupAllDBs(t)
 	defer dbs.Close()
-	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
+	db, imagesDB := dbs.MainDB.DB, dbs.ImagesDB.DB
 
 	config := app.LoadConfig()
-	// Database wrappers
-	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
-	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
-	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
-	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
-
-	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, nil, nil, nil, nil)
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, nil, nil, nil, nil)
 	job := NewIndexImagesJob(application)
 
 	ctx := context.Background()
@@ -467,7 +438,7 @@ func TestIndexImagesJob_SyncRobustness(t *testing.T) {
 func TestIndexImagesJob_CorruptImage(t *testing.T) {
 	dbs := testutil.SetupAllDBs(t)
 	defer dbs.Close()
-	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
+	db, imagesDB := dbs.MainDB.DB, dbs.ImagesDB.DB
 
 	tmpDir := t.TempDir()
 	config := app.LoadConfig()
@@ -475,13 +446,7 @@ func TestIndexImagesJob_CorruptImage(t *testing.T) {
 	config.UploadURLPrefix = "/images/entry/"
 	config.UploadDir = tmpDir
 
-	// Database wrappers
-	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
-	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
-	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
-	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
-
-	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, nil, nil, nil, nil)
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, nil, nil, nil, nil)
 	job := NewIndexImagesJob(application)
 
 	// Create a corrupt image file (just some random text)
@@ -519,7 +484,7 @@ func TestIndexImagesJob_CorruptImage(t *testing.T) {
 func TestIndexImagesJob_Rollback(t *testing.T) {
 	dbs := testutil.SetupAllDBs(t)
 	defer dbs.Close()
-	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
+	db, imagesDB := dbs.MainDB.DB, dbs.ImagesDB.DB
 
 	tmpDir := t.TempDir()
 	config := app.LoadConfig()
@@ -527,13 +492,7 @@ func TestIndexImagesJob_Rollback(t *testing.T) {
 	config.UploadURLPrefix = "/images/entry/"
 	config.UploadDir = tmpDir
 
-	// Database wrappers
-	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
-	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
-	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
-	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
-
-	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, nil, nil, nil, nil)
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, nil, nil, nil, nil)
 	job := NewIndexImagesJob(application)
 
 	ctx := context.Background()
@@ -618,7 +577,7 @@ func TestIndexImagesJob_Rollback(t *testing.T) {
 func TestIndexImagesJob_Overwrite(t *testing.T) {
 	dbs := testutil.SetupAllDBs(t)
 	defer dbs.Close()
-	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
+	db, imagesDB := dbs.MainDB.DB, dbs.ImagesDB.DB
 
 	tmpDir := t.TempDir()
 	config := app.LoadConfig()
@@ -626,13 +585,7 @@ func TestIndexImagesJob_Overwrite(t *testing.T) {
 	config.UploadURLPrefix = "/images/entry/"
 	config.UploadDir = tmpDir
 
-	// Database wrappers
-	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
-	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
-	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
-	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
-
-	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, nil, nil, nil, nil)
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, nil, nil, nil, nil)
 	job := NewIndexImagesJob(application)
 
 	imgName := "test.png"

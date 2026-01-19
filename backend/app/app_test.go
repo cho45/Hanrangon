@@ -12,10 +12,7 @@ import (
 	"time"
 
 	"github.com/cho45/hanrangon/backend/jobqueue"
-	"github.com/cho45/hanrangon/backend/model"
-	"github.com/cho45/hanrangon/backend/model/imagesdb"
 	"github.com/cho45/hanrangon/backend/model/maindb"
-	"github.com/cho45/hanrangon/backend/model/tfidfdb"
 	"github.com/cho45/hanrangon/backend/model/workerdb"
 	"github.com/cho45/hanrangon/backend/tfidf"
 	"github.com/cho45/hanrangon/internal/testutil"
@@ -34,7 +31,6 @@ func setupTest(t *testing.T) *testEnv {
 	testutil.SetupEnvironment() // これを追加
 
 	dbs := testutil.SetupAllDBs(t)
-	db, tfidfDB, workerDB, imagesDB := dbs.Main, dbs.TFIDF, dbs.Worker, dbs.Images
 
 	tmpDir, err := os.MkdirTemp("", "hanrangon-upload-test")
 	if err != nil {
@@ -49,25 +45,19 @@ func setupTest(t *testing.T) *testEnv {
 	config.SessionSecret = "testsecret"
 	config.BaseURL = "http://localhost:5555"
 
-	// Database wrappers
-	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
-	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
-	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
-	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
-
 	// TF-IDF calculator and similarity calculator
-	calc, err := tfidf.NewCalculator(tfidfDB, tfidfDBWrapper.Q, db, mainDBWrapper.Q)
+	calc, err := tfidf.NewCalculator(dbs.TFIDFDB.DB, dbs.TFIDFDB.Q, dbs.MainDB.DB, dbs.MainDB.Q)
 	if err != nil {
 		t.Fatalf("failed to create calculator: %v", err)
 	}
-	sim := tfidf.NewSimilarityCalculator(tfidfDB, tfidfDBWrapper.Q)
-	searcher := tfidf.NewSearcher(tfidfDB, tfidfDBWrapper.Q, calc)
+	sim := tfidf.NewSimilarityCalculator(dbs.TFIDFDB.DB, dbs.TFIDFDB.Q)
+	searcher := tfidf.NewSearcher(dbs.TFIDFDB.DB, dbs.TFIDFDB.Q, calc)
 
 	// Create job queue for testing
 	registry := jobqueue.NewRegistry()
-	worker := jobqueue.NewWorker(workerDBWrapper, workerDBWrapper.Q, registry)
+	worker := jobqueue.NewWorker(dbs.WorkerDB, dbs.WorkerDB.Q, registry)
 
-	application := NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, calc, sim, searcher, worker)
+	application := NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, calc, sim, searcher, worker)
 	e := NewServer(application)
 
 	// テスト用のエラーハンドラーを設定（詳細なエラーメッセージを出力）
@@ -92,10 +82,10 @@ func setupTest(t *testing.T) *testEnv {
 
 	return &testEnv{
 		app:       application,
-		db:        db,
-		tfidfDB:   tfidfDB,
-		workerDB:  workerDB,
-		imagesDB:  imagesDB,
+		db:        dbs.MainDB.DB,
+		tfidfDB:   dbs.TFIDFDB.DB,
+		workerDB:  dbs.WorkerDB.DB,
+		imagesDB:  dbs.ImagesDB.DB,
 		server:    e,
 		uploadDir: tmpDir,
 	}

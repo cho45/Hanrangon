@@ -5,11 +5,6 @@ import (
 	"testing"
 
 	"github.com/cho45/hanrangon/backend/app"
-	"github.com/cho45/hanrangon/backend/model"
-	"github.com/cho45/hanrangon/backend/model/imagesdb"
-	"github.com/cho45/hanrangon/backend/model/maindb"
-	"github.com/cho45/hanrangon/backend/model/tfidfdb"
-	"github.com/cho45/hanrangon/backend/model/workerdb"
 	"github.com/cho45/hanrangon/internal/testutil"
 )
 
@@ -18,16 +13,11 @@ func TestReformat(t *testing.T) {
 	defer dbs.Close()
 
 	config := app.LoadConfig()
-	mainDBWrapper := model.NewDatabase[maindb.Querier](dbs.Main, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
-	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](dbs.TFIDF, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
-	workerDBWrapper := model.NewDatabase[workerdb.Querier](dbs.Worker, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
-	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](dbs.Images, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
-
-	application := app.NewApp(config, mainDBWrapper, tfidfDBWrapper, workerDBWrapper, imagesDBWrapper, nil, nil, nil, nil)
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, nil, nil, nil, nil)
 	ctx := context.Background()
 
 	// テストデータの準備 (古いフォーマット結果を持つエントリ)
-	_, err := dbs.Main.Exec(`
+	_, err := dbs.MainDB.Exec(`
 		INSERT INTO entries (id, path, title, body, formatted_body, format, date, created_at, modified_at)
 		VALUES
 		(1, '2024/01/01/1', 'Title 1', 'Body 1', 'OLD FORMAT 1', 'Markdown', '2024-01-01', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
@@ -52,7 +42,7 @@ func TestReformat(t *testing.T) {
 
 		var formattedBody string
 		// ID 1 は更新されているはず (Postprocess が走るので単純な文字列一致ではない可能性があるが、OLD ではなくなっているはず)
-		err = dbs.Main.QueryRow("SELECT formatted_body FROM entries WHERE id = 1").Scan(&formattedBody)
+		err = dbs.MainDB.DB.QueryRow("SELECT formatted_body FROM entries WHERE id = 1").Scan(&formattedBody)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -61,7 +51,7 @@ func TestReformat(t *testing.T) {
 		}
 
 		// ID 2 は更新されていないはず
-		err = dbs.Main.QueryRow("SELECT formatted_body FROM entries WHERE id = 2").Scan(&formattedBody)
+		err = dbs.MainDB.DB.QueryRow("SELECT formatted_body FROM entries WHERE id = 2").Scan(&formattedBody)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -77,7 +67,7 @@ func TestReformat(t *testing.T) {
 		}
 
 		var count int
-		err = dbs.Main.QueryRow("SELECT COUNT(*) FROM entries WHERE formatted_body LIKE 'OLD FORMAT%'").Scan(&count)
+		err = dbs.MainDB.DB.QueryRow("SELECT COUNT(*) FROM entries WHERE formatted_body LIKE 'OLD FORMAT%'").Scan(&count)
 		if err != nil {
 			t.Fatal(err)
 		}

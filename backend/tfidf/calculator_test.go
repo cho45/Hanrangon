@@ -13,7 +13,7 @@ import (
 func TestExtractTerms(t *testing.T) {
 	dbs := testutil.SetupAllDBs(t)
 	defer dbs.Close()
-	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.Main, dbs.MainQueries, dbs.TFIDF, dbs.TFIDFQueries
+	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.MainDB.DB, dbs.MainDB.Q, dbs.TFIDFDB.DB, dbs.TFIDFDB.Q
 
 	calc, err := NewCalculator(tfidfDB, tfidfQueries, dataDB, dataQueries)
 	if err != nil {
@@ -76,7 +76,7 @@ func TestExtractTerms(t *testing.T) {
 func TestUpdateTFIDF(t *testing.T) {
 	dbs := testutil.SetupAllDBs(t)
 	defer dbs.Close()
-	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.Main, dbs.MainQueries, dbs.TFIDF, dbs.TFIDFQueries
+	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.MainDB.DB, dbs.MainDB.Q, dbs.TFIDFDB.DB, dbs.TFIDFDB.Q
 
 	calc, err := NewCalculator(tfidfDB, tfidfQueries, dataDB, dataQueries)
 	if err != nil {
@@ -139,7 +139,7 @@ func TestUpdateTFIDF(t *testing.T) {
 func TestRecalculateTFIDFValues(t *testing.T) {
 	dbs := testutil.SetupAllDBs(t)
 	defer dbs.Close()
-	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.Main, dbs.MainQueries, dbs.TFIDF, dbs.TFIDFQueries
+	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.MainDB.DB, dbs.MainDB.Q, dbs.TFIDFDB.DB, dbs.TFIDFDB.Q
 
 	calc, _ := NewCalculator(tfidfDB, tfidfQueries, dataDB, dataQueries)
 	calc.DFMaxThresholdRate = 0.8
@@ -209,7 +209,7 @@ func TestRecalculateTFIDFValues(t *testing.T) {
 func TestTFIDFThresholding(t *testing.T) {
 	dbs := testutil.SetupAllDBs(t)
 	defer dbs.Close()
-	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.Main, dbs.MainQueries, dbs.TFIDF, dbs.TFIDFQueries
+	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.MainDB.DB, dbs.MainDB.Q, dbs.TFIDFDB.DB, dbs.TFIDFDB.Q
 
 	calc, _ := NewCalculator(tfidfDB, tfidfQueries, dataDB, dataQueries)
 	calc.DFMaxThresholdRate = 0.8
@@ -275,7 +275,7 @@ func TestTFIDFThresholding(t *testing.T) {
 func TestExtractTermsEdgeCases(t *testing.T) {
 	dbs := testutil.SetupAllDBs(t)
 	defer dbs.Close()
-	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.Main, dbs.MainQueries, dbs.TFIDF, dbs.TFIDFQueries
+	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.MainDB.DB, dbs.MainDB.Q, dbs.TFIDFDB.DB, dbs.TFIDFDB.Q
 
 	calc, _ := NewCalculator(tfidfDB, tfidfQueries, dataDB, dataQueries)
 
@@ -340,7 +340,7 @@ func TestExtractTermsEdgeCases(t *testing.T) {
 func TestPromotionEdgeCases(t *testing.T) {
 	dbs := testutil.SetupAllDBs(t)
 	defer dbs.Close()
-	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.Main, dbs.MainQueries, dbs.TFIDF, dbs.TFIDFQueries
+	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.MainDB.DB, dbs.MainDB.Q, dbs.TFIDFDB.DB, dbs.TFIDFDB.Q
 
 	calc, _ := NewCalculator(tfidfDB, tfidfQueries, dataDB, dataQueries)
 	ctx := context.Background()
@@ -377,7 +377,7 @@ func TestPromotionEdgeCases(t *testing.T) {
 func TestUpdateDecrementsDF(t *testing.T) {
 	dbs := testutil.SetupAllDBs(t)
 	defer dbs.Close()
-	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.Main, dbs.MainQueries, dbs.TFIDF, dbs.TFIDFQueries
+	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.MainDB.DB, dbs.MainDB.Q, dbs.TFIDFDB.DB, dbs.TFIDFDB.Q
 
 	calc, _ := NewCalculator(tfidfDB, tfidfQueries, dataDB, dataQueries)
 	ctx := context.Background()
@@ -415,7 +415,7 @@ func TestUpdateDecrementsDF(t *testing.T) {
 func TestPromotionAfterDemotion(t *testing.T) {
 	dbs := testutil.SetupAllDBs(t)
 	defer dbs.Close()
-	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.Main, dbs.MainQueries, dbs.TFIDF, dbs.TFIDFQueries
+	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.MainDB.DB, dbs.MainDB.Q, dbs.TFIDFDB.DB, dbs.TFIDFDB.Q
 
 	calc, _ := NewCalculator(tfidfDB, tfidfQueries, dataDB, dataQueries)
 	ctx := context.Background()

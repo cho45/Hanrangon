@@ -42,7 +42,7 @@ func TestMarkJobCompleted_EdgeCases(t *testing.T) {
 			setupFn: func(ctx context.Context, env *workerTestEnv, jobID int64) {
 				// created_at と grabbed_at を同じ値に設定
 				now := time.Now()
-				_, err := env.DBs.Worker.Exec(
+				_, err := env.DBs.WorkerDB.Exec(
 					"UPDATE jobs SET created_at = ?, grabbed_at = ? WHERE id = ?",
 					now, now, jobID,
 				)
@@ -56,7 +56,7 @@ func TestMarkJobCompleted_EdgeCases(t *testing.T) {
 			setupFn: func(ctx context.Context, env *workerTestEnv, jobID int64) {
 				now := time.Now()
 				createdAt := now.Add(-1 * time.Millisecond)
-				_, err := env.DBs.Worker.Exec(
+				_, err := env.DBs.WorkerDB.Exec(
 					"UPDATE jobs SET created_at = ?, grabbed_at = ? WHERE id = ?",
 					createdAt, now, jobID,
 				)
@@ -70,7 +70,7 @@ func TestMarkJobCompleted_EdgeCases(t *testing.T) {
 			setupFn: func(ctx context.Context, env *workerTestEnv, jobID int64) {
 				now := time.Now()
 				createdAt := now.Add(1 * time.Millisecond)
-				_, err := env.DBs.Worker.Exec(
+				_, err := env.DBs.WorkerDB.Exec(
 					"UPDATE jobs SET created_at = ?, grabbed_at = ? WHERE id = ?",
 					createdAt, now, jobID,
 				)
@@ -84,7 +84,7 @@ func TestMarkJobCompleted_EdgeCases(t *testing.T) {
 			setupFn: func(ctx context.Context, env *workerTestEnv, jobID int64) {
 				now := time.Now()
 				createdAt := now.Add(10 * time.Second)
-				_, err := env.DBs.Worker.Exec(
+				_, err := env.DBs.WorkerDB.Exec(
 					"UPDATE jobs SET created_at = ?, grabbed_at = ? WHERE id = ?",
 					createdAt, now, jobID,
 				)
@@ -289,7 +289,7 @@ func TestUpdateJobForEnqueue_StatusTransitions(t *testing.T) {
 			require.NoError(t, err)
 
 			// 初期ステータスに設定
-			_, err = env.DBs.Worker.Exec(
+			_, err = env.DBs.WorkerDB.Exec(
 				"UPDATE jobs SET status = ?, finished_at = ? WHERE id = ?",
 				tt.initialStatus,
 				sql.NullTime{Time: time.Now(), Valid: tt.initialStatus == "completed" || tt.initialStatus == "failed"},
@@ -346,7 +346,7 @@ func TestMarkJobCompleted_TimestampPrecision(t *testing.T) {
 
 	// GrabJob（grabbed_at を設定）
 	grabbedAt := now.Add(1 * time.Second)
-	_, err = env.DBs.Worker.Exec(
+	_, err = env.DBs.WorkerDB.Exec(
 		"UPDATE jobs SET status = 'running', grabbed_at = ? WHERE id = ?",
 		grabbedAt, job.ID,
 	)
@@ -375,7 +375,7 @@ func TestMarkJobCompleted_TimestampPrecision(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// grabbed_at を再設定（前回のテストで NULL になっている可能性があるため）
-			_, err := env.DBs.Worker.Exec(
+			_, err := env.DBs.WorkerDB.Exec(
 				"UPDATE jobs SET status = 'running', grabbed_at = ? WHERE id = ?",
 				grabbedAt, job.ID,
 			)
@@ -383,7 +383,7 @@ func TestMarkJobCompleted_TimestampPrecision(t *testing.T) {
 
 			// created_at を調整
 			adjustedCreatedAt := grabbedAt.Add(tc.createdAtDiff)
-			_, err = env.DBs.Worker.Exec(
+			_, err = env.DBs.WorkerDB.Exec(
 				"UPDATE jobs SET created_at = ? WHERE id = ?",
 				adjustedCreatedAt, job.ID,
 			)

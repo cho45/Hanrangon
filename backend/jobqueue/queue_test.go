@@ -11,8 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cho45/hanrangon/backend/model"
-	"github.com/cho45/hanrangon/backend/model/workerdb"
+	workerdb "github.com/cho45/hanrangon/backend/model/workerdb"
 	"github.com/cho45/hanrangon/internal/testutil"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
@@ -72,13 +71,9 @@ func setupWorkerTest(t *testing.T, registry *Registry) *workerTestEnv {
 	}
 
 	dbs := testutil.SetupAllDBs(t)
-	db, queries := dbs.Worker, dbs.WorkerQueries
+	queries := dbs.WorkerDB.Q
 
-	workerDB := model.NewDatabase[workerdb.Querier](
-		db,
-		func(d model.DBTX) workerdb.Querier { return workerdb.New(d.(workerdb.DBTX)) },
-	)
-	worker := NewWorker(workerDB, queries, registry)
+	worker := NewWorker(dbs.WorkerDB, queries, registry)
 
 	// Worker制御用context
 	workerCtx, workerCancel := context.WithCancel(context.Background())
@@ -289,7 +284,7 @@ func TestWorker_ExponentialBackoff(t *testing.T) {
 
 	for _, tc := range testCases {
 		// retry_countを設定
-		_, err := env.DBs.Worker.Exec("UPDATE jobs SET retry_count = ?, status = 'pending', run_after = datetime('now') WHERE status != 'failed'", tc.retryCount)
+		_, err := env.DBs.WorkerDB.Exec("UPDATE jobs SET retry_count = ?, status = 'pending', run_after = datetime('now') WHERE status != 'failed'", tc.retryCount)
 		require.NoError(t, err)
 
 		// 失敗前の時刻を記録
@@ -302,7 +297,7 @@ func TestWorker_ExponentialBackoff(t *testing.T) {
 		// ジョブの状態を確認
 		var runAfter time.Time
 		var status string
-		err = env.DBs.Worker.QueryRow("SELECT run_after, status FROM jobs WHERE id = 1").Scan(&runAfter, &status)
+		err = env.DBs.WorkerDB.DB.QueryRow("SELECT run_after, status FROM jobs WHERE id = 1").Scan(&runAfter, &status)
 		require.NoError(t, err)
 
 		// retry_count + 1 が max_retries (5) に達していない場合
@@ -354,7 +349,7 @@ func TestWorker_ProcessNextJob_MaxRetries(t *testing.T) {
 	// 最大リトライ回数まで実行
 	for i := 0; i < 5; i++ {
 		// run_afterを過去にして即座に実行可能にする
-		_, err := env.DBs.Worker.Exec("UPDATE jobs SET run_after = datetime('now', '-1 second') WHERE status = 'pending'")
+		_, err := env.DBs.WorkerDB.Exec("UPDATE jobs SET run_after = datetime('now', '-1 second') WHERE status = 'pending'")
 		require.NoError(t, err)
 
 		err = env.Worker.processNextJob(ctx)
@@ -564,7 +559,7 @@ func TestWorker_RecoverStuckJobs(t *testing.T) {
 	require.NoError(t, err)
 
 	// ジョブをrunningに変更し、grabbed_atを6分前に設定（スタック状態にする）
-	_, err = env.DBs.Worker.Exec("UPDATE jobs SET status = 'running', grabbed_at = datetime('now', '-6 minutes') WHERE id = 1")
+	_, err = env.DBs.WorkerDB.Exec("UPDATE jobs SET status = 'running', grabbed_at = datetime('now', '-6 minutes') WHERE id = 1")
 	require.NoError(t, err)
 
 	// スタックジョブを回復
@@ -597,7 +592,7 @@ func TestWorker_RecoverStuckJobs_MaxRetriesReached(t *testing.T) {
 	require.NoError(t, err)
 
 	// ジョブをrunningに変更し、grabbed_atを6分前、retry_countをmax_retries（5）に設定
-	_, err = env.DBs.Worker.Exec("UPDATE jobs SET status = 'running', grabbed_at = datetime('now', '-6 minutes'), retry_count = 5 WHERE id = 1")
+	_, err = env.DBs.WorkerDB.Exec("UPDATE jobs SET status = 'running', grabbed_at = datetime('now', '-6 minutes'), retry_count = 5 WHERE id = 1")
 	require.NoError(t, err)
 
 	// スタックジョブを回復
@@ -629,7 +624,7 @@ func TestWorker_RecoverStuckJobs_NotStuck(t *testing.T) {
 	require.NoError(t, err)
 
 	// ジョブをrunningに変更するが、grabbed_atは現在時刻（スタックしていない）
-	_, err = env.DBs.Worker.Exec("UPDATE jobs SET status = 'running', grabbed_at = datetime('now') WHERE id = 1")
+	_, err = env.DBs.WorkerDB.Exec("UPDATE jobs SET status = 'running', grabbed_at = datetime('now') WHERE id = 1")
 	require.NoError(t, err)
 
 	// スタックジョブを回復（何も変わらないはず）
@@ -1436,7 +1431,7 @@ func TestWorker_CleanupCompletedJobs(t *testing.T) {
 	require.NoError(t, err)
 
 	// Manually update the finished_at to be 25 hours ago (simulate old job)
-	_, err = env.DBs.Worker.Exec("UPDATE jobs SET finished_at = ?, status = 'completed' WHERE id = ?", oldFinishedAt, oldJob.ID)
+	_, err = env.DBs.WorkerDB.Exec("UPDATE jobs SET finished_at = ?, status = 'completed' WHERE id = ?", oldFinishedAt, oldJob.ID)
 	require.NoError(t, err)
 
 	// Create recent completed job (1 hour ago)
@@ -1459,7 +1454,7 @@ func TestWorker_CleanupCompletedJobs(t *testing.T) {
 	require.NoError(t, err)
 
 	// Manually update the finished_at to be 1 hour ago
-	_, err = env.DBs.Worker.Exec("UPDATE jobs SET finished_at = ?, status = 'completed' WHERE id = ?", recentFinishedAt, recentJob.ID)
+	_, err = env.DBs.WorkerDB.Exec("UPDATE jobs SET finished_at = ?, status = 'completed' WHERE id = ?", recentFinishedAt, recentJob.ID)
 	require.NoError(t, err)
 
 	// Verify both jobs exist

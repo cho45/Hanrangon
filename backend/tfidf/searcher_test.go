@@ -11,7 +11,7 @@ func TestSearch(t *testing.T) {
 	ctx := context.Background()
 	dbs := testutil.SetupAllDBs(t)
 	defer dbs.Close()
-	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.Main, dbs.MainQueries, dbs.TFIDF, dbs.TFIDFQueries
+	dataDB, dataQueries, tfidfDB, tfidfQueries := dbs.MainDB.DB, dbs.MainDB.Q, dbs.TFIDFDB.DB, dbs.TFIDFDB.Q
 
 	calc, err := NewCalculator(tfidfDB, tfidfQueries, dataDB, dataQueries)
 	if err != nil {

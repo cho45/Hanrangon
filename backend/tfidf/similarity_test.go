@@ -11,10 +11,10 @@ import (
 func TestCalculateSimilarEntries(t *testing.T) {
 	dbs := testutil.SetupAllDBs(t)
 	defer dbs.Close()
-	dataDB := dbs.Main
-	dataQueries := dbs.MainQueries
-	tfidfDB := dbs.TFIDF
-	tfidfQueries := dbs.TFIDFQueries
+	dataDB := dbs.MainDB.DB
+	dataQueries := dbs.MainDB.Q
+	tfidfDB := dbs.TFIDFDB.DB
+	tfidfQueries := dbs.TFIDFDB.Q
 
 	calc, err := NewCalculator(tfidfDB, tfidfQueries, dataDB, dataQueries)
 	if err != nil {
@@ -110,10 +110,10 @@ func TestCalculateSimilarEntries(t *testing.T) {
 func TestCalculateSimilarEntriesMultiple(t *testing.T) {
 	dbs := testutil.SetupAllDBs(t)
 	defer dbs.Close()
-	dataDB := dbs.Main
-	dataQueries := dbs.MainQueries
-	tfidfDB := dbs.TFIDF
-	tfidfQueries := dbs.TFIDFQueries
+	dataDB := dbs.MainDB.DB
+	dataQueries := dbs.MainDB.Q
+	tfidfDB := dbs.TFIDFDB.DB
+	tfidfQueries := dbs.TFIDFDB.Q
 
 	calc, err := NewCalculator(tfidfDB, tfidfQueries, dataDB, dataQueries)
 	if err != nil {
@@ -174,10 +174,10 @@ func TestCalculateSimilarEntriesMultiple(t *testing.T) {
 func TestCalculateSimilarEntriesNoSimilar(t *testing.T) {
 	dbs := testutil.SetupAllDBs(t)
 	defer dbs.Close()
-	dataDB := dbs.Main
-	dataQueries := dbs.MainQueries
-	tfidfDB := dbs.TFIDF
-	tfidfQueries := dbs.TFIDFQueries
+	dataDB := dbs.MainDB.DB
+	dataQueries := dbs.MainDB.Q
+	tfidfDB := dbs.TFIDFDB.DB
+	tfidfQueries := dbs.TFIDFDB.Q
 
 	calc, err := NewCalculator(tfidfDB, tfidfQueries, dataDB, dataQueries)
 	if err != nil {
