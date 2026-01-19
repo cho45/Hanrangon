@@ -1,6 +1,7 @@
 package view
 
 import (
+	"encoding/json"
 	"encoding/xml"
 	"html/template"
 	"strings"
@@ -39,6 +40,7 @@ type ViewEntry struct {
 	IsShortEntry      bool
 	SimilarEntries    []SimilarEntry
 	SimilarImages     []SimilarImage
+	JSONLD            template.JS
 }
 
 func NewViewEntry(e maindb.Entry, baseURL string) ViewEntry {
@@ -55,13 +57,49 @@ func NewViewEntry(e maindb.Entry, baseURL string) ViewEntry {
 		}
 	}
 
+	canonicalURL := strings.TrimSuffix(baseURL, "/") + "/" + e.Path
+	jsonLD := map[string]any{
+		"@context": "https://schema.org",
+		"@type":    "BlogPosting",
+		"mainEntityOfPage": map[string]any{
+			"@type": "@WebPage",
+			"@id":   canonicalURL,
+		},
+		"headline":    displayTitle,
+		"description": e.Summary,
+		"image": map[string]any{
+			"@type":  "ImageObject",
+			"url":    "https://www.lowreal.net/images/logo.png",
+			"width":  189,
+			"height": 105,
+		},
+		"author": map[string]any{
+			"@type": "Person",
+			"name":  "cho45",
+			"url":   "https://www.lowreal.net/",
+		},
+		"publisher": map[string]any{
+			"@type": "Organization",
+			"name":  "cho45",
+			"logo": map[string]any{
+				"@type":  "ImageObject",
+				"url":    "https://www.lowreal.net/images/logo.png",
+				"width":  189,
+				"height": 105,
+			},
+		},
+		"datePublished": e.CreatedAt.UTC().Format(time.RFC3339),
+		"dateModified":  e.ModifiedAt.UTC().Format(time.RFC3339),
+	}
+	jsonLDBody, _ := json.Marshal(jsonLD)
+
 	return ViewEntry{
 		Entry:             e,
 		DisplayTitle:      displayTitle,
 		Tags:              tags,
 		Summary:           e.Summary,
 		FirstImageURL:     template.URL(e.ImageUrl),
-		CanonicalURL:      template.URL(strings.TrimSuffix(baseURL, "/") + "/" + e.Path),
+		CanonicalURL:      template.URL(canonicalURL),
 		FormattedDate:     FormatDate(e.Date),
 		DatePath:          DatePath(e.Date),
 		DisplayTime:       e.CreatedAt.Format("15:04"),
@@ -70,6 +108,7 @@ func NewViewEntry(e maindb.Entry, baseURL string) ViewEntry {
 		ModifiedAtRFC3339: e.ModifiedAt.UTC().Format(time.RFC3339),
 		FormattedBodyHTML: template.HTML(e.FormattedBody),
 		IsShortEntry:      isShortEntry,
+		JSONLD:            template.JS(jsonLDBody),
 	}
 }
 

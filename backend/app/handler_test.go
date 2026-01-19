@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/cho45/hanrangon/backend/model/maindb"
 	"github.com/labstack/echo/v4"
 )
@@ -50,15 +51,16 @@ func TestHandleIndex(t *testing.T) {
 		t.Errorf("Link header does not contain style.css preload, got: %s", linkHeader)
 	}
 
-	body := rec.Body.String()
-	if !strings.Contains(body, "Test Entry 1") {
-		t.Errorf("body does not contain 'Test Entry 1'")
+	doc := mustParseHTML(t, rec.Body.String())
+	if doc.Find("title").Text() != "氾濫原" {
+		t.Errorf("title = %v, want 氾濫原", doc.Find("title").Text())
 	}
-	if !strings.Contains(body, "<p>Formatted Body 1</p>") {
+	if !strings.Contains(doc.Find("h2").Text(), "Test Entry 1") {
+		t.Errorf("h2 does not contain 'Test Entry 1'")
+	}
+	if doc.Find("article .content").First().Text() == "" {
 		t.Errorf("body does not contain formatted body")
 	}
-
-	checkCompleteHTML(t, body)
 
 	t.Run("HEAD request", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodHead, "/", nil)
@@ -131,23 +133,22 @@ func TestHandleIndex_SimilarImagesBulkFallback(t *testing.T) {
 		t.Fatalf("want status 200, got %d", rec.Code)
 	}
 
-	body := rec.Body.String()
+	doc := mustParseHTML(t, rec.Body.String())
 
 	// 4. Verify that Entry A shows Entry B as similar image, and vice versa
-	// We check for the presence of the related entry titles/images near each other.
-	// In entries.html, SimilarImages are rendered within each entry block.
-	if !strings.Contains(body, "Entry A") || !strings.Contains(body, "Entry B") {
-		t.Fatal("Entries not found in index")
+	h2Text := doc.Find("h2").Text()
+	if !strings.Contains(h2Text, "Entry A") || !strings.Contains(h2Text, "Entry B") {
+		t.Fatal("Entries not found in index h2 tags")
 	}
 
-	if !strings.Contains(body, "http://example.com/imgB.jpg") {
+	if doc.Find("img[src='http://example.com/imgB.jpg']").Length() == 0 {
 		t.Error("body does not contain similar image B (linked from A)")
 	}
-	if !strings.Contains(body, "http://example.com/imgA.jpg") {
+	if doc.Find("img[src='http://example.com/imgA.jpg']").Length() == 0 {
 		t.Error("body does not contain similar image A (linked from B)")
 	}
-	if !strings.Contains(body, "<h3>関連エントリー (画像)</h3>") {
-		t.Error("body does not contain '関連エントリー (画像)' header")
+	if !strings.Contains(doc.Find("h3").Text(), "関連エントリー (画像)") {
+		t.Error("h3 tags do not contain '関連エントリー (画像)'")
 	}
 }
 
@@ -192,33 +193,39 @@ func TestHandleIndex_Adaptive(t *testing.T) {
 		t.Fatalf("want status 200, got %d", rec.Code)
 	}
 
-	body := rec.Body.String()
+	doc := mustParseHTML(t, rec.Body.String())
 
 	// しきい値10に対して初日だけで12件あるので、
 	// ロジックでは d=10 から減らしていき、totalEntries > 10 なので d は減り続ける。
 	// 最終的に minDays = 3 になるはず。
 
 	// 3日分が表示されているか確認
-	if !strings.Contains(body, "Entry 11") {
-		t.Error("body should contain Entry 11 (from the first day)")
+	h2Text := doc.Find("h2").Text()
+	if !strings.Contains(h2Text, "Entry 11") {
+		t.Error("h2 tags should contain Entry 11 (from the first day)")
 	}
 
 	// 4日目のエントリが含まれていないことを確認 (Old Entry 3 は 3日前のデータ)
-	if strings.Contains(body, "Old Entry 3") {
-		t.Error("body should NOT contain 'Old Entry 3' due to adaptive reduction")
+	if strings.Contains(h2Text, "Old Entry 3") {
+		t.Error("h2 tags should NOT contain 'Old Entry 3' due to adaptive reduction")
 	}
 
 	// OlderPage リンクが生成されているか確認
-	if !strings.Contains(body, "/.page/") {
+	if doc.Find(".pager a[rel='next']").Length() == 0 {
 		t.Error("OlderPage link should be generated")
 	}
 }
 
-func checkCompleteHTML(t *testing.T, body string) {
+func mustParseHTML(t *testing.T, body string) *goquery.Document {
 	t.Helper()
 	if !strings.Contains(body, "</html>") {
 		t.Errorf("response body does not contain </html> tag (possibly truncated)")
 	}
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("failed to parse HTML: %v", err)
+	}
+	return doc
 }
 
 func TestHandleEntry(t *testing.T) {
@@ -244,14 +251,35 @@ func TestHandleEntry(t *testing.T) {
 			t.Errorf("want status 200, got %d", rec.Code)
 		}
 
-		body := rec.Body.String()
-		checkCompleteHTML(t, body)
-		if !strings.Contains(body, "Test Entry 1") {
-			t.Errorf("body does not contain 'Test Entry 1'")
+		doc := mustParseHTML(t, rec.Body.String())
+		if doc.Find("title").Text() != "Test Entry 1 - 氾濫原" {
+			t.Errorf("title = %v, want 'Test Entry 1 - 氾濫原'", doc.Find("title").Text())
+		}
+		if !strings.Contains(doc.Find("h2").Text(), "Test Entry 1") {
+			t.Errorf("h2 does not contain 'Test Entry 1'")
 		}
 		// Prev/Next links
-		if !strings.Contains(body, "Test Entry 2") {
-			t.Errorf("body does not contain next entry link 'Test Entry 2'")
+		pagerText := doc.Find(".pager").Text()
+		if !strings.Contains(pagerText, "Test Entry 2") {
+			t.Errorf("pager does not contain next entry link 'Test Entry 2'")
+		}
+
+		// Check JSON-LD
+		script := doc.Find("script[type='application/ld+json']")
+		if script.Length() == 0 {
+			t.Errorf("script[type='application/ld+json'] not found in response")
+		} else {
+			jsonLD := strings.TrimSpace(script.Text())
+			var ld map[string]any
+			if err := json.Unmarshal([]byte(jsonLD), &ld); err != nil {
+				t.Errorf("Failed to unmarshal JSON-LD: %v\nContent: %q", err, jsonLD)
+			}
+			if ld["headline"] != "Test Entry 1" {
+				t.Errorf("JSON-LD headline = %v, want %v", ld["headline"], "Test Entry 1")
+			}
+			if ld["@type"] != "BlogPosting" {
+				t.Errorf("JSON-LD @type = %v, want BlogPosting", ld["@type"])
+			}
 		}
 	})
 
@@ -352,14 +380,14 @@ func TestHandleEntry(t *testing.T) {
 		rec := httptest.NewRecorder()
 		env.server.ServeHTTP(rec, req)
 
-		body := rec.Body.String()
-		if !strings.Contains(body, "<h3>関連エントリー (画像)</h3>") {
-			t.Errorf("body does not contain '関連エントリー (画像)' header")
+		doc := mustParseHTML(t, rec.Body.String())
+		if !strings.Contains(doc.Find("h3").Text(), "関連エントリー (画像)") {
+			t.Errorf("h3 tags do not contain '関連エントリー (画像)'")
 		}
-		if !strings.Contains(body, "http://example.com/img5.jpg") {
+		if doc.Find("img[src='http://example.com/img5.jpg']").Length() == 0 {
 			t.Errorf("body does not contain related image URL")
 		}
-		if !strings.Contains(body, "/2025/01/01/5") {
+		if doc.Find("a[href='/2025/01/01/5']").Length() == 0 {
 			t.Errorf("body does not contain link to related image entry")
 		}
 	})
@@ -397,12 +425,19 @@ func TestHandleEntry_DateHeader(t *testing.T) {
 		t.Fatalf("want status 200, got %d", rec.Code)
 	}
 
-	body := rec.Body.String()
+	doc := mustParseHTML(t, rec.Body.String())
 	// 日付見出し (class="date") が含まれているか確認
 	// view/helper.go の FormatDate("2025-01-01") は "2025年 01月 01日" を返す
-	expectedDateHeader := `<div class="date"><a href="/2025/01/01/">2025年 01月 01日</a></div>`
-	if !strings.Contains(body, expectedDateHeader) {
-		t.Errorf("body does not contain expected date header")
+	dateHeader := doc.Find(".date a")
+	if dateHeader.Length() == 0 {
+		t.Errorf("body does not contain date header")
+	} else {
+		if dateHeader.AttrOr("href", "") != "/2025/01/01/" {
+			t.Errorf("date header href = %v, want /2025/01/01/", dateHeader.AttrOr("href", ""))
+		}
+		if !strings.Contains(dateHeader.Text(), "2025年 01月 01日") {
+			t.Errorf("date header text = %v, want contains 2025年 01月 01日", dateHeader.Text())
+		}
 	}
 }
 
@@ -429,17 +464,20 @@ func TestHandleArchive(t *testing.T) {
 		t.Errorf("want status 200, got %d", rec.Code)
 	}
 
-	body := rec.Body.String()
-	checkCompleteHTML(t, body)
+	doc := mustParseHTML(t, rec.Body.String())
+	if doc.Find("title").Text() != "アーカイブ - 氾濫原" {
+		t.Errorf("title = %v, want 'アーカイブ - 氾濫原'", doc.Find("title").Text())
+	}
 	// 2025年 (2 entries), 2024年 (1 entry)
-	if !strings.Contains(body, "2025年") {
-		t.Errorf("body does not contain '2025年'")
+	yearText := doc.Find("#archive h2").Text()
+	if !strings.Contains(yearText, "2025年") {
+		t.Errorf("archive years do not contain '2025年'")
 	}
-	if !strings.Contains(body, "01月") {
-		t.Errorf("body does not contain '01月'")
+	if !strings.Contains(yearText, "2024年") {
+		t.Errorf("archive years do not contain '2024年'")
 	}
-	if !strings.Contains(body, "2024年") {
-		t.Errorf("body does not contain '2024年'")
+	if !strings.Contains(doc.Find(".month a").Text(), "01月") {
+		t.Errorf("archive months do not contain '01月'")
 	}
 }
 
@@ -492,16 +530,16 @@ func TestHandleDateArchive(t *testing.T) {
 				t.Errorf("want status 200, got %d", rec.Code)
 			}
 
-			body := rec.Body.String()
-			checkCompleteHTML(t, body)
+			doc := mustParseHTML(t, rec.Body.String())
+			h2Text := doc.Find("h2").Text()
 			for _, title := range tt.wantTitles {
-				if !strings.Contains(body, title) {
-					t.Errorf("path %s: body does not contain '%s'", tt.path, title)
+				if !strings.Contains(h2Text, title) {
+					t.Errorf("path %s: h2 tags do not contain '%s'", tt.path, title)
 				}
 			}
 			for _, title := range tt.notTitles {
-				if strings.Contains(body, title) {
-					t.Errorf("path %s: body SHOULD NOT contain '%s'", tt.path, title)
+				if strings.Contains(h2Text, title) {
+					t.Errorf("path %s: h2 tags SHOULD NOT contain '%s'", tt.path, title)
 				}
 			}
 		})
@@ -531,18 +569,17 @@ func TestHandleCategory(t *testing.T) {
 		t.Errorf("want status 200, got %d", rec.Code)
 	}
 
-	body := rec.Body.String()
-	checkCompleteHTML(t, body)
+	doc := mustParseHTML(t, rec.Body.String())
 	// ParseTitle separates tags, so we look for the tag link and the clean title
 	// Structure: <a href="/test/"><span itemprop="keywords">test</span></a>
-	if !strings.Contains(body, "<span itemprop=\"keywords\">test</span></a>") {
+	if doc.Find("span[itemprop='keywords']").Text() != "test" {
 		t.Errorf("body does not contain tag link for 'test'")
 	}
-	if !strings.Contains(body, "Tagged Entry") {
-		t.Errorf("body does not contain clean title 'Tagged Entry'")
+	if !strings.Contains(doc.Find("h2").Text(), "Tagged Entry") {
+		t.Errorf("h2 tags do not contain clean title 'Tagged Entry'")
 	}
-	if strings.Contains(body, "Normal Entry") {
-		t.Errorf("body SHOULD NOT contain normal entry")
+	if strings.Contains(doc.Find("h2").Text(), "Normal Entry") {
+		t.Errorf("h2 tags SHOULD NOT contain normal entry")
 	}
 }
 
@@ -754,18 +791,17 @@ func TestHandleAdminApiPreview(t *testing.T) {
 		t.Fatalf("want status 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	body := rec.Body.String()
-	checkCompleteHTML(t, body)
+	doc := mustParseHTML(t, rec.Body.String())
 
-	if !strings.Contains(body, "Preview Title") {
-		t.Errorf("body does not contain preview title")
+	if !strings.Contains(doc.Find("h2").Text(), "Preview Title") {
+		t.Errorf("h2 tags do not contain preview title")
 	}
-	if !strings.Contains(body, "Preview Body content") {
-		t.Errorf("body does not contain preview body content")
+	if !strings.Contains(doc.Find("article .content").Text(), "Preview Body content") {
+		t.Errorf("article content does not contain preview body content")
 	}
 	// Check if it's using the layout
-	if !strings.Contains(body, "<title>Preview Title - 氾濫原</title>") {
-		t.Errorf("body does not seem to use the layout template correctly")
+	if doc.Find("title").Text() != "Preview Title - 氾濫原" {
+		t.Errorf("body does not seem to use the layout template correctly: got %v", doc.Find("title").Text())
 	}
 }
 
@@ -845,9 +881,8 @@ func TestHandleEdit(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Errorf("want status 200, got %d", rec.Code)
 		}
-		body := rec.Body.String()
-		checkCompleteHTML(t, body)
-		if !strings.Contains(body, `id="admin-root"`) {
+		doc := mustParseHTML(t, rec.Body.String())
+		if doc.Find("#admin-root").Length() == 0 {
 			t.Errorf("body does not contain admin-root element")
 		}
 	})
@@ -866,9 +901,8 @@ func TestHandleAdminIndex(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Errorf("want status 200, got %d", rec.Code)
 	}
-	body := rec.Body.String()
-	checkCompleteHTML(t, body)
-	if !strings.Contains(body, `id="admin-root"`) {
+	doc := mustParseHTML(t, rec.Body.String())
+	if doc.Find("#admin-root").Length() == 0 {
 		t.Errorf("body does not contain admin-root element")
 	}
 }
@@ -1613,10 +1647,9 @@ func TestHandleSearch(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
 	}
-	body := rec.Body.String()
-	checkCompleteHTML(t, body)
-	if !strings.Contains(body, "検索") {
-		t.Errorf("body does not contain '検索'")
+	doc := mustParseHTML(t, rec.Body.String())
+	if doc.Find("title").Text() != "検索 - 氾濫原" {
+		t.Errorf("title = %v, want '検索 - 氾濫原'", doc.Find("title").Text())
 	}
 }
 

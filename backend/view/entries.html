@@ -54,35 +54,9 @@
 						<a href="/admin/edit?id={{$e.ID}}" class="nogag-edit">編集</a>
 					{{end}}
 
-					<div style="display: none">
-						<meta itemscope itemprop="mainEntityOfPage"  itemType="https://schema.org/WebPage" content="{{$e.CanonicalURL}}">
-						<span itemprop="headline">{{$e.DisplayTitle}}</span>
-						<span itemprop="description">{{$e.Summary}}</span>
-
-						<span itemprop="author" itemscope itemtype="https://schema.org/Person">
-							<a href="http://www.lowreal.net/" itemprop="url">
-								<span itemprop="name">cho45</span>
-							</a>
-						</span>
-
-						<div itemprop="publisher" itemscope itemtype="https://schema.org/Organization">
-							<div itemprop="logo" itemscope itemtype="https://schema.org/ImageObject">
-								<meta itemprop="url" content="https://www.lowreal.net/images/logo.png">
-								<meta itemprop="width" content="189">
-								<meta itemprop="height" content="105">
-							</div>
-							<meta itemprop="name" content="cho45">
-						</div>
-
-						<meta itemprop="datePublished" content="{{$e.CreatedAtRFC3339}}">
-						<meta itemprop="dateModified" content="{{$e.ModifiedAtRFC3339}}">
-
-						<div itemprop="image" itemscope itemtype="https://schema.org/ImageObject">
-							<meta itemprop="url" content="https://www.lowreal.net/images/logo.png">
-							<meta itemprop="width" content="189">
-							<meta itemprop="height" content="105">
-						</div>
-					</div>
+					<script type="application/ld+json">
+						{{$e.JSONLD}}
+					</script>
 				</div>
 			</header>
 
