@@ -27,6 +27,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
+	"golang.org/x/sync/singleflight"
 )
 
 // ProgressSession は進捗追跡用のセッション情報
@@ -67,6 +68,8 @@ type AppImpl struct {
 	cacheService         *CacheService
 	postprocessProcessor *BatchProcessor
 	postprocessMu        sync.Mutex
+	cacheWg              sync.WaitGroup
+	cacheSF              singleflight.Group
 }
 
 func NewApp(
@@ -145,6 +148,9 @@ func (a *AppImpl) CacheService() *CacheService                       { return a.
 func (a *AppImpl) Storage() StorageClient                            { return a.storage }
 
 func (a *AppImpl) Close() error {
+	// 非同期キャッシュタスクの完了を待機
+	a.cacheWg.Wait()
+
 	a.postprocessMu.Lock()
 	defer a.postprocessMu.Unlock()
 	if a.postprocessProcessor != nil {

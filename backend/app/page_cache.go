@@ -114,13 +114,19 @@ func (app *AppImpl) PageCacheMiddleware() echo.MiddlewareFunc {
 						log.Printf("[WARN] Failed to save raw page cache for %s: %v", baseKey, err)
 					}
 
-					// 非同期で Gzip 圧縮して保存
+					// 非同期で Gzip 圧縮して保存 (重複実行を抑制)
+					app.cacheWg.Add(1)
 					go func() {
-						ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-						defer cancel()
-						if err := app.CompressGzipAndSave(ctx, baseKey, content, sourceIDs); err != nil {
-							log.Printf("[WARN] Failed to compress and save page cache for %s: %v", baseKey, err)
-						}
+						defer app.cacheWg.Done()
+						// 同一キーでの同時圧縮を防ぐ
+						_, _, _ = app.cacheSF.Do(baseKey, func() (interface{}, error) {
+							ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+							defer cancel()
+							if err := app.CompressGzipAndSave(ctx, baseKey, content, sourceIDs); err != nil {
+								log.Printf("[WARN] Failed to compress and save page cache for %s: %v", baseKey, err)
+							}
+							return nil, nil
+						})
 					}()
 				}
 
