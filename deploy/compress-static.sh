@@ -16,7 +16,7 @@ find static -type f \( -name "*.css" -o -name "*.js" \) | while read -r file; do
 	if command -v brotli >/dev/null 2>&1; then
 		if [[ ! -f "${file}.br" ]] || [[ "$file" -nt "${file}.br" ]]; then
 			echo "brotli: $file"
-			brotli -c -9 "$file" > "${file}.br"
+			brotli -w 18 -c -10 "$file" > "${file}.br"
 		fi
 	fi
 done
