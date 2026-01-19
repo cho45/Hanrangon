@@ -12,127 +12,127 @@
 {{$entries := .Entries}}
 {{$isAuth := .IsAuth}}
 {{$isDetail := .IsDetail}}
-	{{range $i, $e := $entries}}
-		{{if $e.IsDateBoundary}}
-			<div class="date"><a href="{{$e.DatePath}}">{{$e.FormattedDate}}</a></div>
-		{{end}}
+{{range $i, $e := $entries}}
 
-		{{/* Article */}}
-		<article
-			id="post-{{$e.CreatedAtUnix}}"
-			class="{{range $e.Tags}}{{.}} {{end}}{{if eq $i 0}}first {{end}}status-{{$e.Status}}"
-			data-id="{{$e.ID}}"
-			data-is-short="{{$e.IsShortEntry}}"
-		>
-			<header>
-				<h2><a href="{{$e.CanonicalURL}}" class="bookmark" rel="bookmark"><budoux-ja>{{$e.DisplayTitle}}</budoux-ja></a></h2>
-				<div class="metadata">
-					{{$baseURL := $.BaseURL}}
-					<span class="tags">
-						{{range $e.Tags}}
-							<a href="{{$baseURL}}/{{.}}/"><span>{{.}}</span></a>
-						{{end}}
-					</span>
+{{if $e.IsDateBoundary}}
+<div class="date"><a href="{{$e.DatePath}}">{{$e.FormattedDate}}</a></div>
+{{end}}
 
-					<time datetime="{{$e.CreatedAtRFC3339}}">
-						<relative-time epoch="{{$e.CreatedAtUnix}}">{{$e.DisplayTime}}</relative-time>
+<article
+	id="post-{{$e.CreatedAtUnix}}"
+	class="{{range $e.Tags}}{{.}} {{end}}{{if eq $i 0}}first {{end}}status-{{$e.Status}}"
+	data-id="{{$e.ID}}"
+	data-is-short="{{$e.IsShortEntry}}"
+>
+	<header>
+		<h2><a href="{{$e.CanonicalURL}}" class="bookmark" rel="bookmark"><budoux-ja>{{$e.DisplayTitle}}</budoux-ja></a></h2>
+		<div class="metadata">
+			{{$baseURL := $.BaseURL}}
+			<span class="tags">
+				{{range $e.Tags}}
+					<a href="{{$baseURL}}/{{.}}/"><span>{{.}}</span></a>
+				{{end}}
+			</span>
+
+			<time datetime="{{$e.CreatedAtRFC3339}}">
+				<relative-time epoch="{{$e.CreatedAtUnix}}">{{$e.DisplayTime}}</relative-time>
+			</time>
+
+			{{if eq $e.Status "scheduled"}}
+			<span class="status">
+				{{if $e.PublishAt.Valid}}<time datetime="{{$e.PublishAt.Time.UTC.Format "2006-01-02T15:04:05Z"}}"><relative-time epoch="{{$e.PublishAt.Time.Unix}}">{{$e.PublishAt.Time.Format "2006-01-02 15:04"}}</relative-time></time>{{else}}未来{{end}}に公開
+			</span>
+			{{end}}
+
+			{{if $isAuth}}
+			<a href="/admin/edit?id={{$e.ID}}" class="nogag-edit">編集</a>
+			{{end}}
+
+			<script type="application/ld+json">
+				{{$e.JSONLD}}
+			</script>
+		</div>
+	</header>
+
+	<div class="content">
+		{{$e.FormattedBodyHTML}}
+	</div>
+
+	{{if $.Trackbacks}}
+	<div class="content trackbacks">
+		<h3>このエントリを参照するエントリ</h3>
+		{{range $.Trackbacks}}
+		<ul>
+			<li data-id="{{.ID}}">
+				<a href="/{{.Path}}">
+					<em>{{.DisplayTitle}}</em><br>
+					<span class="summary">{{.Summary}}</span>
+
+					<time datetime="{{.CreatedAtRFC3339}}">
+						<relative-time epoch="{{.CreatedAtUnix}}">{{.DisplayTime}}</relative-time>
 					</time>
-
-					{{if eq $e.Status "scheduled"}}
-						<span class="status">
-							{{if $e.PublishAt.Valid}}<time datetime="{{$e.PublishAt.Time.UTC.Format "2006-01-02T15:04:05Z"}}"><relative-time epoch="{{$e.PublishAt.Time.Unix}}">{{$e.PublishAt.Time.Format "2006-01-02 15:04"}}</relative-time></time>{{else}}未来{{end}}に公開
-						</span>
-					{{end}}
-
-					{{if $isAuth}}
-						<a href="/admin/edit?id={{$e.ID}}" class="nogag-edit">編集</a>
-					{{end}}
-
-					<script type="application/ld+json">
-						{{$e.JSONLD}}
-					</script>
-				</div>
-			</header>
-
-			<div class="content">
-				{{$e.FormattedBodyHTML}}
-			</div>
-
-			{{if $.Trackbacks}}
-			<div class="content trackbacks">
-				<h3>このエントリを参照するエントリ</h3>
-				{{range $.Trackbacks}}
-				<ul>
-					<li data-id="{{.ID}}">
-						<a href="/{{.Path}}">
-							<em>{{.DisplayTitle}}</em><br>
-							<span class="summary">{{.Summary}}</span>
-
-							<time datetime="{{.CreatedAtRFC3339}}">
-								<relative-time epoch="{{.CreatedAtUnix}}">{{.DisplayTime}}</relative-time>
-							</time>
-						</a>
-					</li>
-				</ul>
-				{{end}}
-			</div>
-			{{end}}
-
-			{{if or $isDetail (not $e.IsShortEntry)}}
-			<div class="content similar-entries">
-				{{if $e.SimilarEntries}}
-					<h3>関連エントリー</h3>
-					<ul>
-						{{range $e.SimilarEntries}}
-						<li data-id="{{.ID}}">
-							<a href="/{{.Path}}" data-score="{{printf "%f" .Score}}">
-								<em>{{.DisplayTitle}}</em>
-								<time datetime="{{.CreatedAtRFC3339}}">
-									<relative-time epoch="{{.CreatedAtUnix}}">{{.DisplayTime}}</relative-time>
-								</time>
-								<span class="summary">{{.Summary}}</span>
-							</a>
-						</li>
-						{{end}}
-					</ul>
-				{{else if $e.SimilarImages}}
-					<h3>関連エントリー (画像)</h3>
-					<ul class="similar-images">
-						{{range $e.SimilarImages}}
-							<li>
-								<a href="/{{.EntryPath}}">
-									<img src="{{.URI}}" alt="画像関連:{{.EntryTitle}}" decoding="async" loading="lazy"/>
-								</a>
-							</li>
-						{{end}}
-					</ul>
-				{{end}}
-			</div>
-
-			<social-share-buttons title="{{$e.DisplayTitle}}" url="{{$e.CanonicalURL}}"></social-share-buttons>
-			{{end}}
-		</article>
+				</a>
+			</li>
+		</ul>
+		{{end}}
+	</div>
 	{{end}}
+
+	{{if or $isDetail (not $e.IsShortEntry)}}
+	<div class="content similar-entries">
+		{{if $e.SimilarEntries}}
+		<h3>関連エントリー</h3>
+		<ul>
+			{{range $e.SimilarEntries}}
+			<li data-id="{{.ID}}">
+				<a href="/{{.Path}}" data-score="{{printf "%f" .Score}}">
+					<em>{{.DisplayTitle}}</em>
+					<time datetime="{{.CreatedAtRFC3339}}">
+						<relative-time epoch="{{.CreatedAtUnix}}">{{.DisplayTime}}</relative-time>
+					</time>
+					<span class="summary">{{.Summary}}</span>
+				</a>
+			</li>
+			{{end}}
+		</ul>
+		{{else if $e.SimilarImages}}
+		<h3>関連エントリー (画像)</h3>
+		<ul class="similar-images">
+			{{range $e.SimilarImages}}
+				<li>
+					<a href="/{{.EntryPath}}">
+						<img src="{{.URI}}" alt="画像関連:{{.EntryTitle}}" decoding="async" loading="lazy"/>
+					</a>
+				</li>
+			{{end}}
+		</ul>
+		{{end}}
+	</div>
+
+	<social-share-buttons title="{{$e.DisplayTitle}}" url="{{$e.CanonicalURL}}"></social-share-buttons>
+	{{end}}
+</article>
+{{end}}
 
 <nav class="pager" aria-label="ページ送り">
 	{{if .IsDetail}}
 		{{/* Entry detail navigation */}}
 		{{if .Older}}
-			<a href="/{{.Older.Path}}" rel="next" class="prev">
-				<span class="label">OLDER</span>
-				<span class="title">{{.Older.DisplayTitle}}</span>
-			</a>
+		<a href="/{{.Older.Path}}" rel="next" class="prev">
+			<span class="label">OLDER</span>
+			<span class="title">{{.Older.DisplayTitle}}</span>
+		</a>
 		{{end}}
 		{{if .Newer}}
-			<a href="/{{.Newer.Path}}" rel="prev" class="next">
-				<span class="label">NEWER</span>
-				<span class="title">{{.Newer.DisplayTitle}}</span>
-			</a>
+		<a href="/{{.Newer.Path}}" rel="prev" class="next">
+			<span class="label">NEWER</span>
+			<span class="title">{{.Newer.DisplayTitle}}</span>
+		</a>
 		{{end}}
 	{{else}}
 		{{/* Index pagination */}}
 		{{if .OlderPage}}
-			<a href="{{.OlderPage}}" rel="next">&#x25BC; もっと古いエントリ</a>
+		<a href="{{.OlderPage}}" rel="next">&#x25BC; もっと古いエントリ</a>
 		{{end}}
 	{{end}}
 </nav>
