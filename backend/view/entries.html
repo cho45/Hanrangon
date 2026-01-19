@@ -109,24 +109,7 @@
 				{{end}}
 			</div>
 
-			<div class="social">
-				<a class="share-button" style="background: #3b5998" target="_blank" rel="noopener nofollow"
-					href="https://www.facebook.com/sharer/sharer.php?u={{$e.CanonicalURL}}"
-				>
-					<img src="/images/sharebuttons/FB-f-Logo__white_50.png" width="18" height="18" alt="Facebook"/>
-				</a>
-				<a class="share-button" style="background: #efefef" target="_blank" rel="noopener nofollow"
-					href="https://bsky.app/intent/compose?text={{$e.DisplayTitle}} {{$e.CanonicalURL}}"
-				>
-					<img src="/images/bluesky_media_kit_logo_svgs.svg" width="40" height="40" alt="Bluesky"/>
-				</a>
-				<a class="share-button" style="background: #00a4de" target="_blank" rel="noopener nofollow"
-					href="http://b.hatena.ne.jp/add?url={{$e.CanonicalURL}}"
-				>
-					<img src="/images/sharebuttons/hatenabookmark-logomark.svg" width="40" height="40" alt="はてなブックマーク"/>
-				</a>
-				<web-share-button title="{{$e.DisplayTitle}}" url="{{$e.CanonicalURL}}"></web-share-button>
-			</div>
+			<social-share-buttons title="{{$e.DisplayTitle}}" url="{{$e.CanonicalURL}}"></social-share-buttons>
 			{{end}}
 		</article>
 	{{end}}

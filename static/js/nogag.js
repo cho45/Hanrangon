@@ -84,32 +84,69 @@ customElements.define('ip-info', class extends HTMLElement {
 	}
 });
 
-customElements.define('web-share-button', class extends HTMLElement {
+customElements.define('social-share-buttons', class extends HTMLElement {
 	connectedCallback() {
 		const title = this.getAttribute('title');
 		const url = this.getAttribute('url');
 
-		if (!navigator.share) {
-			// Web Share API 非対応: 要素を非表示
-			this.style.display = 'none';
-			return;
+		const buttons = [
+			{
+				name: 'Facebook',
+				bg: '#3b5998',
+				href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
+				icon: '/images/sharebuttons/FB-f-Logo__white_50.png',
+				iconSize: 18
+			},
+			{
+				name: 'Bluesky',
+				bg: '#efefef',
+				href: `https://bsky.app/intent/compose?text=${encodeURIComponent(title + ' ' + url)}`,
+				icon: '/images/bluesky_media_kit_logo_svgs.svg',
+				iconSize: 40
+			},
+			{
+				name: 'はてなブックマーク',
+				bg: '#00a4de',
+				href: `https://b.hatena.ne.jp/add?url=${encodeURIComponent(url)}`,
+				icon: '/images/sharebuttons/hatenabookmark-logomark.svg',
+				iconSize: 40
+			}
+		];
+
+		for (const btn of buttons) {
+			const a = document.createElement('a');
+			a.className = 'share-button';
+			a.style.background = btn.bg;
+			a.href = btn.href;
+			a.target = '_blank';
+			a.rel = 'noopener nofollow';
+
+			const img = document.createElement('img');
+			img.src = btn.icon;
+			img.width = btn.iconSize;
+			img.height = btn.iconSize;
+			img.alt = btn.name;
+
+			a.appendChild(img);
+			this.appendChild(a);
 		}
 
-		// Web Share API 対応: ボタンを表示
-		const button = document.createElement('button');
-		button.className = 'share-button';
-		button.textContent = '共有';
-		button.addEventListener('click', async () => {
-			try {
-				await navigator.share({ title, url });
-			} catch (err) {
-				// ユーザーがキャンセルした場合など
-				if (err.name !== 'AbortError') {
-					console.error('共有エラー:', err);
+		// Web Share API 対応時のみ共有ボタンを追加
+		if (navigator.share) {
+			const button = document.createElement('button');
+			button.className = 'share-button';
+			button.textContent = '共有';
+			button.addEventListener('click', async () => {
+				try {
+					await navigator.share({ title, url });
+				} catch (err) {
+					if (err.name !== 'AbortError') {
+						console.error('共有エラー:', err);
+					}
 				}
-			}
-		});
-		this.appendChild(button);
+			});
+			this.appendChild(button);
+		}
 	}
 });
 

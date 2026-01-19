@@ -704,14 +704,17 @@ ol[itemtype*="BreadcrumbList"] {
 	font-size: 0.8rem !important;
 }
 
-.social {
+/* Social Share Buttons */
+social-share-buttons {
+	/* Reserve space to prevent layout shift: 4 buttons (3rem each) + 3 gaps (1rem each) */
 	display: flex;
 	justify-content: center;
 	gap: 1rem;
 	margin: 3rem 0;
+	min-height: 3rem;
 }
 
-.share-button {
+social-share-buttons .share-button {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -721,22 +724,18 @@ ol[itemtype*="BreadcrumbList"] {
 	transition: transform 0.2s;
 }
 
-.share-button:hover {
+social-share-buttons .share-button:hover {
 	transform: translateY(-3px);
 }
 
-.share-button img {
+social-share-buttons .share-button img {
 	width: 1.2rem;
 	height: 1.2rem;
 	margin: 0 !important;
 	box-shadow: none !important;
 }
 
-web-share-button {
-	display: inline-block;
-}
-
-web-share-button button.share-button {
+social-share-buttons button.share-button {
 	background: #666;
 	color: white;
 	border: none;
