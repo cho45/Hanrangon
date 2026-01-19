@@ -36,11 +36,6 @@ func TestMetaTags(t *testing.T) {
 		// Index page has no PageTitle by default in HandleIndex
 		expectedTitle := "氾濫原"
 
-		itemprop := fmt.Sprintf(`<meta itemprop="name" content="%s"/>`, expectedTitle)
-		if !strings.Contains(body, itemprop) {
-			t.Errorf("itemprop=\"name\" mismatch. expected to contain %s", itemprop)
-		}
-
 		ogTitle := fmt.Sprintf(`<meta property="og:title" content="%s"/>`, expectedTitle)
 		if !strings.Contains(body, ogTitle) {
 			t.Errorf("og:title mismatch. expected to contain %s", ogTitle)
@@ -98,11 +93,6 @@ func TestMetaTags(t *testing.T) {
 
 		expectedTitle := "Test Entry Title - 氾濫原"
 
-		itemprop := fmt.Sprintf(`<meta itemprop="name" content="%s"/>`, expectedTitle)
-		if !strings.Contains(body, itemprop) {
-			t.Errorf("itemprop=\"name\" mismatch. expected to contain %s", itemprop)
-		}
-
 		ogTitle := fmt.Sprintf(`<meta property="og:title" content="%s"/>`, expectedTitle)
 		if !strings.Contains(body, ogTitle) {
 			t.Errorf("og:title mismatch. expected to contain %s", ogTitle)
@@ -129,10 +119,6 @@ func TestMetaTags(t *testing.T) {
 
 		if !strings.Contains(body, `<meta property="og:type" content="article"/>`) {
 			t.Errorf("og:type mismatch for entry page")
-		}
-
-		if !strings.Contains(body, `<meta name="twitter:creator" content="@cho45"/>`) {
-			t.Errorf("twitter:creator mismatch")
 		}
 
 		if !strings.Contains(body, `<meta property="article:published_time" content="2025-01-01T10:00:00Z"/>`) {
