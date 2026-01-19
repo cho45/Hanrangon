@@ -107,6 +107,42 @@ p {
 	margin: 1.5rem 0;
 }
 
+figure {
+	margin: 2rem 0;
+}
+
+blockquote {
+	margin: 1rem 0;
+	padding: 1rem 1.5rem;
+	border-left: 3px solid var(--border-color);
+	color: var(--accent-color);
+	font-size: 0.95em;
+}
+
+blockquote::before {
+	content: "【引用】";
+	display: block;
+	font-weight: bold;
+	margin-bottom: 0.5rem;
+	font-size: 0.9rem;
+	color: var(--accent-color);
+}
+
+q {
+	font-style: italic;
+	color: var(--accent-color);
+}
+
+q::before {
+	content: "［引用: ";
+	font-size: 0.8em;
+}
+
+q::after {
+	content: "］";
+	font-size: 0.8em;
+}
+
 /* Layout */
 #global-header {
 	text-align: center;
@@ -131,6 +167,8 @@ p {
 	border-radius: 8px;
 	overflow: hidden;
 	transition: color 0.4s ease;
+	max-width: var(--container-width);
+	margin: 0 auto;
 }
 
 #global-header a::before {
@@ -915,20 +953,24 @@ hr {
 	html {
 		font-size: 17px;
 	}
-	
+
+	#global-header a {
+		padding: 1rem;
+	}
+
 	#content {
 		padding: 0 1rem;
 	}
-	
+
 	article header h2 {
 		font-size: 1.4rem;
 	}
-	
+
 	.pager {
 		flex-direction: column;
 		align-items: stretch;
 	}
-	
+
 	.pager a {
 		text-align: center;
 	}
