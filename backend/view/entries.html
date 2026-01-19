@@ -12,7 +12,6 @@
 {{$entries := .Entries}}
 {{$isAuth := .IsAuth}}
 {{$isDetail := .IsDetail}}
-<div class="entries">
 	{{range $i, $e := $entries}}
 		{{if $e.IsDateBoundary}}
 			<div class="date"><a href="{{$e.DatePath}}">{{$e.FormattedDate}}</a></div>
@@ -24,23 +23,18 @@
 			class="{{range $e.Tags}}{{.}} {{end}}{{if eq $i 0}}first {{end}}status-{{$e.Status}}"
 			data-id="{{$e.ID}}"
 			data-is-short="{{$e.IsShortEntry}}"
-			{{if not $isDetail}}
-			itemprop="blogPosts"
-			itemscope
-			itemtype="http://schema.org/BlogPosting"
-			{{end}}
 		>
 			<header>
-				<h2 itemprop="name"><a href="{{$e.CanonicalURL}}" class="bookmark" rel="bookmark" itemprop="url"><budoux-ja>{{$e.DisplayTitle}}</budoux-ja></a></h2>
+				<h2><a href="{{$e.CanonicalURL}}" class="bookmark" rel="bookmark"><budoux-ja>{{$e.DisplayTitle}}</budoux-ja></a></h2>
 				<div class="metadata">
 					{{$baseURL := $.BaseURL}}
 					<span class="tags">
 						{{range $e.Tags}}
-							<a href="{{$baseURL}}/{{.}}/"><span itemprop="keywords">{{.}}</span></a>
+							<a href="{{$baseURL}}/{{.}}/"><span>{{.}}</span></a>
 						{{end}}
 					</span>
 
-					<time datetime="{{$e.CreatedAtRFC3339}}" itemprop="datePublished">
+					<time datetime="{{$e.CreatedAtRFC3339}}">
 						<relative-time epoch="{{$e.CreatedAtUnix}}">{{$e.DisplayTime}}</relative-time>
 					</time>
 
@@ -60,26 +54,8 @@
 				</div>
 			</header>
 
-			<div class="content" itemprop="articleBody">
+			<div class="content">
 				{{$e.FormattedBodyHTML}}
-
-				{{$baseURL := $.BaseURL}}
-				{{range $e.Tags}}
-				<ol itemscope itemtype="http://schema.org/BreadcrumbList">
-					<li itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem">
-						<a itemprop="item" href="{{$baseURL}}/"><span itemprop="name">トップ</span></a>
-						<meta itemprop="position" content="1">
-					</li>
-					<li itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem">
-						<a itemprop="item" href="{{$baseURL}}/{{.}}/"><span itemprop="name">{{.}}</span></a>
-						<meta itemprop="position" content="2">
-					</li>
-					<li itemprop="itemListElement" itemscope itemtype="http://schema.org/ListItem">
-						<a itemprop="item" href="{{$e.CanonicalURL}}"><span itemprop="name">{{$e.DisplayTitle}}</span></a>
-						<meta itemprop="position" content="3">
-					</li>
-				</ol>
-				{{end}}
 			</div>
 
 			{{if $.Trackbacks}}
@@ -92,7 +68,7 @@
 							<em>{{.DisplayTitle}}</em><br>
 							<span class="summary">{{.Summary}}</span>
 
-							<time datetime="{{.CreatedAtRFC3339}}" itemprop="datePublished">
+							<time datetime="{{.CreatedAtRFC3339}}">
 								<relative-time epoch="{{.CreatedAtUnix}}">{{.DisplayTime}}</relative-time>
 							</time>
 						</a>
@@ -111,7 +87,7 @@
 						<li data-id="{{.ID}}">
 							<a href="/{{.Path}}" data-score="{{printf "%f" .Score}}">
 								<em>{{.DisplayTitle}}</em>
-								<time datetime="{{.CreatedAtRFC3339}}" itemprop="datePublished">
+								<time datetime="{{.CreatedAtRFC3339}}">
 									<relative-time epoch="{{.CreatedAtUnix}}">{{.DisplayTime}}</relative-time>
 								</time>
 								<span class="summary">{{.Summary}}</span>
@@ -134,29 +110,26 @@
 			</div>
 
 			<div class="social">
-				<p class="share-buttons">
-					<a class="share-button" style="background: #3b5998" target="_blank" rel="noopener nofollow"
-						href="https://www.facebook.com/sharer/sharer.php?u={{$e.CanonicalURL}}"
-					>
-						<img src="/images/sharebuttons/FB-f-Logo__white_50.png" width="18" height="18" alt="Facebook"/>
-					</a>
-					<a class="share-button" style="background: #efefef" target="_blank" rel="noopener nofollow"
-						href="https://bsky.app/intent/compose?text={{$e.DisplayTitle}} {{$e.CanonicalURL}}"
-					>
-						<img src="/images/bluesky_media_kit_logo_svgs.svg" width="40" height="40" alt="Bluesky"/>
-					</a>
-					<a class="share-button" style="background: #00a4de" target="_blank" rel="noopener nofollow"
-						href="http://b.hatena.ne.jp/add?url={{$e.CanonicalURL}}"
-					>
-						<img src="/images/sharebuttons/hatenabookmark-logomark.svg" width="40" height="40" alt="はてなブックマーク"/>
-					</a>
-					<web-share-button title="{{$e.DisplayTitle}}" url="{{$e.CanonicalURL}}"></web-share-button>
-				</p>
+				<a class="share-button" style="background: #3b5998" target="_blank" rel="noopener nofollow"
+					href="https://www.facebook.com/sharer/sharer.php?u={{$e.CanonicalURL}}"
+				>
+					<img src="/images/sharebuttons/FB-f-Logo__white_50.png" width="18" height="18" alt="Facebook"/>
+				</a>
+				<a class="share-button" style="background: #efefef" target="_blank" rel="noopener nofollow"
+					href="https://bsky.app/intent/compose?text={{$e.DisplayTitle}} {{$e.CanonicalURL}}"
+				>
+					<img src="/images/bluesky_media_kit_logo_svgs.svg" width="40" height="40" alt="Bluesky"/>
+				</a>
+				<a class="share-button" style="background: #00a4de" target="_blank" rel="noopener nofollow"
+					href="http://b.hatena.ne.jp/add?url={{$e.CanonicalURL}}"
+				>
+					<img src="/images/sharebuttons/hatenabookmark-logomark.svg" width="40" height="40" alt="はてなブックマーク"/>
+				</a>
+				<web-share-button title="{{$e.DisplayTitle}}" url="{{$e.CanonicalURL}}"></web-share-button>
 			</div>
 			{{end}}
 		</article>
 	{{end}}
-</div>
 
 <nav class="pager" aria-label="ページ送り">
 	{{if .IsDetail}}

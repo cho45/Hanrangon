@@ -571,9 +571,9 @@ func TestHandleCategory(t *testing.T) {
 
 	doc := mustParseHTML(t, rec.Body.String())
 	// ParseTitle separates tags, so we look for the tag link and the clean title
-	// Structure: <a href="/test/"><span itemprop="keywords">test</span></a>
-	if doc.Find("span[itemprop='keywords']").Text() != "test" {
-		t.Errorf("body does not contain tag link for 'test'")
+	// Structure: <a href="/test/"><span>test</span></a>
+	if doc.Find(".metadata .tags span").First().Text() != "test" {
+		t.Errorf("body does not contain tag link for 'test': got %v", doc.Find(".metadata .tags span").First().Text())
 	}
 	if !strings.Contains(doc.Find("h2").Text(), "Tagged Entry") {
 		t.Errorf("h2 tags do not contain clean title 'Tagged Entry'")

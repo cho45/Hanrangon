@@ -1,6 +1,6 @@
 export class AutoPager {
 	constructor(options = {}) {
-		this.containerSelector = options.containerSelector || '.entries';
+		this.containerSelector = options.containerSelector || '#content';
 		this.itemSelector = options.itemSelector || 'article, .date';
 		this.nextSelector = options.nextSelector || 'a[rel="next"]';
 		this.pagerSelector = options.pagerSelector || '.pager';
@@ -8,6 +8,8 @@ export class AutoPager {
 
 		this.loading = false;
 		this.lastUrl = null;
+		this.lastLoadTime = 0;
+		this.minInterval = 500;
 
 		this.observer = new IntersectionObserver((entries) => {
 			for (const entry of entries) {
@@ -33,6 +35,9 @@ export class AutoPager {
 		const next = document.querySelector(this.nextSelector);
 		if (!next || this.loading) return;
 
+		const now = Date.now();
+		if (now - this.lastLoadTime < this.minInterval) return;
+
 		const url = next.href;
 		if (url === this.lastUrl || url === location.href) return;
 
@@ -53,11 +58,17 @@ export class AutoPager {
 			const doc = parser.parseFromString(html, 'text/html');
 
 			const container = document.querySelector(this.containerSelector);
+			const pager = document.querySelector(this.pagerSelector);
 			const newItems = doc.querySelectorAll(`${this.containerSelector} > ${this.itemSelector}`);
 			
 			if (container && newItems.length > 0) {
 				for (const item of newItems) {
-					container.appendChild(document.importNode(item, true));
+					const newNode = document.importNode(item, true);
+					if (pager) {
+						pager.before(newNode);
+					} else {
+						container.appendChild(newNode);
+					}
 				}
 			}
 
@@ -84,6 +95,7 @@ export class AutoPager {
 			console.error('AutoPager error:', e);
 		} finally {
 			this.loading = false;
+			this.lastLoadTime = Date.now();
 		}
 	}
 }

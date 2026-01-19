@@ -119,11 +119,13 @@ p {
 	padding: 0;
 }
 
-#global-header .logo-container {
+#global-header a {
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	gap: 0;
+	color: var(--text-color);
+	text-decoration: none;
 }
 
 #global-header .logo-icon {
@@ -136,11 +138,6 @@ p {
 	width: 150px;
 	height: 50px;
 	transition: color 0.2s;
-}
-
-#global-header a {
-	color: var(--text-color);
-	text-decoration: none;
 }
 
 #global-header a:hover {
@@ -202,7 +199,7 @@ p {
 }
 
 /* Entries */
-.entries .date {
+.date {
 	font-family: 'Noto Serif JP', serif;
 	font-size: 0.85rem;
 	color: var(--accent-color);
@@ -212,7 +209,7 @@ p {
 	border-bottom: 1px solid var(--border-color);
 }
 
-.entries .date a {
+.date a {
 	text-decoration: none;
 	color: inherit;
 }
@@ -707,7 +704,7 @@ ol[itemtype*="BreadcrumbList"] {
 	font-size: 0.8rem !important;
 }
 
-.share-buttons {
+.social {
 	display: flex;
 	justify-content: center;
 	gap: 1rem;
@@ -872,9 +869,6 @@ hr {
 	margin: 4rem 0;
 }
 
-.social {
-	margin-top: 4rem;
-}
 
 /* Metadata tag list */
 .metadata a {
@@ -914,11 +908,17 @@ hr {
 	margin-top: 8rem;
 	padding: 4rem 1.5rem;
 	background-color: #f0f0f0;
+	max-width: var(--full-width);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
 }
 
-#global-footer .container {
+#global-footer > * {
 	max-width: var(--container-width);
-	margin: 0 auto;
+	width: 100%;
+	margin-left: auto;
+	margin-right: auto;
 }
 
 #global-footer .author {
@@ -970,14 +970,14 @@ hr {
 }
 
 /* Specific Nogag overrides */
-.entries article .content {
+article .content {
 	width: 100% !important; /* Overriding old fixed widths */
 }
 
-.entries article header {
+article header {
 	width: 100% !important;
 }
 
-.entries .date {
+.date {
 	width: 100% !important;
 }
