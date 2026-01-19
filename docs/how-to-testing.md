@@ -40,13 +40,26 @@ go test -v -tags "sqlite_math_functions" ./backend/formatter/...
 import "github.com/cho45/hanrangon/internal/testutil"
 
 func TestSomething(t *testing.T) {
+    // 4 つのデータベース（Main, TFIDF, Worker, Images）を自動生成する
     dbs := testutil.SetupAllDBs(t)
     defer dbs.Close()
+
+    // dbs.MainDB.Q などから sqlc 生成のクエリを実行できる
+    entry, err := dbs.MainDB.Q.GetEntry(ctx, "entry-id")
+
+    // トランザクションの使用例
+    err = dbs.MainDB.WithTx(ctx, func(q maindb.Querier) error {
+        return q.UpdateEntry(ctx, params)
+    })
 }
 ```
 
 - タイムゾーンは `Asia/Tokyo` に統一。
-- 4 つのデータベース（Main, TFIDF, Worker, Images）を自動生成する。
+- `dbs.MainDB` などの各フィールドは `model.Database[Q]` 型のラッパーになっており、以下の機能を持つ：
+    - `.Q`: `sqlc` で生成された Querier インターフェース。直接クエリを実行可能。
+    - `.DB`: `*sql.DB` 本体へのアクセス。
+    - `.WithTx(ctx, fn)`: トランザクション内での処理実行。
+    - `.BeginTxx(ctx, opts)`: トランザクション（`*model.Transaction[Q]`）の開始。
 
 ---
 

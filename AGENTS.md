@@ -38,7 +38,7 @@ HANRANGON_ENV=production go run .
 
 ## 開発時の注意事項
 
-1. **AIエージェントへの厳命 (Mandates for AI Agents)**: `make test` -> `make lint` -> `make test` の順で検証を徹底。
+1. **AIエージェントへの厳命 (Mandates for AI Agents)**: `make test` -> `make lint` -> `make test` の順で検証を徹底。テストの詳細は [docs/how-to-testing.md](docs/how-to-testing.md) を参照。
 2. **ディレクトリ移動への配慮**: インポートには常に `github.com/cho45/hanrangon/backend/...` を使用。
 3. **生成コードの編集禁止**: `backend/model/` 以下の `sqlc` 生成ファイル。
 4. **型定義ルール**: `tygo` を使用。フロントエンドでは `admin-frontend/src/lib/types/models.ts` からインポート。
