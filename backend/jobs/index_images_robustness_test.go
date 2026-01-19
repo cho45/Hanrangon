@@ -39,7 +39,7 @@ func TestIndexImagesJob_UniqueConstraintError(t *testing.T) {
 	registry := jobqueue.NewRegistry()
 	worker := jobqueue.NewWorker(dbs.WorkerDB, dbs.WorkerDB.Q, registry)
 
-	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, calc, sim, searcher, worker)
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, dbs.CacheDB, calc, sim, searcher, worker)
 	job := NewIndexImagesJob(application)
 
 	// Create dummy image

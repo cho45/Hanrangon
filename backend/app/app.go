@@ -17,6 +17,7 @@ import (
 
 	"github.com/cho45/hanrangon/backend/jobqueue"
 	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/cachedb"
 	"github.com/cho45/hanrangon/backend/model/imagesdb"
 	"github.com/cho45/hanrangon/backend/model/maindb"
 	"github.com/cho45/hanrangon/backend/model/tfidfdb"
@@ -51,6 +52,7 @@ type AppImpl struct {
 	mainDB               *model.Database[maindb.Querier]
 	tfidfDB              *model.Database[tfidfdb.Querier]
 	workerDB             *model.Database[workerdb.Querier]
+	cacheDB              *model.Database[cachedb.Querier]
 	imagesDB             *model.Database[imagesdb.Querier]
 	calculator           *tfidf.Calculator
 	similarityCalculator *tfidf.SimilarityCalculator
@@ -62,6 +64,7 @@ type AppImpl struct {
 	storage              StorageClient
 	imageProcessor       *ImageProcessor
 	entryService         *EntryService
+	cacheService         *CacheService
 	postprocessProcessor *BatchProcessor
 	postprocessMu        sync.Mutex
 }
@@ -72,6 +75,7 @@ func NewApp(
 	tfidfDB *model.Database[tfidfdb.Querier],
 	workerDB *model.Database[workerdb.Querier],
 	imagesDB *model.Database[imagesdb.Querier],
+	cacheDB *model.Database[cachedb.Querier],
 	calculator *tfidf.Calculator,
 	similarityCalculator *tfidf.SimilarityCalculator,
 	searcher *tfidf.Searcher,
@@ -109,6 +113,7 @@ func NewApp(
 		mainDB:               mainDB,
 		tfidfDB:              tfidfDB,
 		workerDB:             workerDB,
+		cacheDB:              cacheDB,
 		imagesDB:             imagesDB,
 		calculator:           calculator,
 		similarityCalculator: similarityCalculator,
@@ -119,6 +124,7 @@ func NewApp(
 		storage:              storage,
 		imageProcessor:       NewImageProcessor(config),
 	}
+	app.cacheService = NewCacheService(cacheDB.Q)
 	app.entryService = NewEntryService(app)
 	return app
 }
@@ -127,6 +133,7 @@ func (a *AppImpl) MainDB() *model.Database[maindb.Querier]           { return a.
 func (a *AppImpl) TFIDFDB() *model.Database[tfidfdb.Querier]         { return a.tfidfDB }
 func (a *AppImpl) WorkerDB() *model.Database[workerdb.Querier]       { return a.workerDB }
 func (a *AppImpl) ImagesDB() *model.Database[imagesdb.Querier]       { return a.imagesDB }
+func (a *AppImpl) CacheDB() *model.Database[cachedb.Querier]         { return a.cacheDB }
 func (a *AppImpl) Calculator() *tfidf.Calculator                     { return a.calculator }
 func (a *AppImpl) SimilarityCalculator() *tfidf.SimilarityCalculator { return a.similarityCalculator }
 func (a *AppImpl) Searcher() *tfidf.Searcher                         { return a.searcher }
@@ -134,6 +141,7 @@ func (a *AppImpl) JobQueue() *jobqueue.Worker                        { return a.
 func (a *AppImpl) Config() *Config                                   { return a.config }
 func (a *AppImpl) Templates() *Templates                             { return a.templates }
 func (a *AppImpl) EntryService() *EntryService                       { return a.entryService }
+func (a *AppImpl) CacheService() *CacheService                       { return a.cacheService }
 func (a *AppImpl) Storage() StorageClient                            { return a.storage }
 
 func (a *AppImpl) Close() error {

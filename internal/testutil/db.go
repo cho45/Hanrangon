@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/cachedb"
 	"github.com/cho45/hanrangon/backend/model/imagesdb"
 	"github.com/cho45/hanrangon/backend/model/maindb"
 	"github.com/cho45/hanrangon/backend/model/tfidfdb"
@@ -24,6 +25,7 @@ const (
 	tfidfDB  dbType = "tfidf"
 	workerDB dbType = "worker"
 	imagesDB dbType = "images"
+	cacheDB  dbType = "cache"
 )
 
 // getProjectRoot returns the project root directory
@@ -40,6 +42,7 @@ var schemaFiles = map[dbType]string{
 	tfidfDB:  "backend/db/schema/tfidf.sql",
 	workerDB: "backend/db/schema/worker.sql",
 	imagesDB: "backend/db/schema/images.sql",
+	cacheDB:  "backend/db/schema/cache.sql",
 }
 
 var (
@@ -53,6 +56,7 @@ type DBs struct {
 	TFIDFDB  *model.Database[tfidfdb.Querier]
 	WorkerDB *model.Database[workerdb.Querier]
 	ImagesDB *model.Database[imagesdb.Querier]
+	CacheDB  *model.Database[cachedb.Querier]
 }
 
 // Close closes all databases
@@ -68,6 +72,9 @@ func (d *DBs) Close() {
 	}
 	if d.ImagesDB != nil {
 		d.ImagesDB.Close()
+	}
+	if d.CacheDB != nil {
+		d.CacheDB.Close()
 	}
 }
 
@@ -139,11 +146,13 @@ func SetupAllDBs(t *testing.T) *DBs {
 	tfidfDBConn := newTestDB(t, tfidfDB)
 	workerDBConn := newTestDB(t, workerDB)
 	imagesDBConn := newTestDB(t, imagesDB)
+	cacheDBConn := newTestDB(t, cacheDB)
 
 	return &DBs{
 		MainDB:   model.NewDatabase[maindb.Querier](mainDBConn, func(db model.DBTX) maindb.Querier { return maindb.New(db) }),
 		TFIDFDB:  model.NewDatabase[tfidfdb.Querier](tfidfDBConn, func(db model.DBTX) tfidfdb.Querier { return tfidfdb.New(db) }),
 		WorkerDB: model.NewDatabase[workerdb.Querier](workerDBConn, func(db model.DBTX) workerdb.Querier { return workerdb.New(db) }),
 		ImagesDB: model.NewDatabase[imagesdb.Querier](imagesDBConn, func(db model.DBTX) imagesdb.Querier { return imagesdb.New(db) }),
+		CacheDB:  model.NewDatabase[cachedb.Querier](cacheDBConn, func(db model.DBTX) cachedb.Querier { return cachedb.New(db) }),
 	}
 }

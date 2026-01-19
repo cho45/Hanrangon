@@ -110,6 +110,7 @@ func NewServer(app *AppImpl) *echo.Echo {
 		// Gzipライター確保のメモリ/CPUコストの方が大きいため除外する。
 		MinLength: 1024,
 	}))
+	e.Use(app.PageCacheMiddleware())
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			c.Response().Before(func() {

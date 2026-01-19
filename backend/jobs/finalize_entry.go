@@ -40,9 +40,20 @@ func (j *FinalizeEntryJob) Execute(ctx context.Context, arg json.RawMessage) err
 
 	log.Printf("[INFO] FinalizeEntry job started for entry %d", params.EntryID)
 
-	// 現時点では、先行するジョブ（IndexImages, UpdateTrackbacks, RecalculateTFIDF）が
-	// 全て完了したことをログに記録するのみ。
-	// 将来的に、外部サービスへの通知やキャッシュパージなどをここに追加する。
+	// キャッシュ無効化
+	// 1. 該当エントリに依存するページを無効化
+	if err := j.app.CacheService().InvalidateBySourceID(ctx, fmt.Sprintf("entry:%d", params.EntryID)); err != nil {
+		log.Printf("[WARN] Failed to invalidate cache for entry:%d: %v", params.EntryID, err)
+	}
+
+	// 2. 最新エントリリストに依存するページを無効化
+	if err := j.app.CacheService().InvalidateBySourceID(ctx, "global:latest"); err != nil {
+		log.Printf("[WARN] Failed to invalidate cache for global:latest: %v", err)
+	}
+
+	// 3. エントリの内容から、日付アーカイブやカテゴリページも無効化すべきだが、
+	// 現在のジョブ引数には ID しかないため、必要であればここでエントリ情報を取得して無効化する。
+	// YAGNI 原則に基づき、まずは主要な上記2つを実装。
 
 	log.Printf("[INFO] FinalizeEntry job completed for entry %d", params.EntryID)
 	return nil

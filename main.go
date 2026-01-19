@@ -20,6 +20,7 @@ import (
 	"github.com/cho45/hanrangon/backend/jobqueue"
 	"github.com/cho45/hanrangon/backend/jobs"
 	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/cachedb"
 	"github.com/cho45/hanrangon/backend/model/imagesdb"
 	"github.com/cho45/hanrangon/backend/model/maindb"
 	"github.com/cho45/hanrangon/backend/model/tfidfdb"
@@ -84,11 +85,15 @@ func main() {
 	imagesDB := mustOpenDB("sqlite3", config.ImagesDBPath)
 	defer imagesDB.Close()
 
+	cacheDB := mustOpenDB("sqlite3", config.CacheDBPath)
+	defer cacheDB.Close()
+
 	// 4. Database Wrapper初期化
 	mainDBWrapper := model.NewDatabase[maindb.Querier](db, func(tx model.DBTX) maindb.Querier { return maindb.New(tx) })
 	tfidfDBWrapper := model.NewDatabase[tfidfdb.Querier](tfidfDB, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
 	workerDBWrapper := model.NewDatabase[workerdb.Querier](workerDB, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
 	imagesDBWrapper := model.NewDatabase[imagesdb.Querier](imagesDB, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+	cacheDBWrapper := model.NewDatabase[cachedb.Querier](cacheDB, func(tx model.DBTX) cachedb.Querier { return cachedb.New(tx) })
 
 	// 5. TF-IDF Calculator/Similarity初期化
 	calc, err := tfidf.NewCalculator(tfidfDB, tfidfDBWrapper.Q, db, mainDBWrapper.Q)
@@ -111,6 +116,7 @@ func main() {
 		tfidfDBWrapper,
 		workerDBWrapper,
 		imagesDBWrapper,
+		cacheDBWrapper,
 		calc,
 		sim,
 		searcher,

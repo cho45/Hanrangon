@@ -26,7 +26,7 @@ func TestRecalcTFIDF(t *testing.T) {
 	// テスト用に閾値を下げる
 	similarityCalculator.MinValidTerms = 2
 
-	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, calculator, similarityCalculator, nil, nil)
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, dbs.CacheDB, calculator, similarityCalculator, nil, nil)
 	ctx := context.Background()
 
 	// テストデータの準備 (DF > 1 にするために同じ単語を含むエントリを複数作成)

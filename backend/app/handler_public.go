@@ -101,6 +101,21 @@ func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 		IsDetail:   false,
 		OlderPage:  "",
 	}
+
+	// キャッシュ依存関係の設定
+	sourceIDs := []string{}
+	if dd != "" {
+		sourceIDs = append(sourceIDs, fmt.Sprintf("query:date:%s-%s-%s", yyyy, mm, dd))
+	} else if mm != "" {
+		sourceIDs = append(sourceIDs, fmt.Sprintf("query:date:%s-%s", yyyy, mm))
+	} else {
+		sourceIDs = append(sourceIDs, fmt.Sprintf("query:date:%s", yyyy))
+	}
+	for _, e := range entries {
+		sourceIDs = append(sourceIDs, fmt.Sprintf("entry:%d", e.ID))
+	}
+	c.Set("cache_source_ids", sourceIDs)
+
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
 
@@ -240,6 +255,14 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 		IsDetail:   false,
 		OlderPage:  olderPage,
 	}
+
+	// キャッシュ依存関係の設定
+	sourceIDs := []string{"global:latest"}
+	for _, e := range entries {
+		sourceIDs = append(sourceIDs, fmt.Sprintf("entry:%d", e.ID))
+	}
+	c.Set("cache_source_ids", sourceIDs)
+
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
 func (app *AppImpl) HandleCategory(c echo.Context) error {
@@ -297,6 +320,14 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 		IsDetail:   false,
 		OlderPage:  olderPage,
 	}
+
+	// キャッシュ依存関係の設定
+	sourceIDs := []string{fmt.Sprintf("query:category:%s", category)}
+	for _, e := range entries {
+		sourceIDs = append(sourceIDs, fmt.Sprintf("entry:%d", e.ID))
+	}
+	c.Set("cache_source_ids", sourceIDs)
+
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
 
@@ -666,6 +697,15 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 	} else {
 		data.ImageURL = app.JoinBaseURL(fmt.Sprintf("/images/ogp/%d.png", entry.ID))
 	}
+
+	// キャッシュ依存関係の設定
+	sourceIDs := []string{fmt.Sprintf("entry:%d", entry.ID)}
+	if len(viewEntries[0].SimilarEntries) > 0 {
+		for _, se := range viewEntries[0].SimilarEntries {
+			sourceIDs = append(sourceIDs, fmt.Sprintf("entry:%d", se.ID))
+		}
+	}
+	c.Set("cache_source_ids", sourceIDs)
 
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }

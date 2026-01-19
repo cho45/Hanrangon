@@ -47,7 +47,7 @@ func TestIndexImagesJob_SimilarityCache(t *testing.T) {
 	sim := tfidf.NewSimilarityCalculator(tfidfDB, dbs.TFIDFDB.Q)
 	searcher := tfidf.NewSearcher(tfidfDB, dbs.TFIDFDB.Q, calc)
 
-	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, calc, sim, searcher, nil)
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, dbs.CacheDB, calc, sim, searcher, nil)
 	job := NewIndexImagesJob(application)
 
 	ctx := context.Background()

@@ -16,6 +16,7 @@ type Config struct {
 	ImagesDBPath    string   `toml:"images_db_path"`
 	TFIDFDBPath     string   `toml:"tfidf_db_path"`
 	WorkerDBPath    string   `toml:"worker_db_path"`
+	CacheDBPath     string   `toml:"cache_db_path"`
 	StaticDir       string   `toml:"static_dir"`
 	Username        string   `toml:"username"`
 	Password        string   `toml:"password"`
@@ -49,6 +50,8 @@ type Config struct {
 	CFAccountID string `toml:"cf_account_id"`
 
 	PostprocessIdleTimeout int `toml:"postprocess_idle_timeout"` // seconds
+
+	PageCacheEnabled bool `toml:"page_cache_enabled"`
 }
 
 func LoadConfig() *Config {
@@ -64,17 +67,19 @@ func LoadConfig() *Config {
 	staticDir := filepath.Join(baseDir, "static")
 
 	cfg := &Config{
-		BaseDir:         baseDir,
-		DataDBPath:      filepath.Join(varDir, "db", "data.db"),
-		ImagesDBPath:    filepath.Join(varDir, "db", "images.db"),
-		TFIDFDBPath:     filepath.Join(varDir, "db", "tfidf.db"),
-		WorkerDBPath:    filepath.Join(varDir, "db", "worker.db"),
-		StaticDir:       staticDir,
-		UploadDir:       filepath.Join(staticDir, "images", "entry"),
-		UploadURLPrefix: "/images/entry/",
-		BaseURL:         "http://localhost:5555",
-		Listen:          []string{":5555"},
-		SessionSecret:   "change-me-please", // Default secret
+		BaseDir:          baseDir,
+		DataDBPath:       filepath.Join(varDir, "db", "data.db"),
+		ImagesDBPath:     filepath.Join(varDir, "db", "images.db"),
+		TFIDFDBPath:      filepath.Join(varDir, "db", "tfidf.db"),
+		WorkerDBPath:     filepath.Join(varDir, "db", "worker.db"),
+		CacheDBPath:      filepath.Join(varDir, "db", "cache.db"),
+		StaticDir:        staticDir,
+		UploadDir:        filepath.Join(staticDir, "images", "entry"),
+		UploadURLPrefix:  "/images/entry/",
+		BaseURL:          "http://localhost:5555",
+		Listen:           []string{":5555"},
+		SessionSecret:    "change-me-please", // Default secret
+		PageCacheEnabled: true,
 	}
 	// 1. Load from TOML (mandatory)
 	configPath := os.Getenv("HANRANGON_CONFIG")
@@ -106,6 +111,9 @@ func LoadConfig() *Config {
 	if env := os.Getenv("HANRANGON_DB_WORKER"); env != "" {
 		cfg.WorkerDBPath = env
 	}
+	if env := os.Getenv("HANRANGON_DB_CACHE"); env != "" {
+		cfg.CacheDBPath = env
+	}
 	if env := os.Getenv("HANRANGON_STATIC_DIR"); env != "" {
 		cfg.StaticDir = env
 	}
@@ -131,6 +139,9 @@ func LoadConfig() *Config {
 		if val, err := strconv.Atoi(env); err == nil {
 			cfg.PostprocessIdleTimeout = val
 		}
+	}
+	if env := os.Getenv("HANRANGON_PAGE_CACHE_ENABLED"); env != "" {
+		cfg.PageCacheEnabled, _ = strconv.ParseBool(env)
 	}
 
 	// Image Tools Environment Overrides

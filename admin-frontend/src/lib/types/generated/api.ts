@@ -21,6 +21,15 @@ export interface BatchProcessor {
 }
 
 //////////
+// source: cache_service.go
+
+/**
+ * CacheService はページキャッシュを管理するサービス
+ */
+export interface CacheService {
+}
+
+//////////
 // source: cloudflare_api.go
 
 export interface OperationStat {
@@ -42,6 +51,7 @@ export interface Config {
   ImagesDBPath: string;
   TFIDFDBPath: string;
   WorkerDBPath: string;
+  CacheDBPath: string;
   StaticDir: string;
   Username: string;
   Password: string;
@@ -78,6 +88,7 @@ export interface Config {
   CFAPIToken: string;
   CFAccountID: string;
   PostprocessIdleTimeout: number /* int */; // seconds
+  PageCacheEnabled: boolean;
 }
 
 //////////
@@ -201,6 +212,10 @@ export const CSRFCookieName = "sk";
 
 //////////
 // source: ogp.go
+
+
+//////////
+// source: page_cache.go
 
 
 //////////

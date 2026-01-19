@@ -54,7 +54,7 @@ func setupTestApp(t *testing.T) (app.App, *sql.DB) {
 	worker := jobqueue.NewWorker(dbs.WorkerDB, dbs.WorkerDB.Q, registry)
 
 	// App (Use same DB for simplicity if needed, but here we follow main.go pattern)
-	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, calc, sim, searcher, worker)
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, dbs.CacheDB, calc, sim, searcher, worker)
 	return application, db
 }
 

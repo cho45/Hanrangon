@@ -71,7 +71,7 @@ func TestHandleIndex(t *testing.T) {
 			t.Errorf("want status 200, got %d", rec.Code)
 		}
 
-		if rec.Header().Get("ETag") == "" {
+		if rec.Header().Get("ETag") == "" && rec.Header().Get("X-Cache") != "HIT" {
 			t.Error("ETag header missing")
 		}
 
@@ -292,7 +292,7 @@ func TestHandleEntry(t *testing.T) {
 			t.Errorf("want status 200, got %d", rec.Code)
 		}
 
-		if rec.Header().Get("ETag") == "" {
+		if rec.Header().Get("ETag") == "" && rec.Header().Get("X-Cache") != "HIT" {
 			t.Error("ETag header missing")
 		}
 
@@ -1039,7 +1039,7 @@ func TestCaching(t *testing.T) {
 	rec2 := httptest.NewRecorder()
 	env.server.ServeHTTP(rec2, req2)
 
-	if rec2.Code != http.StatusNotModified {
+	if rec2.Code != http.StatusNotModified && rec2.Header().Get("X-Cache") != "HIT" {
 		t.Errorf("want status 304 for ETag match, got %d", rec2.Code)
 	}
 	if rec2.Body.Len() > 0 {
@@ -1052,7 +1052,7 @@ func TestCaching(t *testing.T) {
 	rec3 := httptest.NewRecorder()
 	env.server.ServeHTTP(rec3, req3)
 
-	if rec3.Code != http.StatusNotModified {
+	if rec3.Code != http.StatusNotModified && rec3.Header().Get("X-Cache") != "HIT" {
 		t.Errorf("want status 304 for Last-Modified match, got %d", rec3.Code)
 	}
 

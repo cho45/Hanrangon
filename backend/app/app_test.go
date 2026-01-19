@@ -44,6 +44,7 @@ func setupTest(t *testing.T) *testEnv {
 	config.Password = testPasswordHash
 	config.SessionSecret = "testsecret"
 	config.BaseURL = "http://localhost:5555"
+	config.PageCacheEnabled = false // Disable page cache by default in tests
 
 	// TF-IDF calculator and similarity calculator
 	calc, err := tfidf.NewCalculator(dbs.TFIDFDB.DB, dbs.TFIDFDB.Q, dbs.MainDB.DB, dbs.MainDB.Q)
@@ -57,7 +58,7 @@ func setupTest(t *testing.T) *testEnv {
 	registry := jobqueue.NewRegistry()
 	worker := jobqueue.NewWorker(dbs.WorkerDB, dbs.WorkerDB.Q, registry)
 
-	application := NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, calc, sim, searcher, worker)
+	application := NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, dbs.CacheDB, calc, sim, searcher, worker)
 	e := NewServer(application)
 
 	// テスト用のエラーハンドラーを設定（詳細なエラーメッセージを出力）
@@ -86,6 +87,7 @@ func setupTest(t *testing.T) *testEnv {
 		tfidfDB:   dbs.TFIDFDB.DB,
 		workerDB:  dbs.WorkerDB.DB,
 		imagesDB:  dbs.ImagesDB.DB,
+		cacheDB:   dbs.CacheDB.DB,
 		server:    e,
 		uploadDir: tmpDir,
 	}
@@ -97,6 +99,7 @@ type testEnv struct {
 	tfidfDB   *sql.DB
 	workerDB  *sql.DB
 	imagesDB  *sql.DB
+	cacheDB   *sql.DB
 	server    *echo.Echo
 	uploadDir string
 }
@@ -106,6 +109,7 @@ func (env *testEnv) close() {
 	env.tfidfDB.Close()
 	env.workerDB.Close()
 	env.imagesDB.Close()
+	env.cacheDB.Close()
 	env.app.Close()
 	os.RemoveAll(env.uploadDir)
 }
@@ -369,6 +373,9 @@ func TestAppImpl_AccessorMethods(t *testing.T) {
 	if env.app.ImagesDB() == nil {
 		t.Error("ImagesDB() returned nil")
 	}
+	if env.app.CacheDB() == nil {
+		t.Error("CacheDB() returned nil")
+	}
 	if env.app.Calculator() == nil {
 		t.Error("Calculator() returned nil")
 	}
@@ -386,6 +393,9 @@ func TestAppImpl_AccessorMethods(t *testing.T) {
 	}
 	if env.app.EntryService() == nil {
 		t.Error("EntryService() returned nil")
+	}
+	if env.app.CacheService() == nil {
+		t.Error("CacheService() returned nil")
 	}
 
 	// Test AppImpl-specific methods (not in App interface)
