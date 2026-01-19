@@ -12,9 +12,13 @@ type Querier interface {
 	DeleteCache(ctx context.Context, cacheKey string) error
 	DeleteCacheRelationsByCacheKey(ctx context.Context, cacheKey string) error
 	DeleteCacheRelationsBySourceID(ctx context.Context, sourceID string) error
-	GetCache(ctx context.Context, cacheKey string) ([]byte, error)
+	GetCache(ctx context.Context, cacheKey string) (Cache, error)
+	GetMetadata(ctx context.Context, key string) (string, error)
 	InsertCache(ctx context.Context, arg InsertCacheParams) error
 	InsertCacheRelation(ctx context.Context, arg InsertCacheRelationParams) error
+	SetMetadata(ctx context.Context, arg SetMetadataParams) error
+	TruncateCache(ctx context.Context) error
+	UpdateCacheContentToNull(ctx context.Context, cacheKey string) error
 }
 
 var _ Querier = (*Queries)(nil)

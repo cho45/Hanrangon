@@ -37,28 +37,52 @@ func (q *Queries) DeleteCacheRelationsBySourceID(ctx context.Context, sourceID s
 }
 
 const getCache = `-- name: GetCache :one
-SELECT content FROM cache WHERE cache_key = ?
+SELECT cache_key, content, etag, content_type, created_at FROM cache WHERE cache_key = ?
 `
 
-func (q *Queries) GetCache(ctx context.Context, cacheKey string) ([]byte, error) {
+func (q *Queries) GetCache(ctx context.Context, cacheKey string) (Cache, error) {
 	row := q.db.QueryRowContext(ctx, getCache, cacheKey)
-	var content []byte
-	err := row.Scan(&content)
-	return content, err
+	var i Cache
+	err := row.Scan(
+		&i.CacheKey,
+		&i.Content,
+		&i.Etag,
+		&i.ContentType,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getMetadata = `-- name: GetMetadata :one
+SELECT value FROM cache_metadata WHERE key = ?
+`
+
+func (q *Queries) GetMetadata(ctx context.Context, key string) (string, error) {
+	row := q.db.QueryRowContext(ctx, getMetadata, key)
+	var value string
+	err := row.Scan(&value)
+	return value, err
 }
 
 const insertCache = `-- name: InsertCache :exec
-INSERT OR REPLACE INTO cache (cache_key, content)
-VALUES (?, ?)
+INSERT OR REPLACE INTO cache (cache_key, content, etag, content_type)
+VALUES (?, ?, ?, ?)
 `
 
 type InsertCacheParams struct {
-	CacheKey string `json:"cache_key"`
-	Content  []byte `json:"content"`
+	CacheKey    string `json:"cache_key"`
+	Content     []byte `json:"content"`
+	Etag        string `json:"etag"`
+	ContentType string `json:"content_type"`
 }
 
 func (q *Queries) InsertCache(ctx context.Context, arg InsertCacheParams) error {
-	_, err := q.db.ExecContext(ctx, insertCache, arg.CacheKey, arg.Content)
+	_, err := q.db.ExecContext(ctx, insertCache,
+		arg.CacheKey,
+		arg.Content,
+		arg.Etag,
+		arg.ContentType,
+	)
 	return err
 }
 
@@ -74,5 +98,37 @@ type InsertCacheRelationParams struct {
 
 func (q *Queries) InsertCacheRelation(ctx context.Context, arg InsertCacheRelationParams) error {
 	_, err := q.db.ExecContext(ctx, insertCacheRelation, arg.CacheKey, arg.SourceID)
+	return err
+}
+
+const setMetadata = `-- name: SetMetadata :exec
+INSERT OR REPLACE INTO cache_metadata (key, value) VALUES (?, ?)
+`
+
+type SetMetadataParams struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+func (q *Queries) SetMetadata(ctx context.Context, arg SetMetadataParams) error {
+	_, err := q.db.ExecContext(ctx, setMetadata, arg.Key, arg.Value)
+	return err
+}
+
+const truncateCache = `-- name: TruncateCache :exec
+DELETE FROM cache
+`
+
+func (q *Queries) TruncateCache(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, truncateCache)
+	return err
+}
+
+const updateCacheContentToNull = `-- name: UpdateCacheContentToNull :exec
+UPDATE cache SET content = NULL WHERE cache_key = ?
+`
+
+func (q *Queries) UpdateCacheContentToNull(ctx context.Context, cacheKey string) error {
+	_, err := q.db.ExecContext(ctx, updateCacheContentToNull, cacheKey)
 	return err
 }

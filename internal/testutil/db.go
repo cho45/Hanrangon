@@ -87,6 +87,8 @@ func newTestDB(t *testing.T, typ dbType) *sql.DB {
 	if err != nil {
 		t.Fatalf("failed to open %s db: %v", typ, err)
 	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 
 	// Read schema file from cache or disk
 	schemaCacheMutex.RLock()

@@ -76,13 +76,7 @@ func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
 	}
 
-	if len(entries) > 0 {
-		latest := getLatestModTime(entries)
-		etag := GenerateListETag(latest, len(entries), yyyy+mm+dd, app.IsAuth(c))
-		if ok, err := app.CheckCache(c, latest, etag); ok {
-			return err
-		}
-	}
+	// ETag generation and checking is handled by PageCacheMiddleware
 
 	var pageTitle string
 	if dd != "" {
@@ -238,13 +232,7 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 		entries = filteredEntries
 	}
 
-	if len(entries) > 0 {
-		latest := getLatestModTime(entries)
-		etag := GenerateListETag(latest, len(entries), dateStr, app.IsAuth(c))
-		if ok, err := app.CheckCache(c, latest, etag); ok {
-			return err
-		}
-	}
+	// ETag generation and checking is handled by PageCacheMiddleware
 
 	// HTMLレンダリング
 	viewEntries := view.NewViewEntries(entries, app.config.BaseURL)
@@ -304,13 +292,7 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 		olderPage = fmt.Sprintf("/%s/.page/%s/%d", category, olderDate, limit)
 	}
 
-	if len(entries) > 0 {
-		latest := getLatestModTime(entries)
-		etag := GenerateListETag(latest, len(entries), category+dateStr, app.IsAuth(c))
-		if ok, err := app.CheckCache(c, latest, etag); ok {
-			return err
-		}
-	}
+	// ETag generation and checking is handled by PageCacheMiddleware
 
 	viewEntries := view.NewViewEntries(entries, app.config.BaseURL)
 	app.populateSimilarEntries(ctx, viewEntries)
@@ -616,10 +598,7 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
 	}
 
-	etag := GenerateEntryETag(entry.ID, entry.ModifiedAt, app.IsAuth(c))
-	if ok, err := app.CheckCache(c, entry.ModifiedAt, etag); ok {
-		return err
-	}
+	// ETag generation and checking is handled by PageCacheMiddleware
 
 	rows, err := app.MainDB().Q.ListTrackbackEntries(ctx, sql.NullInt64{Int64: entry.ID, Valid: true})
 	if err != nil && err != sql.ErrNoRows {

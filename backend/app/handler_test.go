@@ -19,6 +19,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/cho45/hanrangon/backend/model/maindb"
 	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHandleIndex(t *testing.T) {
@@ -63,6 +64,10 @@ func TestHandleIndex(t *testing.T) {
 	}
 
 	t.Run("HEAD request", func(t *testing.T) {
+		// Enable page cache to get ETag
+		env.app.Config().PageCacheEnabled = true
+		defer func() { env.app.Config().PageCacheEnabled = false }()
+
 		req := httptest.NewRequest(http.MethodHead, "/", nil)
 		rec := httptest.NewRecorder()
 		env.server.ServeHTTP(rec, req)
@@ -284,6 +289,10 @@ func TestHandleEntry(t *testing.T) {
 	})
 
 	t.Run("HEAD request", func(t *testing.T) {
+		// Enable page cache to get ETag
+		env.app.Config().PageCacheEnabled = true
+		defer func() { env.app.Config().PageCacheEnabled = false }()
+
 		req := httptest.NewRequest(http.MethodHead, "/2025/01/01/1", nil)
 		rec := httptest.NewRecorder()
 		env.server.ServeHTTP(rec, req)
@@ -999,14 +1008,20 @@ func TestHandleApiUploadImage(t *testing.T) {
 
 func TestCaching(t *testing.T) {
 	env := setupTest(t)
-	defer env.close()
+	defer func() {
+		env.app.(*AppImpl).cacheWg.Wait()
+		env.close()
+	}()
+
+	// Enable page cache
+	env.app.Config().PageCacheEnabled = true
 
 	// Insert test data with specific modified_at
 	modTimeStr := "2025-01-01 12:00:00"
 	_, err := env.db.Exec(`
-		INSERT INTO entries (title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at)
+		INSERT INTO entries (title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, status)
 		VALUES
-		('Cache Entry', 'Body', '<p>Body</p>', '', '', '2025/01/01/cache', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', ?)
+		('Cache Entry', 'Body', '<p>Body</p>', '', '', '2025/01/01/cache', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', ?, 'public')
 	`, modTimeStr)
 	if err != nil {
 		t.Fatalf("failed to insert test data: %v", err)
@@ -1014,7 +1029,7 @@ func TestCaching(t *testing.T) {
 
 	targetURL := "/2025/01/01/cache"
 
-	// 1. First request: Should have ETag and Last-Modified
+	// 1. First request: Should have ETag and Last-Modified (MISS)
 	req := httptest.NewRequest(http.MethodGet, targetURL, nil)
 	rec := httptest.NewRecorder()
 	env.server.ServeHTTP(rec, req)
@@ -1033,35 +1048,41 @@ func TestCaching(t *testing.T) {
 		t.Error("Last-Modified header missing")
 	}
 
-	// 2. Second request with If-None-Match (ETag) -> 304
+	// 2. Second request with If-None-Match (ETag) -> 304 (HIT)
 	req2 := httptest.NewRequest(http.MethodGet, targetURL, nil)
 	req2.Header.Set("If-None-Match", etag)
 	rec2 := httptest.NewRecorder()
 	env.server.ServeHTTP(rec2, req2)
 
-	if rec2.Code != http.StatusNotModified && rec2.Header().Get("X-Cache") != "HIT" {
+	if rec2.Code != http.StatusNotModified {
 		t.Errorf("want status 304 for ETag match, got %d", rec2.Code)
 	}
 	if rec2.Body.Len() > 0 {
 		t.Error("want empty body for 304, got content")
 	}
 
-	// 3. Third request with If-Modified-Since (Last-Modified) -> 304
+	// 3. Third request with If-Modified-Since (Last-Modified) -> 304 (HIT)
 	req3 := httptest.NewRequest(http.MethodGet, targetURL, nil)
 	req3.Header.Set("If-Modified-Since", lastModified)
 	rec3 := httptest.NewRecorder()
 	env.server.ServeHTTP(rec3, req3)
 
-	if rec3.Code != http.StatusNotModified && rec3.Header().Get("X-Cache") != "HIT" {
+	if rec3.Code != http.StatusNotModified {
 		t.Errorf("want status 304 for Last-Modified match, got %d", rec3.Code)
 	}
 
-	// 4. Update entry and request with old ETag -> 200 and new ETag
-	newModTimeStr := "2025-01-02 12:00:00"
-	_, err = env.db.Exec(`UPDATE entries SET modified_at = ? WHERE path = '2025/01/01/cache'`, newModTimeStr)
-	if err != nil {
-		t.Fatal(err)
-	}
+	// 4. Update entry (invalidate cache) and request with old ETag -> 200 and new ETag
+	// Invalidate cache explicitly (simulating job)
+	err = env.app.CacheService().InvalidateBySourceID(context.Background(), "entry:1") // ID is likely 1 (auto-increment)
+	// Or we can fetch ID first
+	var id int64
+	env.db.QueryRow("SELECT id FROM entries WHERE path = '2025/01/01/cache'").Scan(&id)
+	err = env.app.CacheService().InvalidateBySourceID(context.Background(), fmt.Sprintf("entry:%d", id))
+	require.NoError(t, err)
+
+	// Update content to change ETag
+	_, err = env.db.Exec(`UPDATE entries SET formatted_body = '<p>Updated Body</p>' WHERE id = ?`, id)
+	require.NoError(t, err)
 
 	req4 := httptest.NewRequest(http.MethodGet, targetURL, nil)
 	req4.Header.Set("If-None-Match", etag) // Old ETag

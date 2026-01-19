@@ -4,13 +4,15 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha1"
+	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"time"
 
+	"github.com/cho45/hanrangon/backend/model/cachedb"
 	"github.com/labstack/echo/v4"
 )
 
@@ -46,126 +48,169 @@ func (app *AppImpl) PageCacheMiddleware() echo.MiddlewareFunc {
 				return next(c)
 			}
 
-			// キャッシュキー生成
 			baseKey := GenerateCacheKey(c.Request().URL.Path)
-			acceptEncoding := c.Request().Header.Get("Accept-Encoding")
-			supportsGzip := strings.Contains(acceptEncoding, "gzip")
+			supportsGzip := strings.Contains(c.Request().Header.Get("Accept-Encoding"), "gzip")
 
-			// 1. 圧縮済みキャッシュのチェック (優先)
-			if content, err := app.CacheService().Get(c.Request().Context(), baseKey+":gzip"); err == nil && content != nil {
-				if supportsGzip {
-					c.Response().Header().Set("Content-Encoding", "gzip")
-					c.Response().Header().Set("X-Cache", "HIT-GZ")
-					c.Response().Header().Set(echo.HeaderContentType, echo.MIMETextHTMLCharsetUTF8)
-					return c.Blob(http.StatusOK, echo.MIMETextHTMLCharsetUTF8, content)
+			// 1. キャッシュヒット確認
+			cache, isGzipped, err := app.getCacheForRequest(c.Request().Context(), baseKey, supportsGzip)
+			if err == nil && cache.Content != nil {
+				if app.checkNotModified(c, cache.Etag, cache.CreatedAt) {
+					return c.NoContent(http.StatusNotModified)
 				}
-				// Gzip非対応クライアントには解凍して返す
-				decompressed, err := app.decompressGzip(content)
-				if err == nil {
-					c.Response().Header().Set("X-Cache", "HIT-GZ-DECOMPRESSED")
-					return c.HTMLBlob(http.StatusOK, decompressed)
-				}
-				// 解凍失敗時はミスとして扱う（通常は起こらない）
+				c.Response().Header().Set("X-Cache", "HIT")
+				return app.serveCache(c, cache, isGzipped)
 			}
 
-			// 2. 非圧縮キャッシュのチェック (非同期処理完了までのフォールバック)
-			if content, err := app.CacheService().Get(c.Request().Context(), baseKey+":raw"); err == nil && content != nil {
-				c.Response().Header().Set("X-Cache", "HIT-RAW")
-				if supportsGzip && len(content) > 1024 {
-					c.Response().Header().Set("Content-Encoding", "gzip")
-					return app.serveGzip(c, content)
-				}
-				return c.HTMLBlob(http.StatusOK, content)
-			}
-
-			// 3. キャッシュミス: レスポンスをキャプチャ
-			c.Response().Header().Set("X-Cache", "MISS")
+			// 2. キャッシュミス - レスポンスをキャプチャ
 			rec := httptest.NewRecorder()
 			origWriter := c.Response().Writer
-			wrapper := &responseWriterWrapper{ResponseWriter: origWriter, recorder: rec}
-			c.Response().Writer = wrapper
-			defer func() {
-				_ = wrapper.Close()
-				c.Response().Writer = origWriter
-			}()
-
-			// クライアントが Gzip 対応ならヘッダーをセット (wrapper 内で圧縮がトリガーされる)
-			if supportsGzip {
-				c.Response().Header().Set("Content-Encoding", "gzip")
-			}
+			c.Response().Writer = rec
 
 			if err := next(c); err != nil {
+				c.Response().Writer = origWriter
+				return err
+			}
+			c.Response().Writer = origWriter
+
+			if c.Response().Status != http.StatusOK {
+				// 成功時以外はキャッシュせず、そのままレスポンスを返す
+				for k, v := range rec.Header() {
+					c.Response().Header()[k] = v
+				}
+				c.Response().WriteHeader(rec.Code)
+				_, err := c.Response().Write(rec.Body.Bytes())
 				return err
 			}
 
-			// 成功時のみキャッシュ保存と圧縮処理
-			if c.Response().Status == http.StatusOK {
-				content := rec.Body.Bytes()
-
-				// 依存関係を取得
-				var sourceIDs []string
-				if ids := c.Get("cache_source_ids"); ids != nil {
-					sourceIDs = ids.([]string)
-				}
-
-				if len(sourceIDs) > 0 {
-					// 非圧縮版を即時保存
-					if err := app.CacheService().Set(c.Request().Context(), baseKey+":raw", content, sourceIDs); err != nil {
-						log.Printf("[WARN] Failed to save raw page cache for %s: %v", baseKey, err)
-					}
-
-					// 非同期で Gzip 圧縮して保存 (重複実行を抑制)
-					app.cacheWg.Add(1)
-					go func() {
-						defer app.cacheWg.Done()
-						// 同一キーでの同時圧縮を防ぐ
-						_, _, _ = app.cacheSF.Do(baseKey, func() (interface{}, error) {
-							ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-							defer cancel()
-							if err := app.CompressGzipAndSave(ctx, baseKey, content, sourceIDs); err != nil {
-								log.Printf("[WARN] Failed to compress and save page cache for %s: %v", baseKey, err)
-							}
-							return nil, nil
-						})
-					}()
-				}
-
+			// 3. キャッシュ保存と返却
+			content := rec.Body.Bytes()
+			contentType := rec.Header().Get(echo.HeaderContentType)
+			if contentType == "" {
+				contentType = echo.MIMETextHTMLCharsetUTF8
 			}
 
-			return nil
+			// ETag 計算 (Raw コンテンツに対して行う)
+			hash := sha1.Sum(content)
+			rawEtag := fmt.Sprintf(`"%x"`, hash)
+
+			// Gzip 圧縮と ETag 生成
+			gzipped, _ := app.compressGzip(content)
+			gzipEtag := strings.TrimSuffix(rawEtag, `"`) + `:gzip"`
+
+			// 依存関係があればキャッシュ保存
+			sourceIDs, _ := c.Get("cache_source_ids").([]string)
+			if len(sourceIDs) > 0 {
+				ctx := c.Request().Context()
+				// Gzip版を保存
+				_ = app.CacheService().Set(ctx, baseKey+":gzip", gzipped, gzipEtag, contentType, sourceIDs)
+				// Raw版はコンテンツなしで保存 (ETagのみ。容量節約のため)
+				_ = app.CacheService().Set(ctx, baseKey+":raw", nil, rawEtag, contentType, sourceIDs)
+			}
+
+			// レスポンス返却
+			c.Response().Header().Set("X-Cache", "MISS")
+			if supportsGzip {
+				return app.serveCache(c, cachedb.Cache{
+					Content:     gzipped,
+					Etag:        gzipEtag,
+					ContentType: contentType,
+					CreatedAt:   time.Now(),
+				}, true)
+			} else {
+				return app.serveCache(c, cachedb.Cache{
+					Content:     content,
+					Etag:        rawEtag,
+					ContentType: contentType,
+					CreatedAt:   time.Now(),
+				}, false)
+			}
 		}
 	}
 }
 
-// serveGzip はデータを Gzip 圧縮してレスポンスとして返す
-func (app *AppImpl) serveGzip(c echo.Context, content []byte) error {
-	c.Response().Header().Set("Content-Encoding", "gzip")
-	gw := gzip.NewWriter(c.Response().Writer)
-	defer func() {
-		_ = gw.Close()
-	}()
-	_, err := gw.Write(content)
-	return err
+// getCacheForRequest はリクエストに応じた最適なキャッシュを取得する
+func (app *AppImpl) getCacheForRequest(ctx context.Context, baseKey string, supportsGzip bool) (cachedb.Cache, bool, error) {
+	if supportsGzip {
+		// 1. Gzip版を探す
+		cache, err := app.CacheService().Get(ctx, baseKey+":gzip")
+		if err == nil && cache.Content != nil {
+			return cache, true, nil
+		}
+		// 2. Raw版を探す (フォールバック)
+		cache, err = app.CacheService().Get(ctx, baseKey+":raw")
+		if err == nil && cache.Content != nil {
+			return cache, false, nil
+		}
+	} else {
+		// 1. Raw版を探す
+		cache, err := app.CacheService().Get(ctx, baseKey+":raw")
+		if err == nil && cache.Content != nil {
+			return cache, false, nil
+		}
+		// 2. Gzip版を探して解凍する (フォールバック)
+		cache, err = app.CacheService().Get(ctx, baseKey+":gzip")
+		if err == nil && cache.Content != nil {
+			decompressed, derr := app.decompressGzip(cache.Content)
+			if derr == nil {
+				cache.Content = decompressed
+				// ETag を Raw 用に復元
+				cache.Etag = strings.TrimSuffix(cache.Etag, `:gzip"`) + `"`
+				return cache, false, nil
+			}
+		}
+	}
+	return cachedb.Cache{}, false, fmt.Errorf("cache not found")
 }
 
-// CompressGzipAndSave はデータを Gzip 圧縮してキャッシュに保存する
-func (app *AppImpl) CompressGzipAndSave(ctx context.Context, baseKey string, content []byte, sourceIDs []string) error {
+// serveCache はキャッシュデータをレスポンスとして返す
+func (app *AppImpl) serveCache(c echo.Context, cache cachedb.Cache, isGzipped bool) error {
+	res := c.Response()
+	res.Header().Set(echo.HeaderContentType, cache.ContentType)
+	res.Header().Set("ETag", cache.Etag)
+	res.Header().Set("Last-Modified", cache.CreatedAt.UTC().Format(http.TimeFormat))
+	res.Header().Set("Vary", "Accept-Encoding")
+	if isGzipped {
+		res.Header().Set("Content-Encoding", "gzip")
+	}
+	return c.Blob(http.StatusOK, cache.ContentType, cache.Content)
+}
+
+// checkNotModified は If-None-Match / If-Modified-Since を検証する
+func (app *AppImpl) checkNotModified(c echo.Context, etag string, createdAt time.Time) bool {
+	req := c.Request()
+
+	// 1. If-None-Match (ETag)
+	if match := req.Header.Get("If-None-Match"); match != "" {
+		if match == "*" || strings.Contains(match, etag) {
+			return true
+		}
+		return false
+	}
+
+	// 2. If-Modified-Since (Last-Modified)
+	if ifModSince := req.Header.Get("If-Modified-Since"); ifModSince != "" {
+		t, err := time.Parse(http.TimeFormat, ifModSince)
+		if err == nil {
+			if !createdAt.Truncate(time.Second).After(t) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// compressGzip はデータを Gzip 圧縮する
+func (app *AppImpl) compressGzip(content []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	gw := gzip.NewWriter(&buf)
 	if _, err := gw.Write(content); err != nil {
-		return err
+		return nil, err
 	}
 	if err := gw.Close(); err != nil {
-		return err
+		return nil, err
 	}
-
-	// 圧縮版を保存
-	if err := app.CacheService().Set(ctx, baseKey+":gzip", buf.Bytes(), sourceIDs); err != nil {
-		return err
-	}
-
-	// 圧縮版の保存に成功したら、非圧縮版を削除して容量を節約
-	return app.CacheService().InvalidateByKey(ctx, baseKey+":raw")
+	return buf.Bytes(), nil
 }
 
 // decompressGzip は Gzip 圧縮されたデータを解凍する
@@ -178,36 +223,4 @@ func (app *AppImpl) decompressGzip(data []byte) ([]byte, error) {
 		_ = gr.Close()
 	}()
 	return io.ReadAll(gr)
-}
-
-type responseWriterWrapper struct {
-	http.ResponseWriter
-	recorder *httptest.ResponseRecorder
-	gw       *gzip.Writer
-}
-
-func (w *responseWriterWrapper) Write(b []byte) (int, error) {
-	_, _ = w.recorder.Write(b)
-
-	// クライアントが Gzip を要求しており、かつ十分に長いデータであれば圧縮を開始
-	if w.Header().Get("Content-Encoding") == "gzip" {
-		if w.gw == nil {
-			w.gw = gzip.NewWriter(w.ResponseWriter)
-		}
-		return w.gw.Write(b)
-	}
-
-	return w.ResponseWriter.Write(b)
-}
-
-func (w *responseWriterWrapper) WriteHeader(statusCode int) {
-	w.recorder.WriteHeader(statusCode)
-	w.ResponseWriter.WriteHeader(statusCode)
-}
-
-func (w *responseWriterWrapper) Close() error {
-	if w.gw != nil {
-		return w.gw.Close()
-	}
-	return nil
 }

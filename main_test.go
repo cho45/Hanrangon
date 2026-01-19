@@ -54,6 +54,14 @@ func TestRunServe_GracefulShutdownOrder(t *testing.T) {
 	if _, err := db.Exec(string(entrySchema)); err != nil {
 		t.Fatal(err)
 	}
+	// And cache schema
+	cacheSchema, err := os.ReadFile(filepath.Join(config.BaseDir, "backend/db/schema/cache.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(string(cacheSchema)); err != nil {
+		t.Fatal(err)
+	}
 
 	config.Listen = []string{"127.0.0.1:0"} // Random free port
 	config.SessionSecret = "test"
@@ -143,6 +151,8 @@ func TestRunServe_MultipleListeners(t *testing.T) {
 	db.Exec(string(workerSchema))
 	entrySchema, _ := os.ReadFile(filepath.Join(config.BaseDir, "backend/db/schema/schema.sql"))
 	db.Exec(string(entrySchema))
+	cacheSchema, _ := os.ReadFile(filepath.Join(config.BaseDir, "backend/db/schema/cache.sql"))
+	db.Exec(string(cacheSchema))
 
 	// Prepare UDS path
 	tmpSock := filepath.Join(t.TempDir(), "test.sock")

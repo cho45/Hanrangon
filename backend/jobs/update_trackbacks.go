@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/url"
 	"regexp"
 
@@ -89,7 +90,27 @@ func (j *UpdateTrackbacksJob) Execute(ctx context.Context, arg json.RawMessage) 
 		}); err != nil {
 			return err
 		}
+
+		// キャッシュ無効化 (非同期で良いが、ここでは同期的に実行)
+		// トランザクション外で実行すべきだが、ジョブ内なので許容範囲か？
+		// いや、トランザクションコミット後に実行すべき。
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	// キャッシュ無効化をコミット後に実行
+	for _, path := range paths {
+		target, err := j.app.MainDB().Q.GetEntryByPath(ctx, path)
+		if err != nil {
+			continue
+		}
+		if err := j.app.CacheService().InvalidateBySourceID(ctx, fmt.Sprintf("entry:%d", target.ID)); err != nil {
+			// ログ出力など (ジョブ自体は失敗させない)
+			log.Printf("Failed to invalidate cache for entry:%d: %v\n", target.ID, err)
+		}
+	}
+
+	return nil
 }

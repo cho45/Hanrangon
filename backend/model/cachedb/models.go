@@ -4,9 +4,21 @@
 
 package cachedb
 
+import (
+	"time"
+)
+
 type Cache struct {
-	CacheKey string `json:"cache_key"`
-	Content  []byte `json:"content"`
+	CacheKey    string    `json:"cache_key"`
+	Content     []byte    `json:"content"`
+	Etag        string    `json:"etag"`
+	ContentType string    `json:"content_type"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type CacheMetadatum struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
 }
 
 type CacheRelation struct {

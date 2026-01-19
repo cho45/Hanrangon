@@ -140,6 +140,7 @@ func (env *testEnv) login(t *testing.T) *LoginInfo {
 	payload := fmt.Sprintf("username=testuser&password=testpass&sk=%s", sk)
 	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("X-Requested-With", "fetch")
 	req.Header.Set("Cookie", strings.Join(cookies, "; "))
 	rec := httptest.NewRecorder()
 	env.server.ServeHTTP(rec, req)

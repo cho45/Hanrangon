@@ -49,9 +49,11 @@ func TestCacheService_SetAndGet(t *testing.T) {
 	// キャッシュ保存 + 依存関係登録
 	key := "/test/page"
 	content := []byte("test content")
+	etag := "etag"
+	contentType := "text/plain"
 	sourceIDs := []string{"entry:123", "entry:456"}
 
-	if err := service.Set(ctx, key, content, sourceIDs); err != nil {
+	if err := service.Set(ctx, key, content, etag, contentType, sourceIDs); err != nil {
 		t.Fatalf("Set failed: %v", err)
 	}
 
@@ -61,8 +63,14 @@ func TestCacheService_SetAndGet(t *testing.T) {
 		t.Fatalf("Get failed: %v", err)
 	}
 
-	if string(got) != string(content) {
-		t.Errorf("Get() = %q, want %q", got, content)
+	if string(got.Content) != string(content) {
+		t.Errorf("Get() = %q, want %q", got.Content, content)
+	}
+	if got.Etag != etag {
+		t.Errorf("Get() etag = %q, want %q", got.Etag, etag)
+	}
+	if got.ContentType != contentType {
+		t.Errorf("Get() contentType = %q, want %q", got.ContentType, contentType)
 	}
 }
 
@@ -78,7 +86,7 @@ func TestCacheService_InvalidateByKey(t *testing.T) {
 	content := []byte("test content")
 	sourceIDs := []string{"entry:123"}
 
-	if err := service.Set(ctx, key, content, sourceIDs); err != nil {
+	if err := service.Set(ctx, key, content, "etag", "text/plain", sourceIDs); err != nil {
 		t.Fatalf("Set failed: %v", err)
 	}
 
@@ -107,15 +115,15 @@ func TestCacheService_InvalidateBySourceID(t *testing.T) {
 	key3 := "/test/page3"
 	content := []byte("test content")
 
-	if err := service.Set(ctx, key1, content, []string{"entry:123", "entry:456"}); err != nil {
+	if err := service.Set(ctx, key1, content, "etag", "text/plain", []string{"entry:123", "entry:456"}); err != nil {
 		t.Fatalf("Set key1 failed: %v", err)
 	}
 
-	if err := service.Set(ctx, key2, content, []string{"entry:123"}); err != nil {
+	if err := service.Set(ctx, key2, content, "etag", "text/plain", []string{"entry:123"}); err != nil {
 		t.Fatalf("Set key2 failed: %v", err)
 	}
 
-	if err := service.Set(ctx, key3, content, []string{"entry:789"}); err != nil {
+	if err := service.Set(ctx, key3, content, "etag", "text/plain", []string{"entry:789"}); err != nil {
 		t.Fatalf("Set key3 failed: %v", err)
 	}
 
@@ -151,7 +159,7 @@ func TestCacheService_TriggerCascade(t *testing.T) {
 	content := []byte("test content")
 	sourceIDs := []string{"entry:123"}
 
-	if err := service.Set(ctx, key, content, sourceIDs); err != nil {
+	if err := service.Set(ctx, key, content, "etag", "text/plain", sourceIDs); err != nil {
 		t.Fatalf("Set failed: %v", err)
 	}
 
@@ -179,7 +187,7 @@ func TestCacheService_MultipleSourceIDs(t *testing.T) {
 	content := []byte("index page")
 	sourceIDs := []string{"global:latest", "entry:1", "entry:2", "entry:3"}
 
-	if err := service.Set(ctx, key, content, sourceIDs); err != nil {
+	if err := service.Set(ctx, key, content, "etag", "text/plain", sourceIDs); err != nil {
 		t.Fatalf("Set failed: %v", err)
 	}
 
@@ -207,14 +215,14 @@ func TestCacheService_OverwriteCache(t *testing.T) {
 	// 最初の保存
 	content1 := []byte("content v1")
 	sourceIDs1 := []string{"entry:1", "entry:2"}
-	if err := service.Set(ctx, key, content1, sourceIDs1); err != nil {
+	if err := service.Set(ctx, key, content1, "etag1", "text/plain", sourceIDs1); err != nil {
 		t.Fatalf("Set v1 failed: %v", err)
 	}
 
 	// 上書き保存 (異なるcontent, 異なるsourceIDs)
 	content2 := []byte("content v2")
 	sourceIDs2 := []string{"entry:3", "entry:4"}
-	if err := service.Set(ctx, key, content2, sourceIDs2); err != nil {
+	if err := service.Set(ctx, key, content2, "etag2", "text/plain", sourceIDs2); err != nil {
 		t.Fatalf("Set v2 failed: %v", err)
 	}
 
@@ -223,8 +231,8 @@ func TestCacheService_OverwriteCache(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
-	if string(got) != string(content2) {
-		t.Errorf("Get() = %q, want %q", got, content2)
+	if string(got.Content) != string(content2) {
+		t.Errorf("Get() = %q, want %q", got.Content, content2)
 	}
 
 	// 古い依存関係 (entry:1) では無効化されない
@@ -275,7 +283,7 @@ func TestCacheService_EmptySourceIDs(t *testing.T) {
 	content := []byte("test content")
 
 	// 空の sourceIDs で保存
-	if err := service.Set(ctx, key, content, []string{}); err != nil {
+	if err := service.Set(ctx, key, content, "etag", "text/plain", []string{}); err != nil {
 		t.Fatalf("Set with empty sourceIDs failed: %v", err)
 	}
 
@@ -284,8 +292,8 @@ func TestCacheService_EmptySourceIDs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
-	if string(got) != string(content) {
-		t.Errorf("Get() = %q, want %q", got, content)
+	if string(got.Content) != string(content) {
+		t.Errorf("Get() = %q, want %q", got.Content, content)
 	}
 
 	// どの source_id でも無効化されない
@@ -320,7 +328,7 @@ func TestCacheService_EmptyContent(t *testing.T) {
 	sourceIDs := []string{"entry:1"}
 
 	// 空のcontent
-	if err := service.Set(ctx, key, content, sourceIDs); err != nil {
+	if err := service.Set(ctx, key, content, "etag", "text/plain", sourceIDs); err != nil {
 		t.Fatalf("Set with empty content failed: %v", err)
 	}
 
@@ -329,8 +337,8 @@ func TestCacheService_EmptyContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
-	if len(got) != 0 {
-		t.Errorf("Get() should return empty content, got: %q", got)
+	if len(got.Content) != 0 {
+		t.Errorf("Get() should return empty content, got: %q", got.Content)
 	}
 }
 
@@ -350,7 +358,7 @@ func TestCacheService_ConcurrentWrite(t *testing.T) {
 		go func(n int) {
 			content := []byte(fmt.Sprintf("content-%d", n))
 			sourceIDs := []string{fmt.Sprintf("entry:%d", n)}
-			if err := service.Set(ctx, key, content, sourceIDs); err != nil {
+			if err := service.Set(ctx, key, content, "etag", "text/plain", sourceIDs); err != nil {
 				t.Errorf("Set failed: %v", err)
 			}
 			done <- true
@@ -369,7 +377,7 @@ func TestCacheService_ConcurrentWrite(t *testing.T) {
 	}
 
 	// どれかの content が保存されている
-	if len(got) == 0 {
+	if len(got.Content) == 0 {
 		t.Errorf("content should not be empty")
 	}
 }
@@ -385,7 +393,7 @@ func TestCacheService_NilSourceIDs(t *testing.T) {
 	content := []byte("test")
 
 	// nil sourceIDs
-	if err := service.Set(ctx, key, content, nil); err != nil {
+	if err := service.Set(ctx, key, content, "etag", "text/plain", nil); err != nil {
 		t.Fatalf("Set with nil sourceIDs failed: %v", err)
 	}
 
@@ -417,7 +425,7 @@ func TestCacheService_IndexPageScenario(t *testing.T) {
 		"entry:1",
 	}
 
-	if err := service.Set(ctx, indexKey, indexContent1, indexSourceIDs1); err != nil {
+	if err := service.Set(ctx, indexKey, indexContent1, "etag", "text/plain", indexSourceIDs1); err != nil {
 		t.Fatalf("Set index cache failed: %v", err)
 	}
 
@@ -426,8 +434,8 @@ func TestCacheService_IndexPageScenario(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get index cache failed: %v", err)
 	}
-	if string(got) != string(indexContent1) {
-		t.Errorf("Get() = %q, want %q", got, indexContent1)
+	if string(got.Content) != string(indexContent1) {
+		t.Errorf("Get() = %q, want %q", got.Content, indexContent1)
 	}
 
 	// ケース1: 既存エントリ3を更新 → Indexページのキャッシュが無効化される
@@ -443,7 +451,7 @@ func TestCacheService_IndexPageScenario(t *testing.T) {
 
 	// 再度キャッシュ (エントリ3の内容が更新されている)
 	indexContent2 := []byte("<html>Entry 5, 4, 3(updated), 2, 1</html>")
-	if err := service.Set(ctx, indexKey, indexContent2, indexSourceIDs1); err != nil {
+	if err := service.Set(ctx, indexKey, indexContent2, "etag", "text/plain", indexSourceIDs1); err != nil {
 		t.Fatalf("Set index cache again failed: %v", err)
 	}
 
@@ -470,7 +478,7 @@ func TestCacheService_IndexPageScenario(t *testing.T) {
 		// entry:1 は表示されなくなった
 	}
 
-	if err := service.Set(ctx, indexKey, indexContent3, indexSourceIDs2); err != nil {
+	if err := service.Set(ctx, indexKey, indexContent3, "etag", "text/plain", indexSourceIDs2); err != nil {
 		t.Fatalf("Set index cache with new entry failed: %v", err)
 	}
 
@@ -484,8 +492,8 @@ func TestCacheService_IndexPageScenario(t *testing.T) {
 	if err != nil {
 		t.Errorf("index cache should still exist after entry:1 update, got: %v", err)
 	}
-	if string(got) != string(indexContent3) {
-		t.Errorf("Get() = %q, want %q", got, indexContent3)
+	if string(got.Content) != string(indexContent3) {
+		t.Errorf("Get() = %q, want %q", got.Content, indexContent3)
 	}
 
 	// ケース4: 表示中のエントリ4を更新 → Indexページが無効化される
@@ -497,6 +505,59 @@ func TestCacheService_IndexPageScenario(t *testing.T) {
 	_, err = service.Get(ctx, indexKey)
 	if err != sql.ErrNoRows {
 		t.Errorf("index cache should be deleted after entry:4 update, got: %v", err)
+	}
+}
+
+func TestCacheService_CheckAndTruncateCache(t *testing.T) {
+	db, wrapper := setupCacheDB(t)
+	defer db.Close()
+
+	service := NewCacheService(wrapper)
+	ctx := context.Background()
+
+	// 1. 初期状態: AppHash を保存 (初期化)
+	initialHash := "hash-v1"
+	if err := service.CheckAndTruncateCache(ctx, initialHash); err != nil {
+		t.Fatalf("CheckAndTruncateCache v1 failed: %v", err)
+	}
+
+	// キャッシュを作成
+	key := "/test/page"
+	if err := service.Set(ctx, key, []byte("content"), "etag", "text/plain", nil); err != nil {
+		t.Fatalf("Set failed: %v", err)
+	}
+
+	// キャッシュが存在することを確認
+	if _, err := service.Get(ctx, key); err != nil {
+		t.Fatalf("Cache should exist: %v", err)
+	}
+
+	// 2. 同じ AppHash でチェック -> 何も起きない
+	if err := service.CheckAndTruncateCache(ctx, initialHash); err != nil {
+		t.Fatalf("CheckAndTruncateCache v1 again failed: %v", err)
+	}
+	if _, err := service.Get(ctx, key); err != nil {
+		t.Fatalf("Cache should still exist: %v", err)
+	}
+
+	// 3. 異なる AppHash でチェック -> キャッシュ全削除
+	newHash := "hash-v2"
+	if err := service.CheckAndTruncateCache(ctx, newHash); err != nil {
+		t.Fatalf("CheckAndTruncateCache v2 failed: %v", err)
+	}
+
+	// キャッシュが削除されていることを確認
+	if _, err := service.Get(ctx, key); err != sql.ErrNoRows {
+		t.Errorf("Cache should be deleted after AppHash change, got: %v", err)
+	}
+
+	// AppHash が更新されていることを確認
+	storedHash, err := wrapper.Q.GetMetadata(ctx, "app_hash")
+	if err != nil {
+		t.Fatalf("GetMetadata failed: %v", err)
+	}
+	if storedHash != newHash {
+		t.Errorf("AppHash should be updated to %q, got %q", newHash, storedHash)
 	}
 }
 
@@ -513,7 +574,7 @@ func TestCacheService_MultiplePagesDependOnSameEntry(t *testing.T) {
 	entryPageContent := []byte("<html>Entry 123 detail</html>")
 	entryPageSourceIDs := []string{"entry:123", "entry:456", "entry:789"} // 本体 + 関連エントリ
 
-	if err := service.Set(ctx, entryPageKey, entryPageContent, entryPageSourceIDs); err != nil {
+	if err := service.Set(ctx, entryPageKey, entryPageContent, "etag", "text/plain", entryPageSourceIDs); err != nil {
 		t.Fatalf("Set entry page failed: %v", err)
 	}
 
@@ -522,7 +583,7 @@ func TestCacheService_MultiplePagesDependOnSameEntry(t *testing.T) {
 	indexContent := []byte("<html>Latest: 125, 124, 123, 122, 121</html>")
 	indexSourceIDs := []string{"global:latest", "entry:125", "entry:124", "entry:123", "entry:122", "entry:121"}
 
-	if err := service.Set(ctx, indexKey, indexContent, indexSourceIDs); err != nil {
+	if err := service.Set(ctx, indexKey, indexContent, "etag", "text/plain", indexSourceIDs); err != nil {
 		t.Fatalf("Set index page failed: %v", err)
 	}
 
@@ -531,7 +592,7 @@ func TestCacheService_MultiplePagesDependOnSameEntry(t *testing.T) {
 	archiveContent := []byte("<html>August 2006: 130, 125, 123, 120</html>")
 	archiveSourceIDs := []string{"query:date:2006-08", "entry:130", "entry:125", "entry:123", "entry:120"}
 
-	if err := service.Set(ctx, archiveKey, archiveContent, archiveSourceIDs); err != nil {
+	if err := service.Set(ctx, archiveKey, archiveContent, "etag", "text/plain", archiveSourceIDs); err != nil {
 		t.Fatalf("Set archive page failed: %v", err)
 	}
 

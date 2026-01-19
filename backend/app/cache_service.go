@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 
 	"github.com/cho45/hanrangon/backend/model"
 	"github.com/cho45/hanrangon/backend/model/cachedb"
@@ -22,7 +23,7 @@ func NewCacheService(db *model.Database[cachedb.Querier]) *CacheService {
 }
 
 // Set はキャッシュを保存し、依存関係を登録
-func (s *CacheService) Set(ctx context.Context, key string, content []byte, sourceIDs []string) error {
+func (s *CacheService) Set(ctx context.Context, key string, content []byte, etag string, contentType string, sourceIDs []string) error {
 	return s.db.WithTx(ctx, func(q cachedb.Querier) error {
 		// 既存の依存関係を明示的に削除 (トリガーによる連鎖削除の混乱を防ぐ)
 		if err := q.DeleteCacheRelationsByCacheKey(ctx, key); err != nil {
@@ -31,8 +32,10 @@ func (s *CacheService) Set(ctx context.Context, key string, content []byte, sour
 
 		// キャッシュを保存 (既存があれば置換)
 		if err := q.InsertCache(ctx, cachedb.InsertCacheParams{
-			CacheKey: key,
-			Content:  content,
+			CacheKey:    key,
+			Content:     content,
+			Etag:        etag,
+			ContentType: contentType,
 		}); err != nil {
 			return fmt.Errorf("failed to insert cache: %w", err)
 		}
@@ -51,16 +54,49 @@ func (s *CacheService) Set(ctx context.Context, key string, content []byte, sour
 }
 
 // Get はキャッシュを取得
-func (s *CacheService) Get(ctx context.Context, key string) ([]byte, error) {
-	content, err := s.db.Q.GetCache(ctx, key)
+func (s *CacheService) Get(ctx context.Context, key string) (cachedb.Cache, error) {
+	cache, err := s.db.Q.GetCache(ctx, key)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, err
+			return cachedb.Cache{}, err
 		}
-		return nil, fmt.Errorf("failed to get cache: %w", err)
+		return cachedb.Cache{}, fmt.Errorf("failed to get cache: %w", err)
 	}
 
-	return content, nil
+	return cache, nil
+}
+
+// UpdateContentToNull はキャッシュのコンテンツをNULLに更新 (容量節約)
+func (s *CacheService) UpdateContentToNull(ctx context.Context, key string) error {
+	if err := s.db.Q.UpdateCacheContentToNull(ctx, key); err != nil {
+		return fmt.Errorf("failed to update cache content to null: %w", err)
+	}
+	return nil
+}
+
+// CheckAndTruncateCache は AppHash を確認し、変更があればキャッシュを全削除する
+func (s *CacheService) CheckAndTruncateCache(ctx context.Context, currentAppHash string) error {
+	storedHash, err := s.db.Q.GetMetadata(ctx, "app_hash")
+	if err != nil && err != sql.ErrNoRows {
+		return fmt.Errorf("failed to get app_hash metadata: %w", err)
+	}
+
+	if storedHash != currentAppHash {
+		log.Printf("AppHash mismatch (stored: %s, current: %s). Truncating cache...\n", storedHash, currentAppHash)
+		if err := s.db.WithTx(ctx, func(q cachedb.Querier) error {
+			if err := q.TruncateCache(ctx); err != nil {
+				return err
+			}
+			return q.SetMetadata(ctx, cachedb.SetMetadataParams{
+				Key:   "app_hash",
+				Value: currentAppHash,
+			})
+		}); err != nil {
+			return fmt.Errorf("failed to truncate cache and update app_hash: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // InvalidateByKey はキーを指定してキャッシュを無効化

@@ -129,6 +129,12 @@ func NewApp(
 	}
 	app.cacheService = NewCacheService(cacheDB)
 	app.entryService = NewEntryService(app)
+
+	// AppHash の変更チェックとキャッシュの整合性確保
+	if err := app.cacheService.CheckAndTruncateCache(context.Background(), AppHash); err != nil {
+		log.Printf("Warning: Failed to check and truncate cache: %v", err)
+	}
+
 	return app
 }
 
