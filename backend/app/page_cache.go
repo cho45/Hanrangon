@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -50,21 +51,27 @@ func (app *AppImpl) PageCacheMiddleware() echo.MiddlewareFunc {
 			acceptEncoding := c.Request().Header.Get("Accept-Encoding")
 			supportsGzip := strings.Contains(acceptEncoding, "gzip")
 
-			// 1. 圧縮済みキャッシュのチェック
-			if supportsGzip {
-				if content, err := app.CacheService().Get(c.Request().Context(), baseKey+":gzip"); err == nil && content != nil {
+			// 1. 圧縮済みキャッシュのチェック (優先)
+			if content, err := app.CacheService().Get(c.Request().Context(), baseKey+":gzip"); err == nil && content != nil {
+				if supportsGzip {
 					c.Response().Header().Set("Content-Encoding", "gzip")
 					c.Response().Header().Set("X-Cache", "HIT-GZ")
 					c.Response().Header().Set(echo.HeaderContentType, echo.MIMETextHTMLCharsetUTF8)
 					return c.Blob(http.StatusOK, echo.MIMETextHTMLCharsetUTF8, content)
 				}
+				// Gzip非対応クライアントには解凍して返す
+				decompressed, err := app.decompressGzip(content)
+				if err == nil {
+					c.Response().Header().Set("X-Cache", "HIT-GZ-DECOMPRESSED")
+					return c.HTMLBlob(http.StatusOK, decompressed)
+				}
+				// 解凍失敗時はミスとして扱う（通常は起こらない）
 			}
 
-			// 2. 非圧縮キャッシュのチェック
+			// 2. 非圧縮キャッシュのチェック (非同期処理完了までのフォールバック)
 			if content, err := app.CacheService().Get(c.Request().Context(), baseKey+":raw"); err == nil && content != nil {
 				c.Response().Header().Set("X-Cache", "HIT-RAW")
 				if supportsGzip && len(content) > 1024 {
-					// その場で圧縮して返す
 					c.Response().Header().Set("Content-Encoding", "gzip")
 					return app.serveGzip(c, content)
 				}
@@ -144,7 +151,23 @@ func (app *AppImpl) CompressGzipAndSave(ctx context.Context, baseKey string, con
 		return err
 	}
 
-	return app.CacheService().Set(ctx, baseKey+":gzip", buf.Bytes(), sourceIDs)
+	// 圧縮版を保存
+	if err := app.CacheService().Set(ctx, baseKey+":gzip", buf.Bytes(), sourceIDs); err != nil {
+		return err
+	}
+
+	// 圧縮版の保存に成功したら、非圧縮版を削除して容量を節約
+	return app.CacheService().InvalidateByKey(ctx, baseKey+":raw")
+}
+
+// decompressGzip は Gzip 圧縮されたデータを解凍する
+func (app *AppImpl) decompressGzip(data []byte) ([]byte, error) {
+	gr, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	defer gr.Close()
+	return io.ReadAll(gr)
 }
 
 type responseWriterWrapper struct {
