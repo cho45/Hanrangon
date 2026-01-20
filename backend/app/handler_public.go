@@ -125,6 +125,10 @@ func (app *AppImpl) HandleArchive(c echo.Context) error {
 		LayoutData: app.newLayoutData(c, "アーカイブ"),
 		Archives:   view.ConvertArchives(archives),
 	}
+
+	// キャッシュ依存関係の設定
+	c.Set("cache_source_ids", []string{"global:latest"})
+
 	return app.templates.RenderWithLayout(c, "layout.html", "archive.html", data)
 }
 
@@ -364,6 +368,9 @@ func (app *AppImpl) HandleFeed(c echo.Context) error {
 
 	feed.Entries = atomEntries
 
+	// キャッシュ依存関係の設定
+	c.Set("cache_source_ids", []string{"global:latest"})
+
 	c.Response().Header().Set(echo.HeaderContentType, "application/atom+xml")
 	c.Response().WriteHeader(http.StatusOK)
 	if _, err := c.Response().Write([]byte(xml.Header)); err != nil {
@@ -404,6 +411,9 @@ func (app *AppImpl) HandleSitemap(c echo.Context) error {
 		URLs: urls,
 	}
 
+	// キャッシュ依存関係の設定
+	c.Set("cache_source_ids", []string{"global:latest"})
+
 	c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationXMLCharsetUTF8)
 	c.Response().WriteHeader(http.StatusOK)
 	if _, err := c.Response().Write([]byte(xml.Header)); err != nil {
@@ -424,6 +434,10 @@ Sitemap: %s
 `,
 		app.JoinBaseURL("/sitemap.xml"),
 	)
+
+	// キャッシュ依存関係の設定
+	c.Set("cache_source_ids", []string{"global:latest"})
+
 	return c.String(http.StatusOK, content)
 }
 

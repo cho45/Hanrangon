@@ -14,10 +14,7 @@ import (
 
 func TestPageCacheMiddleware_EndToEnd(t *testing.T) {
 	env := setupTest(t)
-	defer func() {
-		env.app.(*AppImpl).cacheWg.Wait()
-		env.close()
-	}()
+	defer env.close()
 
 	// ページキャッシュを有効化
 	env.app.Config().PageCacheEnabled = true
@@ -82,10 +79,7 @@ func TestPageCacheMiddleware_EndToEnd(t *testing.T) {
 
 func TestPageCacheMiddleware_CompressionConsistency(t *testing.T) {
 	env := setupTest(t)
-	defer func() {
-		env.app.(*AppImpl).cacheWg.Wait()
-		env.close()
-	}()
+	defer env.close()
 
 	env.app.Config().PageCacheEnabled = true
 
@@ -112,9 +106,6 @@ func TestPageCacheMiddleware_CompressionConsistency(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec1.Code)
 	assert.Equal(t, "gzip", rec1.Header().Get("Content-Encoding"))
 	assert.Equal(t, "MISS", rec1.Header().Get("X-Cache"))
-
-	// Wait for async gzip compression
-	env.app.(*AppImpl).cacheWg.Wait()
 
 	// 2. Gzipを要求しないリクエスト: HIT
 	// 不具合がある場合、ここで gzip 圧縮されたデータがそのまま返ってきてしまう (Content-Encoding なしなのに中身がバイナリ)
@@ -151,10 +142,7 @@ func TestPageCacheMiddleware_CompressionConsistency(t *testing.T) {
 
 func TestPageCacheMiddleware_InvalidationScenario(t *testing.T) {
 	env := setupTest(t)
-	defer func() {
-		env.app.(*AppImpl).cacheWg.Wait()
-		env.close()
-	}()
+	defer env.close()
 
 	env.app.Config().PageCacheEnabled = true
 
@@ -190,10 +178,7 @@ func TestPageCacheMiddleware_InvalidationScenario(t *testing.T) {
 
 func TestPageCacheMiddleware_AuthUser(t *testing.T) {
 	env := setupTest(t)
-	defer func() {
-		env.app.(*AppImpl).cacheWg.Wait()
-		env.close()
-	}()
+	defer env.close()
 
 	env.app.Config().PageCacheEnabled = true
 
@@ -211,10 +196,7 @@ func TestPageCacheMiddleware_AuthUser(t *testing.T) {
 
 func TestPageCacheMiddleware_OnTheFlyDecompression(t *testing.T) {
 	env := setupTest(t)
-	defer func() {
-		env.app.(*AppImpl).cacheWg.Wait()
-		env.close()
-	}()
+	defer env.close()
 
 	env.app.Config().PageCacheEnabled = true
 
@@ -232,15 +214,12 @@ func TestPageCacheMiddleware_OnTheFlyDecompression(t *testing.T) {
 
 	targetURL := "/decompress-path"
 
-	// 1. Gzipリクエスト (MISS -> Async Gzip Save -> Raw Content Nullified)
+	// 1. Gzipリクエスト (MISS -> Sync Gzip Save -> Raw Content Nullified)
 	req1 := httptest.NewRequest(http.MethodGet, targetURL, nil)
 	req1.Header.Set("Accept-Encoding", "gzip")
 	rec1 := httptest.NewRecorder()
 	env.server.ServeHTTP(rec1, req1)
 	assert.Equal(t, "MISS", rec1.Header().Get("X-Cache"))
-
-	// 非同期処理の完了を待つ
-	env.app.(*AppImpl).cacheWg.Wait()
 
 	// DBの状態を確認: RawキャッシュのContentがNULLになっているはず
 	rawKey := targetURL + ":raw"
@@ -261,10 +240,7 @@ func TestPageCacheMiddleware_OnTheFlyDecompression(t *testing.T) {
 
 func TestPageCacheMiddleware_Consistency(t *testing.T) {
 	env := setupTest(t)
-	defer func() {
-		env.app.(*AppImpl).cacheWg.Wait()
-		env.close()
-	}()
+	defer env.close()
 
 	env.app.Config().PageCacheEnabled = true
 
@@ -287,9 +263,6 @@ func TestPageCacheMiddleware_Consistency(t *testing.T) {
 	assert.NotEmpty(t, etag1, "ETag must be present on first MISS")
 	assert.Contains(t, etag1, ":gzip", "ETag must have :gzip suffix when response is gzipped")
 
-	// Wait for async gzip compression to avoid race condition in test expectations
-	env.app.(*AppImpl).cacheWg.Wait()
-
 	// 2. Second request: MUST be HIT
 	req2 := httptest.NewRequest(http.MethodGet, targetURL, nil)
 	req2.Header.Set("Accept-Encoding", "gzip")
@@ -306,4 +279,63 @@ func TestPageCacheMiddleware_Consistency(t *testing.T) {
 	env.server.ServeHTTP(rec3, req3)
 
 	assert.Equal(t, "HIT", rec3.Header().Get("X-Cache"), "Third request must be a HIT")
+}
+
+func TestPageCacheMiddleware_Whitelist(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	env.app.Config().PageCacheEnabled = true
+
+	// テストデータ
+	_, err := env.db.Exec(`
+		INSERT INTO entries (title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, status)
+		VALUES ('Test Entry', 'Body', '<p>Body</p>', 'Summary', '', 'test-entry', 'Markdown', '2025-01-01', '2025-01-01 10:00:00', '2025-01-01 10:00:00', 'public')
+	`)
+	require.NoError(t, err)
+
+	tests := []struct {
+		path        string
+		shouldCache bool
+	}{
+		{"/", true},
+		{"/archive", true},
+		{"/2025/", true},
+		{"/2025/01/", true},
+		{"/2025/01/01/", true},
+		{"/feed", true},
+		{"/sitemap.xml", true},
+		{"/robots.txt", true},
+		{"/test-entry", true}, // matches /*
+		{"/search", false},
+		{"/.page/2025-01-01/10", false},
+		{"/api/search", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			// 1回目
+			req1 := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			rec1 := httptest.NewRecorder()
+			env.server.ServeHTTP(rec1, req1)
+
+			if tt.shouldCache {
+				assert.Equal(t, "MISS", rec1.Header().Get("X-Cache"), "Should be MISS for %s", tt.path)
+
+				// 2回目 (HITするはず)
+				req2 := httptest.NewRequest(http.MethodGet, tt.path, nil)
+				rec2 := httptest.NewRecorder()
+				env.server.ServeHTTP(rec2, req2)
+				assert.Equal(t, "HIT", rec2.Header().Get("X-Cache"), "Should be HIT for %s", tt.path)
+			} else {
+				assert.Equal(t, "", rec1.Header().Get("X-Cache"), "Should NOT have X-Cache header for %s", tt.path)
+
+				// 2回目 (やはりキャッシュされないはず)
+				req2 := httptest.NewRequest(http.MethodGet, tt.path, nil)
+				rec2 := httptest.NewRecorder()
+				env.server.ServeHTTP(rec2, req2)
+				assert.Equal(t, "", rec2.Header().Get("X-Cache"), "Should NOT have X-Cache header for %s even on second request for %s", tt.path, tt.path)
+			}
+		})
+	}
 }

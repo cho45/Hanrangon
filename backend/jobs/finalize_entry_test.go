@@ -62,6 +62,58 @@ func TestFinalizeEntryJob_Execute(t *testing.T) {
 	}
 }
 
+func TestFinalizeEntryJob_Invalidation(t *testing.T) {
+	application, db := setupTestApp(t)
+	ctx := context.Background()
+
+	// 1. テストデータの準備
+	entryID := int64(200)
+	date := "2026-01-20"
+	_ = "tech" // category
+	_, err := db.Exec(`
+		INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at)
+		VALUES (?, '[tech] Test Entry', 'Body', 'Formatted', '2026/01/20/1', 'Markdown', ?, '2026-01-20 10:00:00', '2026-01-20 10:00:00')
+	`, entryID, date)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. 関連するキャッシュをあらかじめ作成
+	cacheKeys := []struct {
+		key      string
+		sourceID string
+	}{
+		{"/2026/01/20/", "query:date:2026-01-20"},
+		{"/2026/01/", "query:date:2026-01"},
+		{"/2026/", "query:date:2026"},
+		{"/tech/", "query:category:tech"},
+	}
+
+	for _, ck := range cacheKeys {
+		err = application.CacheService().Set(ctx, ck.key, []byte("content"), "etag", "text/html", []string{ck.sourceID})
+		if err != nil {
+			t.Fatalf("Failed to setup cache for %s: %v", ck.key, err)
+		}
+	}
+
+	// 3. ジョブ実行
+	job := NewFinalizeEntryJob(application)
+	arg := FinalizeEntryArg{EntryID: entryID}
+	argJSON, _ := json.Marshal(arg)
+	err = job.Execute(ctx, argJSON)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+
+	// 4. キャッシュが削除されているか確認
+	for _, ck := range cacheKeys {
+		_, err := application.CacheService().Get(ctx, ck.key)
+		if err == nil {
+			t.Errorf("Cache for %s should have been invalidated but still exists", ck.key)
+		}
+	}
+}
+
 // TestFinalizeEntryJob_Execute_InvalidJSON は不正なJSONでエラーが返されることを検証する
 func TestFinalizeEntryJob_Execute_InvalidJSON(t *testing.T) {
 	application, _ := setupTestApp(t)

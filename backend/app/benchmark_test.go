@@ -83,7 +83,6 @@ func createBenchEntries(b *testing.B, env *testEnv, count int) {
 func BenchmarkHandleIndex(b *testing.B) {
 	env := setupBenchmark(b)
 	defer func() {
-		env.app.(*AppImpl).cacheWg.Wait()
 		env.close()
 	}()
 
@@ -112,7 +111,6 @@ func BenchmarkHandleIndex(b *testing.B) {
 func BenchmarkHandlePath(b *testing.B) {
 	env := setupBenchmark(b)
 	defer func() {
-		env.app.(*AppImpl).cacheWg.Wait()
 		env.close()
 	}()
 
@@ -152,7 +150,6 @@ func BenchmarkHandlePath(b *testing.B) {
 func BenchmarkHandlePath_CacheHit(b *testing.B) {
 	env := setupBenchmark(b)
 	defer func() {
-		env.app.(*AppImpl).cacheWg.Wait()
 		env.close()
 	}()
 
@@ -176,8 +173,6 @@ func BenchmarkHandlePath_CacheHit(b *testing.B) {
 
 	// 1回実行してキャッシュを生成させる
 	env.server.ServeHTTP(rec, req)
-	// 非同期保存の完了を待機
-	env.app.(*AppImpl).cacheWg.Wait()
 
 	// キャッシュが生成されたか確認
 	recCheck := newPreallocRecorder(128 * 1024)
@@ -204,7 +199,6 @@ func BenchmarkHandlePath_CacheHit(b *testing.B) {
 func BenchmarkHandlePath_CacheHit_Gzip(b *testing.B) {
 	env := setupBenchmark(b)
 	defer func() {
-		env.app.(*AppImpl).cacheWg.Wait()
 		env.close()
 	}()
 
@@ -225,18 +219,13 @@ func BenchmarkHandlePath_CacheHit_Gzip(b *testing.B) {
 	req.Header.Set("Accept-Encoding", "gzip")
 	rec := newPreallocRecorder(128 * 1024)
 
-	// キャッシュ生成（非同期圧縮の完了を待つ必要があるため、ここでは同期的に生成されるのを待つか、
-	// 十分な回数回して HIT-GZ になることを確認する）
-	// 今回の実装では初回 MISS 時に同期圧縮レスポンス + 非同期保存なので、
-	// 2回目以降に HIT-GZ を期待する。
+	// キャッシュ生成（初回 MISS 時に同期的に生成される）
 	env.server.ServeHTTP(rec, req)
-	// 非同期圧縮の完了を確実に待機
-	env.app.(*AppImpl).cacheWg.Wait()
 
 	// キャッシュが生成されたか確認
 	recCheck := newPreallocRecorder(128 * 1024)
 	env.server.ServeHTTP(recCheck, req)
-	if recCheck.Header().Get("X-Cache") != "HIT-GZ" {
+	if recCheck.Header().Get("X-Cache") != "HIT" {
 		b.Fatalf("failed to prime gzip cache: %s", recCheck.Header().Get("X-Cache"))
 	}
 
@@ -247,11 +236,7 @@ func BenchmarkHandlePath_CacheHit_Gzip(b *testing.B) {
 		rec.Reset()
 		env.server.ServeHTTP(rec, req)
 
-		if rec.Header().Get("X-Cache") != "HIT-GZ" {
-			// まだ非同期処理が終わっていない場合はスキップせず、状況を確認
-			if i < 10 && rec.Header().Get("X-Cache") == "HIT-RAW" {
-				continue
-			}
+		if rec.Header().Get("X-Cache") != "HIT" {
 			b.Fatalf("expected Gzip cache hit, got X-Cache: %s", rec.Header().Get("X-Cache"))
 		}
 	}

@@ -1009,7 +1009,6 @@ func TestHandleApiUploadImage(t *testing.T) {
 func TestCaching(t *testing.T) {
 	env := setupTest(t)
 	defer func() {
-		env.app.(*AppImpl).cacheWg.Wait()
 		env.close()
 	}()
 
@@ -1073,7 +1072,7 @@ func TestCaching(t *testing.T) {
 
 	// 4. Update entry (invalidate cache) and request with old ETag -> 200 and new ETag
 	// Invalidate cache explicitly (simulating job)
-	err = env.app.CacheService().InvalidateBySourceID(context.Background(), "entry:1") // ID is likely 1 (auto-increment)
+	_ = env.app.CacheService().InvalidateBySourceID(context.Background(), "entry:1") // ID is likely 1 (auto-increment)
 	// Or we can fetch ID first
 	var id int64
 	env.db.QueryRow("SELECT id FROM entries WHERE path = '2025/01/01/cache'").Scan(&id)

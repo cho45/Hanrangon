@@ -7,6 +7,7 @@ import (
 	"crypto/sha1"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,7 +17,8 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// GenerateCacheKey はリクエストパスからキャッシュキーを生成する
+// GenerateCacheKey はリクエストパスからキャッシュキーを生成する。
+// 現在の実装ではクエリパラメータを無視している。
 func GenerateCacheKey(path string) string {
 	path = strings.TrimSuffix(path, "/")
 	if path == "" {
@@ -43,8 +45,15 @@ func (app *AppImpl) PageCacheMiddleware() echo.MiddlewareFunc {
 				return next(c)
 			}
 
-			// 管理画面は除外
-			if strings.HasPrefix(c.Request().URL.Path, "/admin") {
+			// キャッシュ対象のパスかチェック (ホワイトリスト)
+			// 個別エントリ (/*) や各種アーカイブ、フィードなどを対象とする。
+			// ページング (/.page/...) や検索などはキャッシュしない。
+			isWhitelisted := false
+			switch c.Path() {
+			case "/", "/archive", "/:param/", "/:yyyy/:mm/", "/:yyyy/:mm/:dd/", "/feed", "/sitemap.xml", "/robots.txt", "/*":
+				isWhitelisted = true
+			}
+			if !isWhitelisted {
 				return next(c)
 			}
 
@@ -53,12 +62,16 @@ func (app *AppImpl) PageCacheMiddleware() echo.MiddlewareFunc {
 
 			// 1. キャッシュヒット確認
 			cache, isGzipped, err := app.getCacheForRequest(c.Request().Context(), baseKey, supportsGzip)
-			if err == nil && cache.Content != nil {
+			if err == nil {
 				if app.checkNotModified(c, cache.Etag, cache.CreatedAt) {
 					return c.NoContent(http.StatusNotModified)
 				}
-				c.Response().Header().Set("X-Cache", "HIT")
-				return app.serveCache(c, cache, isGzipped)
+				// Content がある場合のみ HIT として返す。
+				// NULL の場合は 304 チェックには使えるが配信はできないため MISS 扱いにして再生成する。
+				if cache.Content != nil {
+					c.Response().Header().Set("X-Cache", "HIT")
+					return app.serveCache(c, cache, isGzipped)
+				}
 			}
 
 			// 2. キャッシュミス - レスポンスをキャプチャ
@@ -102,9 +115,13 @@ func (app *AppImpl) PageCacheMiddleware() echo.MiddlewareFunc {
 			if len(sourceIDs) > 0 {
 				ctx := c.Request().Context()
 				// Gzip版を保存
-				_ = app.CacheService().Set(ctx, baseKey+":gzip", gzipped, gzipEtag, contentType, sourceIDs)
+				if err := app.CacheService().Set(ctx, baseKey+":gzip", gzipped, gzipEtag, contentType, sourceIDs); err != nil {
+					log.Printf("[WARN] Failed to set gzip cache for %s: %v", baseKey, err)
+				}
 				// Raw版はコンテンツなしで保存 (ETagのみ。容量節約のため)
-				_ = app.CacheService().Set(ctx, baseKey+":raw", nil, rawEtag, contentType, sourceIDs)
+				if err := app.CacheService().Set(ctx, baseKey+":raw", nil, rawEtag, contentType, sourceIDs); err != nil {
+					log.Printf("[WARN] Failed to set raw cache for %s: %v", baseKey, err)
+				}
 			}
 
 			// レスポンス返却
@@ -142,13 +159,8 @@ func (app *AppImpl) getCacheForRequest(ctx context.Context, baseKey string, supp
 			return cache, false, nil
 		}
 	} else {
-		// 1. Raw版を探す
-		cache, err := app.CacheService().Get(ctx, baseKey+":raw")
-		if err == nil && cache.Content != nil {
-			return cache, false, nil
-		}
-		// 2. Gzip版を探して解凍する (フォールバック)
-		cache, err = app.CacheService().Get(ctx, baseKey+":gzip")
+		// 1. Gzip版を探す (解凍して返すのが一番確実)
+		cache, err := app.CacheService().Get(ctx, baseKey+":gzip")
 		if err == nil && cache.Content != nil {
 			decompressed, derr := app.decompressGzip(cache.Content)
 			if derr == nil {
@@ -157,6 +169,11 @@ func (app *AppImpl) getCacheForRequest(ctx context.Context, baseKey string, supp
 				cache.Etag = strings.TrimSuffix(cache.Etag, `:gzip"`) + `"`
 				return cache, false, nil
 			}
+		}
+		// 2. Raw版を探す (Content があればそれを返し、なければ ETag チェック用として返す)
+		cache, err = app.CacheService().Get(ctx, baseKey+":raw")
+		if err == nil {
+			return cache, false, nil
 		}
 	}
 	return cachedb.Cache{}, false, fmt.Errorf("cache not found")
