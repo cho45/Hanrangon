@@ -94,33 +94,3 @@ func (app *AppImpl) CheckCache(c echo.Context, lastMod time.Time, etag string) (
 
 	return false, nil
 }
-
-// GenerateListETag は記事リスト用の Strong ETag を生成。AppHash と認証状態を含めることで、
-// アプリの更新や権限変更時にキャッシュを無効化する。
-func GenerateListETag(latestMod time.Time, count int, extra string, isAuth bool) string {
-	authPart := "public"
-	if isAuth {
-		authPart = "auth"
-	}
-	s := fmt.Sprintf("%s-%s-%d-%d-%s", AppHash, authPart, latestMod.UnixNano(), count, extra)
-	h := sha1.Sum([]byte(s))
-	return fmt.Sprintf(`"%x"`, h)
-}
-
-// SHA1 を使用する理由:
-// ETag の用途は衝突を回避することであり、セキュリティ上の要請はない。
-// SHA1 は 160 ビットのハッシュ空間を持ち、HTTP キャッシュ用途として
-// 衝突の可能性は実質的に無視できるレベル。
-// 歴史的な実装との互換性や、HTTP ヘッダサイズの観点から
-// SHA1 のまま運用を継続する。
-
-// GenerateEntryETag は単一エントリ用の Strong ETag を生成。
-func GenerateEntryETag(id int64, mod time.Time, isAuth bool) string {
-	authPart := "public"
-	if isAuth {
-		authPart = "auth"
-	}
-	s := fmt.Sprintf("%s-%s-%d-%d", AppHash, authPart, id, mod.UnixNano())
-	h := sha1.Sum([]byte(s))
-	return fmt.Sprintf(`"%x"`, h)
-}
