@@ -13,7 +13,7 @@ func TestReformat(t *testing.T) {
 	defer dbs.Close()
 
 	config := app.LoadConfig()
-	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, nil, nil, nil, nil)
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, dbs.CacheDB, nil, nil, nil, nil)
 	ctx := context.Background()
 
 	// テストデータの準備 (古いフォーマット結果を持つエントリ)

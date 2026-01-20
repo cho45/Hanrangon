@@ -105,7 +105,7 @@ func TestIndexImagesJob_Execute(t *testing.T) {
 	registry := jobqueue.NewRegistry()
 	worker := jobqueue.NewWorker(dbs.WorkerDB, dbs.WorkerDB.Q, registry)
 
-	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, calc, sim, searcher, worker)
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, dbs.CacheDB, calc, sim, searcher, worker)
 	job := NewIndexImagesJob(application)
 
 	// Create a dummy image
@@ -180,7 +180,7 @@ func TestIndexImagesJob_HandleLoadFailure(t *testing.T) {
 	registry := jobqueue.NewRegistry()
 	worker := jobqueue.NewWorker(dbs.WorkerDB, dbs.WorkerDB.Q, registry)
 
-	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, calc, sim, searcher, worker)
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, dbs.CacheDB, calc, sim, searcher, worker)
 	job := NewIndexImagesJob(application)
 
 	ctx := context.Background()
@@ -233,7 +233,7 @@ func TestIndexImagesJob_TwoPhase(t *testing.T) {
 	registry := jobqueue.NewRegistry()
 	worker := jobqueue.NewWorker(dbs.WorkerDB, dbs.WorkerDB.Q, registry)
 
-	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, calc, sim, searcher, worker)
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, dbs.CacheDB, calc, sim, searcher, worker)
 	job := NewIndexImagesJob(application)
 
 	// Create a dummy image
@@ -334,7 +334,7 @@ func TestIndexImagesJob_SyncRobustness(t *testing.T) {
 	db, imagesDB := dbs.MainDB.DB, dbs.ImagesDB.DB
 
 	config := app.LoadConfig()
-	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, nil, nil, nil, nil)
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, dbs.CacheDB, nil, nil, nil, nil)
 	job := NewIndexImagesJob(application)
 
 	ctx := context.Background()
@@ -446,7 +446,7 @@ func TestIndexImagesJob_CorruptImage(t *testing.T) {
 	config.UploadURLPrefix = "/images/entry/"
 	config.UploadDir = tmpDir
 
-	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, nil, nil, nil, nil)
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, dbs.CacheDB, nil, nil, nil, nil)
 	job := NewIndexImagesJob(application)
 
 	// Create a corrupt image file (just some random text)
@@ -492,7 +492,7 @@ func TestIndexImagesJob_Rollback(t *testing.T) {
 	config.UploadURLPrefix = "/images/entry/"
 	config.UploadDir = tmpDir
 
-	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, nil, nil, nil, nil)
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, dbs.CacheDB, nil, nil, nil, nil)
 	job := NewIndexImagesJob(application)
 
 	ctx := context.Background()
@@ -585,7 +585,7 @@ func TestIndexImagesJob_Overwrite(t *testing.T) {
 	config.UploadURLPrefix = "/images/entry/"
 	config.UploadDir = tmpDir
 
-	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, nil, nil, nil, nil)
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, dbs.CacheDB, nil, nil, nil, nil)
 	job := NewIndexImagesJob(application)
 
 	imgName := "test.png"

@@ -50,3 +50,15 @@ sql:
         sql_package: "database/sql"
         emit_json_tags: true
         emit_interface: true
+
+  - name: "cachedb"
+    schema: "backend/db/schema/cache.sql"
+    queries: ["backend/db/query/cache.sql"]
+    engine: "sqlite"
+    gen:
+      go:
+        package: "cachedb"
+        out: "backend/model/cachedb"
+        sql_package: "database/sql"
+        emit_json_tags: true
+        emit_interface: true

@@ -4,6 +4,7 @@ data_db_path = "var/db/data.db"
 images_db_path = "var/db/images.db"
 tfidf_db_path = "var/db/tfidf.db"
 worker_db_path = "var/db/worker.db"
+cache_db_path = "var/db/cache.db"
 static_dir = "static"
 upload_dir = "static/images/entry"
 
@@ -16,6 +17,9 @@ base_url = "http://localhost:5555"
 username = "admin"
 password = "changeme"
 session_secret = "your-random-secret-here"
+
+# Page Cache (optional)
+# page_cache_enabled = true
 
 # Path to node binary (optional)
 # node_path = "/usr/local/bin/node"

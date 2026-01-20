@@ -76,13 +76,7 @@ func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
 	}
 
-	if len(entries) > 0 {
-		latest := getLatestModTime(entries)
-		etag := GenerateListETag(latest, len(entries), yyyy+mm+dd, app.IsAuth(c))
-		if ok, err := app.CheckCache(c, latest, etag); ok {
-			return err
-		}
-	}
+	// ETag generation and checking is handled by PageCacheMiddleware
 
 	var pageTitle string
 	if dd != "" {
@@ -101,6 +95,21 @@ func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 		IsDetail:   false,
 		OlderPage:  "",
 	}
+
+	// キャッシュ依存関係の設定
+	sourceIDs := []string{}
+	if dd != "" {
+		sourceIDs = append(sourceIDs, fmt.Sprintf("query:date:%s-%s-%s", yyyy, mm, dd))
+	} else if mm != "" {
+		sourceIDs = append(sourceIDs, fmt.Sprintf("query:date:%s-%s", yyyy, mm))
+	} else {
+		sourceIDs = append(sourceIDs, fmt.Sprintf("query:date:%s", yyyy))
+	}
+	for _, e := range entries {
+		sourceIDs = append(sourceIDs, fmt.Sprintf("entry:%d", e.ID))
+	}
+	c.Set("cache_source_ids", sourceIDs)
+
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
 
@@ -116,6 +125,10 @@ func (app *AppImpl) HandleArchive(c echo.Context) error {
 		LayoutData: app.newLayoutData(c, "アーカイブ"),
 		Archives:   view.ConvertArchives(archives),
 	}
+
+	// キャッシュ依存関係の設定
+	c.Set("cache_source_ids", []string{"global:latest"})
+
 	return app.templates.RenderWithLayout(c, "layout.html", "archive.html", data)
 }
 
@@ -223,13 +236,7 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 		entries = filteredEntries
 	}
 
-	if len(entries) > 0 {
-		latest := getLatestModTime(entries)
-		etag := GenerateListETag(latest, len(entries), dateStr, app.IsAuth(c))
-		if ok, err := app.CheckCache(c, latest, etag); ok {
-			return err
-		}
-	}
+	// ETag generation and checking is handled by PageCacheMiddleware
 
 	// HTMLレンダリング
 	viewEntries := view.NewViewEntries(entries, app.config.BaseURL)
@@ -240,6 +247,14 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 		IsDetail:   false,
 		OlderPage:  olderPage,
 	}
+
+	// キャッシュ依存関係の設定
+	sourceIDs := []string{"global:latest"}
+	for _, e := range entries {
+		sourceIDs = append(sourceIDs, fmt.Sprintf("entry:%d", e.ID))
+	}
+	c.Set("cache_source_ids", sourceIDs)
+
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
 func (app *AppImpl) HandleCategory(c echo.Context) error {
@@ -281,13 +296,7 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 		olderPage = fmt.Sprintf("/%s/.page/%s/%d", category, olderDate, limit)
 	}
 
-	if len(entries) > 0 {
-		latest := getLatestModTime(entries)
-		etag := GenerateListETag(latest, len(entries), category+dateStr, app.IsAuth(c))
-		if ok, err := app.CheckCache(c, latest, etag); ok {
-			return err
-		}
-	}
+	// ETag generation and checking is handled by PageCacheMiddleware
 
 	viewEntries := view.NewViewEntries(entries, app.config.BaseURL)
 	app.populateSimilarEntries(ctx, viewEntries)
@@ -297,6 +306,14 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 		IsDetail:   false,
 		OlderPage:  olderPage,
 	}
+
+	// キャッシュ依存関係の設定
+	sourceIDs := []string{fmt.Sprintf("query:category:%s", category)}
+	for _, e := range entries {
+		sourceIDs = append(sourceIDs, fmt.Sprintf("entry:%d", e.ID))
+	}
+	c.Set("cache_source_ids", sourceIDs)
+
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }
 
@@ -351,6 +368,9 @@ func (app *AppImpl) HandleFeed(c echo.Context) error {
 
 	feed.Entries = atomEntries
 
+	// キャッシュ依存関係の設定
+	c.Set("cache_source_ids", []string{"global:latest"})
+
 	c.Response().Header().Set(echo.HeaderContentType, "application/atom+xml")
 	c.Response().WriteHeader(http.StatusOK)
 	if _, err := c.Response().Write([]byte(xml.Header)); err != nil {
@@ -391,6 +411,9 @@ func (app *AppImpl) HandleSitemap(c echo.Context) error {
 		URLs: urls,
 	}
 
+	// キャッシュ依存関係の設定
+	c.Set("cache_source_ids", []string{"global:latest"})
+
 	c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationXMLCharsetUTF8)
 	c.Response().WriteHeader(http.StatusOK)
 	if _, err := c.Response().Write([]byte(xml.Header)); err != nil {
@@ -411,6 +434,10 @@ Sitemap: %s
 `,
 		app.JoinBaseURL("/sitemap.xml"),
 	)
+
+	// キャッシュ依存関係の設定
+	c.Set("cache_source_ids", []string{"global:latest"})
+
 	return c.String(http.StatusOK, content)
 }
 
@@ -585,10 +612,7 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "Entry not found")
 	}
 
-	etag := GenerateEntryETag(entry.ID, entry.ModifiedAt, app.IsAuth(c))
-	if ok, err := app.CheckCache(c, entry.ModifiedAt, etag); ok {
-		return err
-	}
+	// ETag generation and checking is handled by PageCacheMiddleware
 
 	rows, err := app.MainDB().Q.ListTrackbackEntries(ctx, sql.NullInt64{Int64: entry.ID, Valid: true})
 	if err != nil && err != sql.ErrNoRows {
@@ -666,6 +690,15 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 	} else {
 		data.ImageURL = app.JoinBaseURL(fmt.Sprintf("/images/ogp/%d.png", entry.ID))
 	}
+
+	// キャッシュ依存関係の設定
+	sourceIDs := []string{fmt.Sprintf("entry:%d", entry.ID)}
+	if len(viewEntries[0].SimilarEntries) > 0 {
+		for _, se := range viewEntries[0].SimilarEntries {
+			sourceIDs = append(sourceIDs, fmt.Sprintf("entry:%d", se.ID))
+		}
+	}
+	c.Set("cache_source_ids", sourceIDs)
 
 	return app.templates.RenderWithLayout(c, "layout.html", "entries.html", data)
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/cho45/hanrangon/backend/model/imagesdb"
@@ -81,7 +82,9 @@ func createBenchEntries(b *testing.B, env *testEnv, count int) {
 // BenchmarkHandleIndex はトップページのベンチマーク
 func BenchmarkHandleIndex(b *testing.B) {
 	env := setupBenchmark(b)
-	defer env.close()
+	defer func() {
+		env.close()
+	}()
 
 	// テストデータを準備 (より現実に近い件数にする)
 	createBenchEntries(b, env, 100)
@@ -107,7 +110,9 @@ func BenchmarkHandleIndex(b *testing.B) {
 // BenchmarkHandlePath は個別エントリページのベンチマーク
 func BenchmarkHandlePath(b *testing.B) {
 	env := setupBenchmark(b)
-	defer env.close()
+	defer func() {
+		env.close()
+	}()
 
 	// テストエントリを1つ作成
 	ctx := context.Background()
@@ -137,6 +142,102 @@ func BenchmarkHandlePath(b *testing.B) {
 
 		if rec.Code != http.StatusOK {
 			b.Fatalf("expected status 200, got %d", rec.Code)
+		}
+	}
+}
+
+// BenchmarkHandlePath_CacheHit は個別エントリページのキャッシュヒット（非圧縮）のベンチマーク
+func BenchmarkHandlePath_CacheHit(b *testing.B) {
+	env := setupBenchmark(b)
+	defer func() {
+		env.close()
+	}()
+
+	// ページキャッシュを有効化
+	env.app.Config().PageCacheEnabled = true
+
+	// テストエントリを1つ作成
+	ctx := context.Background()
+	entry, _ := env.app.MainDB().Q.CreateEntry(ctx, maindb.CreateEntryParams{
+		Title:         "Benchmark Test Entry",
+		Body:          "Content",
+		FormattedBody: "<p>Content</p>",
+		Path:          "bench",
+		Format:        "Markdown",
+		Date:          "2025-01-01",
+		Status:        "public",
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/"+entry.Path, nil)
+	rec := newPreallocRecorder(128 * 1024)
+
+	// 1回実行してキャッシュを生成させる
+	env.server.ServeHTTP(rec, req)
+
+	// キャッシュが生成されたか確認
+	recCheck := newPreallocRecorder(128 * 1024)
+	env.server.ServeHTTP(recCheck, req)
+	if !strings.HasPrefix(recCheck.Header().Get("X-Cache"), "HIT") {
+		b.Fatalf("failed to prime cache: %s", recCheck.Header().Get("X-Cache"))
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		rec.Reset()
+		env.server.ServeHTTP(rec, req)
+
+		cacheHeader := rec.Header().Get("X-Cache")
+		if !strings.HasPrefix(cacheHeader, "HIT") {
+			b.Fatalf("expected cache hit, got X-Cache: %s", cacheHeader)
+		}
+	}
+}
+
+// BenchmarkHandlePath_CacheHit_Gzip は個別エントリページのキャッシュヒット（Gzip圧縮済み）のベンチマーク
+func BenchmarkHandlePath_CacheHit_Gzip(b *testing.B) {
+	env := setupBenchmark(b)
+	defer func() {
+		env.close()
+	}()
+
+	env.app.Config().PageCacheEnabled = true
+
+	ctx := context.Background()
+	entry, _ := env.app.MainDB().Q.CreateEntry(ctx, maindb.CreateEntryParams{
+		Title:         "Benchmark Test Entry",
+		Body:          "Content",
+		FormattedBody: "<p>Content</p>",
+		Path:          "bench",
+		Format:        "Markdown",
+		Date:          "2025-01-01",
+		Status:        "public",
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/"+entry.Path, nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	rec := newPreallocRecorder(128 * 1024)
+
+	// キャッシュ生成（初回 MISS 時に同期的に生成される）
+	env.server.ServeHTTP(rec, req)
+
+	// キャッシュが生成されたか確認
+	recCheck := newPreallocRecorder(128 * 1024)
+	env.server.ServeHTTP(recCheck, req)
+	if recCheck.Header().Get("X-Cache") != "HIT" {
+		b.Fatalf("failed to prime gzip cache: %s", recCheck.Header().Get("X-Cache"))
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		rec.Reset()
+		env.server.ServeHTTP(rec, req)
+
+		if rec.Header().Get("X-Cache") != "HIT" {
+			b.Fatalf("expected Gzip cache hit, got X-Cache: %s", rec.Header().Get("X-Cache"))
 		}
 	}
 }

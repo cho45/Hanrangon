@@ -14,6 +14,7 @@ import (
 	"github.com/cho45/hanrangon/backend/app"
 	"github.com/cho45/hanrangon/backend/jobqueue"
 	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/cachedb"
 	"github.com/cho45/hanrangon/backend/model/imagesdb"
 	"github.com/cho45/hanrangon/backend/model/maindb"
 	"github.com/cho45/hanrangon/backend/model/tfidfdb"
@@ -53,6 +54,14 @@ func TestRunServe_GracefulShutdownOrder(t *testing.T) {
 	if _, err := db.Exec(string(entrySchema)); err != nil {
 		t.Fatal(err)
 	}
+	// And cache schema
+	cacheSchema, err := os.ReadFile(filepath.Join(config.BaseDir, "backend/db/schema/cache.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(string(cacheSchema)); err != nil {
+		t.Fatal(err)
+	}
 
 	config.Listen = []string{"127.0.0.1:0"} // Random free port
 	config.SessionSecret = "test"
@@ -62,11 +71,12 @@ func TestRunServe_GracefulShutdownOrder(t *testing.T) {
 	tfidfDB := model.NewDatabase[tfidfdb.Querier](db, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
 	workerDB := model.NewDatabase[workerdb.Querier](db, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
 	imagesDB := model.NewDatabase[imagesdb.Querier](db, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+	cacheDB := model.NewDatabase[cachedb.Querier](db, func(tx model.DBTX) cachedb.Querier { return cachedb.New(tx) })
 	worker := jobqueue.NewWorker(workerDB, workerDB.Q, registry)
 
 	// Create minimal App
 	// We need to satisfy the App interface. Using app.NewApp with mostly nil/minimal values
-	application := app.NewApp(config, mainDB, tfidfDB, workerDB, imagesDB, &tfidf.Calculator{}, &tfidf.SimilarityCalculator{}, &tfidf.Searcher{}, worker)
+	application := app.NewApp(config, mainDB, tfidfDB, workerDB, imagesDB, cacheDB, &tfidf.Calculator{}, &tfidf.SimilarityCalculator{}, &tfidf.Searcher{}, worker)
 
 	// Capture logs
 	var logBuf bytes.Buffer
@@ -141,6 +151,8 @@ func TestRunServe_MultipleListeners(t *testing.T) {
 	db.Exec(string(workerSchema))
 	entrySchema, _ := os.ReadFile(filepath.Join(config.BaseDir, "backend/db/schema/schema.sql"))
 	db.Exec(string(entrySchema))
+	cacheSchema, _ := os.ReadFile(filepath.Join(config.BaseDir, "backend/db/schema/cache.sql"))
+	db.Exec(string(cacheSchema))
 
 	// Prepare UDS path
 	tmpSock := filepath.Join(t.TempDir(), "test.sock")
@@ -153,8 +165,9 @@ func TestRunServe_MultipleListeners(t *testing.T) {
 	tfidfDB := model.NewDatabase[tfidfdb.Querier](db, func(tx model.DBTX) tfidfdb.Querier { return tfidfdb.New(tx) })
 	workerDB := model.NewDatabase[workerdb.Querier](db, func(tx model.DBTX) workerdb.Querier { return workerdb.New(tx) })
 	imagesDB := model.NewDatabase[imagesdb.Querier](db, func(tx model.DBTX) imagesdb.Querier { return imagesdb.New(tx) })
+	cacheDB := model.NewDatabase[cachedb.Querier](db, func(tx model.DBTX) cachedb.Querier { return cachedb.New(tx) })
 	worker := jobqueue.NewWorker(workerDB, workerDB.Q, registry)
-	application := app.NewApp(config, mainDB, tfidfDB, workerDB, imagesDB, &tfidf.Calculator{}, &tfidf.SimilarityCalculator{}, &tfidf.Searcher{}, worker)
+	application := app.NewApp(config, mainDB, tfidfDB, workerDB, imagesDB, cacheDB, &tfidf.Calculator{}, &tfidf.SimilarityCalculator{}, &tfidf.Searcher{}, worker)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)

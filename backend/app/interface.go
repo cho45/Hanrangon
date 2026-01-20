@@ -7,6 +7,7 @@ import (
 
 	"github.com/cho45/hanrangon/backend/jobqueue"
 	"github.com/cho45/hanrangon/backend/model"
+	"github.com/cho45/hanrangon/backend/model/cachedb"
 	"github.com/cho45/hanrangon/backend/model/imagesdb"
 	"github.com/cho45/hanrangon/backend/model/maindb"
 	"github.com/cho45/hanrangon/backend/model/tfidfdb"
@@ -28,6 +29,7 @@ type App interface {
 	TFIDFDB() *model.Database[tfidfdb.Querier]
 	WorkerDB() *model.Database[workerdb.Querier]
 	ImagesDB() *model.Database[imagesdb.Querier]
+	CacheDB() *model.Database[cachedb.Querier]
 
 	// TF-IDF accessors
 	Calculator() *tfidf.Calculator
@@ -42,6 +44,9 @@ type App interface {
 
 	// EntryService accessor
 	EntryService() *EntryService
+
+	// CacheService accessor
+	CacheService() *CacheService
 
 	// Postprocess
 	Postprocess(ctx context.Context, html string, reporter ProgressReporter) (string, error)
