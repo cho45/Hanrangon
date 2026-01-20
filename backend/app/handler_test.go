@@ -1777,3 +1777,88 @@ func TestHTTPErrorHandler(t *testing.T) {
 		}
 	})
 }
+
+func TestHandleAdminApiCache(t *testing.T) {
+	env := setupTest(t)
+	defer env.close()
+
+	loginInfo := env.login(t)
+
+	// 1. Insert test cache data
+	ctx := context.Background()
+	err := env.app.CacheService().Set(ctx, "/test1", []byte("content1"), "etag1", "text/html", []string{"source1"})
+	require.NoError(t, err)
+	err = env.app.CacheService().Set(ctx, "/test2", []byte("content2-longer"), "etag2", "text/plain", []string{"source2"})
+	require.NoError(t, err)
+
+	t.Run("Get Stats", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/admin/api/cache/stats", nil)
+		req.Header.Set("Cookie", loginInfo.Cookie)
+		rec := httptest.NewRecorder()
+		env.server.ServeHTTP(rec, req)
+
+		require.Equal(t, http.StatusOK, rec.Code)
+		var res map[string]interface{}
+		err := json.NewDecoder(rec.Body).Decode(&res)
+		require.NoError(t, err)
+
+		stats := res["stats"].(map[string]interface{})
+		require.Equal(t, float64(2), stats["total_count"])
+		require.NotNil(t, res["metadata"])
+		// total_size might be returned as string or number depending on how json.Unmarshal handles interface{}
+		// but since we used COALESCE(SUM(LENGTH(content)), 0), it should be a number.
+		// However, sqlc generated TotalSize as interface{}.
+	})
+
+	t.Run("List Entries", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/admin/api/cache/list", nil)
+		req.Header.Set("Cookie", loginInfo.Cookie)
+		rec := httptest.NewRecorder()
+		env.server.ServeHTTP(rec, req)
+
+		require.Equal(t, http.StatusOK, rec.Code)
+		var res struct {
+			Entries []map[string]interface{} `json:"entries"`
+		}
+		err := json.NewDecoder(rec.Body).Decode(&res)
+		require.NoError(t, err)
+
+		require.Len(t, res.Entries, 2)
+	})
+
+	t.Run("Purge Specific Key", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/admin/api/cache/purge?key=/test1", nil)
+		req.Header.Set("Cookie", loginInfo.Cookie)
+		req.Header.Set("X-Requested-With", "fetch")
+		rec := httptest.NewRecorder()
+		env.server.ServeHTTP(rec, req)
+
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		// Verify deletion
+		cache, err := env.app.CacheService().Get(ctx, "/test1")
+		require.Error(t, err)
+		require.Empty(t, cache.CacheKey)
+	})
+
+	t.Run("Purge All", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/admin/api/cache/purge", nil)
+		req.Header.Set("Cookie", loginInfo.Cookie)
+		req.Header.Set("X-Requested-With", "fetch")
+		rec := httptest.NewRecorder()
+		env.server.ServeHTTP(rec, req)
+
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		// Verify all deleted
+		reqStats := httptest.NewRequest(http.MethodGet, "/admin/api/cache/stats", nil)
+		reqStats.Header.Set("Cookie", loginInfo.Cookie)
+		recStats := httptest.NewRecorder()
+		env.server.ServeHTTP(recStats, reqStats)
+
+		var res map[string]interface{}
+		json.NewDecoder(recStats.Body).Decode(&res)
+		stats := res["stats"].(map[string]interface{})
+		require.Equal(t, float64(0), stats["total_count"])
+	})
+}

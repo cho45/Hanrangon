@@ -24,9 +24,31 @@ DELETE FROM cache_relation WHERE cache_key = ?;
 -- name: GetMetadata :one
 SELECT value FROM cache_metadata WHERE key = ?;
 
+-- name: ListMetadata :many
+SELECT * FROM cache_metadata;
+
 -- name: SetMetadata :exec
 INSERT OR REPLACE INTO cache_metadata (key, value) VALUES (?, ?);
 
 -- name: TruncateCache :exec
 DELETE FROM cache;
+
+-- name: GetCacheStats :one
+SELECT
+    COUNT(*) AS total_count,
+    COALESCE(SUM(LENGTH(content)), 0) AS total_size,
+    MIN(created_at) AS oldest_at,
+    MAX(created_at) AS newest_at
+FROM cache;
+
+-- name: ListCacheEntries :many
+SELECT
+    cache_key,
+    LENGTH(content) AS size,
+    etag,
+    content_type,
+    created_at
+FROM cache
+ORDER BY created_at DESC
+LIMIT ? OFFSET ?;
 

@@ -7,6 +7,8 @@ package cachedb
 
 import (
 	"context"
+	"database/sql"
+	"time"
 )
 
 const deleteCache = `-- name: DeleteCache :exec
@@ -49,6 +51,34 @@ func (q *Queries) GetCache(ctx context.Context, cacheKey string) (Cache, error) 
 		&i.Etag,
 		&i.ContentType,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getCacheStats = `-- name: GetCacheStats :one
+SELECT
+    COUNT(*) AS total_count,
+    COALESCE(SUM(LENGTH(content)), 0) AS total_size,
+    MIN(created_at) AS oldest_at,
+    MAX(created_at) AS newest_at
+FROM cache
+`
+
+type GetCacheStatsRow struct {
+	TotalCount int64       `json:"total_count"`
+	TotalSize  interface{} `json:"total_size"`
+	OldestAt   interface{} `json:"oldest_at"`
+	NewestAt   interface{} `json:"newest_at"`
+}
+
+func (q *Queries) GetCacheStats(ctx context.Context) (GetCacheStatsRow, error) {
+	row := q.db.QueryRowContext(ctx, getCacheStats)
+	var i GetCacheStatsRow
+	err := row.Scan(
+		&i.TotalCount,
+		&i.TotalSize,
+		&i.OldestAt,
+		&i.NewestAt,
 	)
 	return i, err
 }
@@ -99,6 +129,87 @@ type InsertCacheRelationParams struct {
 func (q *Queries) InsertCacheRelation(ctx context.Context, arg InsertCacheRelationParams) error {
 	_, err := q.db.ExecContext(ctx, insertCacheRelation, arg.CacheKey, arg.SourceID)
 	return err
+}
+
+const listCacheEntries = `-- name: ListCacheEntries :many
+SELECT
+    cache_key,
+    LENGTH(content) AS size,
+    etag,
+    content_type,
+    created_at
+FROM cache
+ORDER BY created_at DESC
+LIMIT ? OFFSET ?
+`
+
+type ListCacheEntriesParams struct {
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+type ListCacheEntriesRow struct {
+	CacheKey    string        `json:"cache_key"`
+	Size        sql.NullInt64 `json:"size"`
+	Etag        string        `json:"etag"`
+	ContentType string        `json:"content_type"`
+	CreatedAt   time.Time     `json:"created_at"`
+}
+
+func (q *Queries) ListCacheEntries(ctx context.Context, arg ListCacheEntriesParams) ([]ListCacheEntriesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCacheEntries, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCacheEntriesRow
+	for rows.Next() {
+		var i ListCacheEntriesRow
+		if err := rows.Scan(
+			&i.CacheKey,
+			&i.Size,
+			&i.Etag,
+			&i.ContentType,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMetadata = `-- name: ListMetadata :many
+SELECT "key", value FROM cache_metadata
+`
+
+func (q *Queries) ListMetadata(ctx context.Context) ([]CacheMetadatum, error) {
+	rows, err := q.db.QueryContext(ctx, listMetadata)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CacheMetadatum
+	for rows.Next() {
+		var i CacheMetadatum
+		if err := rows.Scan(&i.Key, &i.Value); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const setMetadata = `-- name: SetMetadata :exec

@@ -1,44 +1,65 @@
-# Hanrangon (Go Implementation)
+# Hanrangon (Go実装) - AIエージェント プロトコル
 
-## プロジェクト概要
+## 🛑 飛行前チェックリスト (必須)
 
-HanrangonはブログシステムのGo実装。Echoフレームワークベースで、複数テキストフォーマットをサポート。
+コードを書く前に、以下のチェックリストから関連する項目を**必ず**あなたの計画に追加しなければなりません：
 
-## 主要コマンド
+- [ ] **コンテキスト**: `AGENTS.md` (このファイル) を読む。
+- [ ] **アーキテクチャ**: `docs/backend_architecture.md` を読む (`AppImpl` と `BaseDir` を理解する)。
+- [ ] **テスト**: `docs/how-to-testing.md` を読む (`testutil` と DBセットアップを理解する)。
+- [ ] **データベース** (DB編集時): `docs/database_design.md` と `backend/db/schema/` を読む。
+- [ ] **フロントエンド** (UI編集時): `docs/ssr-view-and-templating.md` または `admin-frontend/README.md` を読む。
+
+---
+
+## ⚡️ 重大な「飛行禁止」区域 (立ち入り禁止)
+
+これらのルールに違反すると、即座にビルド失敗やアーキテクチャの退行を引き起こします。
+
+1.  **⛔️ 相対パス禁止**: すべてのファイル操作はルートとして `app.Config.BaseDir` を使用しなければなりません。実行時のファイルアクセスに `./` や `../` を決して使用しないでください。
+2.  **⛔️ 読み取り専用ディレクトリ**:
+    - `backend/model/`: これらは **sqlc によって生成**されます。決して手動で編集しないでください。
+    - `admin-frontend/src/lib/types/generated/`: `tygo` によって生成されます。
+    - **アクション**: `backend/db/schema` または Go構造体を修正し、その後 `make generate` を実行してください。
+3.  **⛔️ 厳格なテスト順序**:
+    - 変更**前**に `make test` を実行しなければなりません (ベースラインの確立)。
+    - 変更**後**に `make lint` と `make test` を実行しなければなりません。
+    - 「たぶん動く」と決して仮定しないでください。
+
+---
+
+## 🗺 タスク別ドキュメントマップ
+
+タスクの種類を特定し、必要なファイルを即座に**読んで**ください。
+
+| タスクカテゴリ | 必読資料 | 重要なコマンド |
+| :--- | :--- | :--- |
+| **コアロジック / ハンドラ** | [`docs/backend_architecture.md`](docs/backend_architecture.md) | `AppImpl` メソッドを使用 |
+| **データベース / スキーマ** | [`docs/database_design.md`](docs/database_design.md) | `make generate` |
+| **HTML / テンプレート** | [`docs/ssr-view-and-templating.md`](docs/ssr-view-and-templating.md) | `make postprocess-test` |
+| **コンテンツ / Markdown** | [`docs/content_pipeline.md`](docs/content_pipeline.md) | `go test ./backend/formatter/...` |
+| **テスト / デバッグ** | [`docs/how-to-testing.md`](docs/how-to-testing.md) | `make test` |
+
+---
+
+## 🛠 主要コマンド (チートシート)
 
 ```bash
-# ビルド・実行・生成
-make build | make run | make clean | make generate | make fmt
+# 1. ここから開始
+make run              # 開発サーバー起動
+make test             # 全テスト実行 (Go + Node + Frontend)
 
-# テスト (全テスト / 特定パッケージ)
-make test
-go test -v -tags "sqlite_math_functions" ./formatter/...
+# 2. コード生成 (DB/構造体変更後に実行)
+make generate
 
-# 開発サーバー起動 (通常 / 設定指定 / 本番モード)
-go run .
-HANRANGON_CONFIG=/path/to/config.toml go run .
-HANRANGON_ENV=production go run .
+# 3. 個別テスト
+make test-go          # バックエンドのみ
+make postprocess-test # HTML/レンダリング検証
+make admin-test       # Svelte フロントエンド
 ```
 
-## アーキテクチャ
+## 🏗 アーキテクチャのハイライト
 
-### ディレクトリ構造
-
-- **Backend (Go)**: `backend/app/` (コア), `backend/db/` (SQL), `backend/model/` (sqlc生成), `backend/formatter/` (変換), `backend/tfidf/` (解析), `backend/jobqueue/` (ジョブ), `backend/subcommands/` (CLI), `backend/view/` (SSR)
-- **Frontend & Assets**: `admin-frontend/` (Svelte SPA), `static/` (静的), `postprocess/` (Node.js)
-- **Other**: `internal/` (共通), `var/` (データ), `main.go` (エントリ)
-
-### 主要な設計パターン
-
-- **パス解決 (BaseDir)**: `app.Config.BaseDir` 起点の絶対パス構築。詳細は [docs/backend_architecture.md](docs/backend_architecture.md)。
-- **データベース層 (sqlc)**: `backend/model/` 下に自動生成（編集禁止）。詳細は [docs/database_design.md](docs/database_design.md)。
-- **テンプレート層**: `backend/view/` 下の `html/template` を使用。詳細は [docs/ssr-view-and-templating.md](docs/ssr-view-and-templating.md)。
-- **App 構造体パターン**: `AppImpl` メソッドとして全ハンドラを実装。サービス層（`EntryService` 等）によるロジック分離。詳細は [docs/backend_architecture.md](docs/backend_architecture.md)。
-- **コンテンツパイプライン**: `formatter.Format` による HTML 変換。詳細は [docs/content_pipeline.md](docs/content_pipeline.md)。
-
-## 開発時の注意事項
-
-1. **AIエージェントへの厳命 (Mandates for AI Agents)**: `make test` -> `make lint` -> `make test` の順で検証を徹底。テストの詳細は [docs/how-to-testing.md](docs/how-to-testing.md) を参照。
-2. **ディレクトリ移動への配慮**: インポートには常に `github.com/cho45/hanrangon/backend/...` を使用。
-3. **生成コードの編集禁止**: `backend/model/` 以下の `sqlc` 生成ファイル。
-4. **型定義ルール**: `tygo` を使用。フロントエンドでは `admin-frontend/src/lib/types/models.ts` からインポート。
+- **App 構造**: モノリシックな `AppImpl` 構造体 (`backend/app/app.go`) が全ての依存関係 (DB, Config) を保持します。ハンドラは `*AppImpl` のメソッドです。
+- **データベース**: 4つの分割された SQLite DB (`main`, `images`, `tfidf`, `worker`)。理由は `docs/database_design.md` を参照してください。
+- **フロントエンド**: ハイブリッド構成。公開サイトは Go SSR + Node.js Postprocess。管理画面は Svelte SPA です。

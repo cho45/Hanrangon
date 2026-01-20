@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/cho45/hanrangon/backend/formatter"
+	"github.com/cho45/hanrangon/backend/model/cachedb"
 	"github.com/cho45/hanrangon/backend/model/imagesdb"
 	"github.com/cho45/hanrangon/backend/model/maindb"
 	"github.com/cho45/hanrangon/backend/model/tfidfdb"
@@ -690,4 +691,57 @@ func (app *AppImpl) HandleAdminApiInfo(c echo.Context) error {
 			NumGC:         m.NumGC,
 		},
 	})
+}
+
+func (app *AppImpl) HandleAdminApiCacheStats(c echo.Context) error {
+	stats, err := app.CacheDB().Q.GetCacheStats(c.Request().Context())
+	if err != nil {
+		return err
+	}
+	metadata, err := app.CacheDB().Q.ListMetadata(c.Request().Context())
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"stats":    stats,
+		"metadata": metadata,
+	})
+}
+
+func (app *AppImpl) HandleAdminApiCacheList(c echo.Context) error {
+	limit, _ := strconv.Atoi(c.QueryParam("limit"))
+	if limit <= 0 {
+		limit = 100
+	}
+	offset, _ := strconv.Atoi(c.QueryParam("offset"))
+
+	entries, err := app.CacheDB().Q.ListCacheEntries(c.Request().Context(), cachedb.ListCacheEntriesParams{
+		Limit:  int64(limit),
+		Offset: int64(offset),
+	})
+	if err != nil {
+		return err
+	}
+
+	if entries == nil {
+		entries = []cachedb.ListCacheEntriesRow{}
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"entries": entries,
+	})
+}
+
+func (app *AppImpl) HandleAdminApiCachePurge(c echo.Context) error {
+	key := c.QueryParam("key")
+	if key != "" {
+		if err := app.CacheService().InvalidateByKey(c.Request().Context(), key); err != nil {
+			return err
+		}
+	} else {
+		if err := app.CacheDB().Q.TruncateCache(c.Request().Context()); err != nil {
+			return err
+		}
+	}
+	return c.NoContent(http.StatusOK)
 }

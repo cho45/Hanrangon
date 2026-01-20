@@ -23,3 +23,6 @@ packages:
   - path: "github.com/cho45/hanrangon/backend/app"
     output_path: "admin-frontend/src/lib/types/generated/api.ts"
     indent: "  "
+  - path: "github.com/cho45/hanrangon/backend/model/cachedb"
+    output_path: "admin-frontend/src/lib/types/generated/cachedb.ts"
+    indent: "  "

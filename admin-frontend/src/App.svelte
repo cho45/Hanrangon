@@ -5,6 +5,7 @@
   import JobList from './components/JobList.svelte';
   import ImageList from './components/ImageList.svelte';
   import InfoPage from './components/InfoPage.svelte';
+  import CacheList from './components/CacheList.svelte';
 
   let currentPath = $state(window.location.pathname);
   let searchParams = $state(new URLSearchParams(window.location.search));
@@ -43,12 +44,17 @@
       page: 'images',
       getProps: () => ({})
     },
-    '/admin/info': { 
-      component: InfoPage, 
+    '/admin/info': {
+      component: InfoPage,
       page: 'info',
       getProps: () => ({})
     },
-    '/admin/': { 
+    '/admin/cache': {
+      component: CacheList,
+      page: 'cache',
+      getProps: () => ({})
+    },
+    '/admin/': {
       component: EntryList, 
       page: 'list',
       getProps: () => ({ onEdit: (id: string) => navigate(`/admin/edit?id=${id}`) })
@@ -60,6 +66,7 @@
     { label: '新規作成',     path: '/admin/edit',  page: 'edit', exact: true },
     { label: '画像一覧',     path: '/admin/images',page: 'images' },
     { label: 'ジョブ一覧',   path: '/admin/jobs',  page: 'jobs' },
+    { label: 'キャッシュ',   path: '/admin/cache', page: 'cache' },
     { label: '情報',         path: '/admin/info',  page: 'info' },
   ];
 
