@@ -2,6 +2,7 @@ package view
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -468,9 +469,14 @@ func TestConvertArchives(t *testing.T) {
 			expected: []ArchiveYear{
 				{
 					Year: "2024",
-					Months: []ArchiveMonth{
-						{Year: "2024", Month: "01", Count: 5},
-					},
+					Months: func() []ArchiveMonth {
+						m := make([]ArchiveMonth, 12)
+						for i := 0; i < 12; i++ {
+							m[i] = ArchiveMonth{Year: "2024", Month: fmt.Sprintf("%02d", i+1), Count: 0}
+						}
+						m[0].Count = 5
+						return m
+					}(),
 				},
 			},
 		},
@@ -484,11 +490,16 @@ func TestConvertArchives(t *testing.T) {
 			expected: []ArchiveYear{
 				{
 					Year: "2024",
-					Months: []ArchiveMonth{
-						{Year: "2024", Month: "01", Count: 5},
-						{Year: "2024", Month: "02", Count: 10},
-						{Year: "2024", Month: "03", Count: 3},
-					},
+					Months: func() []ArchiveMonth {
+						m := make([]ArchiveMonth, 12)
+						for i := 0; i < 12; i++ {
+							m[i] = ArchiveMonth{Year: "2024", Month: fmt.Sprintf("%02d", i+1), Count: 0}
+						}
+						m[0].Count = 5
+						m[1].Count = 10
+						m[2].Count = 3
+						return m
+					}(),
 				},
 			},
 		},
@@ -503,17 +514,27 @@ func TestConvertArchives(t *testing.T) {
 			expected: []ArchiveYear{
 				{
 					Year: "2024",
-					Months: []ArchiveMonth{
-						{Year: "2024", Month: "01", Count: 5},
-						{Year: "2024", Month: "02", Count: 10},
-					},
+					Months: func() []ArchiveMonth {
+						m := make([]ArchiveMonth, 12)
+						for i := 0; i < 12; i++ {
+							m[i] = ArchiveMonth{Year: "2024", Month: fmt.Sprintf("%02d", i+1), Count: 0}
+						}
+						m[0].Count = 5
+						m[1].Count = 10
+						return m
+					}(),
 				},
 				{
 					Year: "2023",
-					Months: []ArchiveMonth{
-						{Year: "2023", Month: "11", Count: 7},
-						{Year: "2023", Month: "12", Count: 8},
-					},
+					Months: func() []ArchiveMonth {
+						m := make([]ArchiveMonth, 12)
+						for i := 0; i < 12; i++ {
+							m[i] = ArchiveMonth{Year: "2023", Month: fmt.Sprintf("%02d", i+1), Count: 0}
+						}
+						m[10].Count = 7
+						m[11].Count = 8
+						return m
+					}(),
 				},
 			},
 		},

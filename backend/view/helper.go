@@ -1,7 +1,9 @@
 package view
 
 import (
+	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -203,21 +205,32 @@ func ConvertArchives(archives []maindb.ListArchiveMonthsRow) []ArchiveYear {
 
 	for _, a := range archives {
 		year := a.Year.(string)
-		month := a.Month.(string)
+		monthStr := a.Month.(string)
 
 		if currentYear == nil || currentYear.Year != year {
 			if currentYear != nil {
 				res = append(res, *currentYear)
 			}
 			currentYear = &ArchiveYear{
-				Year: year,
+				Year:   year,
+				Months: make([]ArchiveMonth, 12),
+			}
+			for i := 0; i < 12; i++ {
+				m := i + 1
+				currentYear.Months[i] = ArchiveMonth{
+					Year:  year,
+					Month: fmt.Sprintf("%02d", m),
+					Count: 0,
+				}
 			}
 		}
-		currentYear.Months = append(currentYear.Months, ArchiveMonth{
-			Year:  year,
-			Month: month,
-			Count: a.Count,
-		})
+
+		// monthStr is "01" to "12"
+		if m, err := strconv.Atoi(monthStr); err == nil {
+			if m >= 1 && m <= 12 {
+				currentYear.Months[m-1].Count = a.Count
+			}
+		}
 	}
 	if currentYear != nil {
 		res = append(res, *currentYear)

@@ -4,10 +4,14 @@
 			<h2>{{.Year}}年</h2>
 			<ol class="months">
 				{{range .Months}}
-					<li class="month">
-						<a href="/{{.Year}}/{{.Month}}/" title="{{.Count}}">
+					<li class="month{{if eq .Count 0}} empty{{end}}">
+						{{if gt .Count 0}}
+							<a href="/{{.Year}}/{{.Month}}/" title="{{.Count}}">
+								{{.Month}}月
+							</a>
+						{{else}}
 							{{.Month}}月
-						</a>
+						{{end}}
 					</li>
 				{{end}}
 			</ol>

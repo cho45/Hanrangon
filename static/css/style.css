@@ -918,6 +918,14 @@ social-share-buttons button.share-button {
 	background: #ddd;
 }
 
+#archive .month.empty {
+	padding: 1rem;
+	background: transparent;
+	color: #ccc;
+	text-align: center;
+	border: 1px solid #eee;
+}
+
 /* Tables */
 table {
 	width: 100%;
