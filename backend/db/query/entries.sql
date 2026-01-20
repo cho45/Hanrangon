@@ -86,6 +86,7 @@ UPDATE entries SET
     path = sqlc.arg(path),
     format = sqlc.arg(format),
     date = sqlc.arg(date),
+    created_at = sqlc.arg(created_at),
     modified_at = sqlc.arg(modified_at),
     publish_at = sqlc.arg(publish_at),
     status = sqlc.arg(status)
@@ -126,5 +127,6 @@ UPDATE entries
 SET status = 'public',
     path = sqlc.arg(path),
     date = sqlc.arg(date),
+    created_at = sqlc.arg(created_at),
     modified_at = sqlc.arg(modified_at)
 WHERE id = sqlc.arg(id);

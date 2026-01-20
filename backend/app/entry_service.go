@@ -96,6 +96,7 @@ func (s *EntryService) SaveEntry(ctx context.Context, params SaveEntryParams) (*
 	// 保存用パラメータの決定
 	var date string
 	var path string
+	var createdAt time.Time
 	if params.ID != 0 {
 		existing, err := qtx.GetEntryById(ctx, params.ID)
 		if err != nil {
@@ -103,6 +104,12 @@ func (s *EntryService) SaveEntry(ctx context.Context, params SaveEntryParams) (*
 		}
 		date = existing.Date
 		path = existing.Path
+		createdAt = existing.CreatedAt
+
+		// 下書き(draft)から公開(public/scheduled/reserved)に移行する場合、作成日時を更新する
+		if existing.Status == string(maindb.StatusDraft) && status != string(maindb.StatusDraft) {
+			createdAt = now
+		}
 
 		// パスが未確定の状態で public/scheduled になる場合は、date を「今」にする
 		if path == "" && (status == "public" || status == "scheduled") {
@@ -122,6 +129,7 @@ func (s *EntryService) SaveEntry(ctx context.Context, params SaveEntryParams) (*
 			}
 		}
 	} else {
+		createdAt = now
 		path = ""
 		if status == string(maindb.StatusReserved) && params.PublishAt.Valid {
 			date = params.PublishAt.Time.Format("2006-01-02")
@@ -152,6 +160,7 @@ func (s *EntryService) SaveEntry(ctx context.Context, params SaveEntryParams) (*
 			Path:          path,
 			Format:        params.Format,
 			Date:          date,
+			CreatedAt:     createdAt,
 			ModifiedAt:    now,
 			PublishAt:     params.PublishAt,
 			Status:        status,
@@ -166,7 +175,7 @@ func (s *EntryService) SaveEntry(ctx context.Context, params SaveEntryParams) (*
 			Path:          path,
 			Format:        params.Format,
 			Date:          date,
-			CreatedAt:     now,
+			CreatedAt:     createdAt,
 			ModifiedAt:    now,
 			PublishAt:     params.PublishAt,
 			Status:        status,
@@ -268,6 +277,7 @@ func (s *EntryService) PublishScheduledEntries(ctx context.Context) error {
 					ID:         e.ID,
 					Path:       path,
 					Date:       date,
+					CreatedAt:  now,
 					ModifiedAt: now,
 				})
 				if err != nil {
@@ -282,6 +292,7 @@ func (s *EntryService) PublishScheduledEntries(ctx context.Context) error {
 					ID:         e.ID,
 					Path:       e.Path,
 					Date:       e.Date,
+					CreatedAt:  now,
 					ModifiedAt: now,
 				})
 				if err != nil {

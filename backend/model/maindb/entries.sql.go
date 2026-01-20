@@ -728,13 +728,15 @@ UPDATE entries
 SET status = 'public',
     path = ?1,
     date = ?2,
-    modified_at = ?3
-WHERE id = ?4
+    created_at = ?3,
+    modified_at = ?4
+WHERE id = ?5
 `
 
 type PublishEntryParams struct {
 	Path       string    `json:"path"`
 	Date       string    `json:"date"`
+	CreatedAt  time.Time `json:"created_at"`
 	ModifiedAt time.Time `json:"modified_at"`
 	ID         int64     `json:"id"`
 }
@@ -743,6 +745,7 @@ func (q *Queries) PublishEntry(ctx context.Context, arg PublishEntryParams) erro
 	_, err := q.db.ExecContext(ctx, publishEntry,
 		arg.Path,
 		arg.Date,
+		arg.CreatedAt,
 		arg.ModifiedAt,
 		arg.ID,
 	)
@@ -810,10 +813,11 @@ UPDATE entries SET
     path = ?6,
     format = ?7,
     date = ?8,
-    modified_at = ?9,
-    publish_at = ?10,
-    status = ?11
-WHERE id = ?12
+    created_at = ?9,
+    modified_at = ?10,
+    publish_at = ?11,
+    status = ?12
+WHERE id = ?13
 RETURNING id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, publish_at, status
 `
 
@@ -826,6 +830,7 @@ type UpdateEntryParams struct {
 	Path          string       `json:"path"`
 	Format        string       `json:"format"`
 	Date          string       `json:"date"`
+	CreatedAt     time.Time    `json:"created_at"`
 	ModifiedAt    time.Time    `json:"modified_at"`
 	PublishAt     sql.NullTime `json:"publish_at"`
 	Status        string       `json:"status"`
@@ -842,6 +847,7 @@ func (q *Queries) UpdateEntry(ctx context.Context, arg UpdateEntryParams) (Entry
 		arg.Path,
 		arg.Format,
 		arg.Date,
+		arg.CreatedAt,
 		arg.ModifiedAt,
 		arg.PublishAt,
 		arg.Status,

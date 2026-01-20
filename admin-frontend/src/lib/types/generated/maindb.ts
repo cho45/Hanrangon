@@ -57,6 +57,7 @@ export interface ListUniqueDatesParams {
 export interface PublishEntryParams {
   path: string;
   date: string;
+  created_at: string;
   modified_at: string;
   id: number /* int64 */;
 }
@@ -74,6 +75,7 @@ export interface UpdateEntryParams {
   path: string;
   format: string;
   date: string;
+  created_at: string;
   modified_at: string;
   publish_at: any /* sql.NullTime */;
   status: string;

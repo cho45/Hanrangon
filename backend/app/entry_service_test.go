@@ -450,4 +450,67 @@ func TestEntryService_SaveEntry_StateTransitions(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "Reserved status requires a future publish_at")
 	})
+
+	t.Run("CreatedAtUpdate", func(t *testing.T) {
+		e := setupTest(t)
+		defer e.close()
+		ctx := context.Background()
+		service := e.app.EntryService()
+
+		past := time.Now().Add(-24 * time.Hour).Truncate(time.Second)
+
+		t.Run("draft to draft: maintain CreatedAt", func(t *testing.T) {
+			id := createEntryForService(t, e, "draft", past, "")
+			entry, err := service.SaveEntry(ctx, SaveEntryParams{
+				ID:     id,
+				Title:  "Still Draft",
+				Body:   "Body",
+				Format: "Markdown",
+				Status: "draft",
+			})
+			require.NoError(t, err)
+			assert.True(t, entry.CreatedAt.Equal(past), "CreatedAt should be maintained for draft entries")
+		})
+
+		t.Run("draft to public: update CreatedAt", func(t *testing.T) {
+			id := createEntryForService(t, e, "draft", past, "")
+			now := time.Now()
+			entry, err := service.SaveEntry(ctx, SaveEntryParams{
+				ID:     id,
+				Title:  "Published",
+				Body:   "Body",
+				Format: "Markdown",
+				Status: "public",
+			})
+			require.NoError(t, err)
+			assert.True(t, entry.CreatedAt.After(past), "CreatedAt should be updated when transitioning from draft to public")
+			assert.True(t, entry.CreatedAt.After(now.Add(-5*time.Second)), "CreatedAt should be near now")
+		})
+
+		t.Run("public to public: maintain CreatedAt", func(t *testing.T) {
+			id := createEntryForService(t, e, "public", past, "2025/01/01/1")
+			entry, err := service.SaveEntry(ctx, SaveEntryParams{
+				ID:     id,
+				Title:  "Updated Public",
+				Body:   "Body",
+				Format: "Markdown",
+				Status: "public",
+			})
+			require.NoError(t, err)
+			assert.True(t, entry.CreatedAt.Equal(past), "CreatedAt should be maintained for public entries")
+		})
+
+		t.Run("public to draft: maintain CreatedAt", func(t *testing.T) {
+			id := createEntryForService(t, e, "public", past, "2025/01/01/1")
+			entry, err := service.SaveEntry(ctx, SaveEntryParams{
+				ID:     id,
+				Title:  "Back to Draft",
+				Body:   "Body",
+				Format: "Markdown",
+				Status: "draft",
+			})
+			require.NoError(t, err)
+			assert.True(t, entry.CreatedAt.Equal(past), "CreatedAt should be maintained when transitioning from public to draft")
+		})
+	})
 }
