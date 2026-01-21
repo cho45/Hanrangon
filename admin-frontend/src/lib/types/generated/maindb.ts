@@ -24,6 +24,14 @@ export interface CreateEntryParams {
   publish_at: any /* sql.NullTime */;
   status: string;
 }
+export interface GetNewerEntryParams {
+  now: any /* sql.NullTime */;
+  created_at: string;
+}
+export interface GetOlderEntryParams {
+  now: any /* sql.NullTime */;
+  created_at: string;
+}
 export interface ListAllEntriesForSitemapRow {
   path: string;
   modified_at: string;
@@ -34,6 +42,7 @@ export interface ListArchiveMonthsRow {
   count: number /* int64 */;
 }
 export interface ListEntriesParams {
+  now: any /* sql.NullTime */;
   target_date: string;
   limit: number /* int64 */;
 }
@@ -42,15 +51,22 @@ export interface ListEntriesAdminParams {
   limit: number /* int64 */;
 }
 export interface ListEntriesByCategoryParams {
+  now: any /* sql.NullTime */;
   title: string;
   target_date: string;
   limit: number /* int64 */;
 }
+export interface ListEntriesByDatesParams {
+  now: any /* sql.NullTime */;
+  dates: string[];
+}
 export interface ListEntriesByYearMonthDayParams {
+  now: any /* sql.NullTime */;
   start_date: string;
   end_date: string;
 }
 export interface ListUniqueDatesParams {
+  now: any /* sql.NullTime */;
   target_date: string;
   limit: number /* int64 */;
 }

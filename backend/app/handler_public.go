@@ -68,9 +68,11 @@ func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid date format").SetInternal(err)
 	}
 
+	now := Now()
 	entries, err := app.MainDB().Q.ListEntriesByYearMonthDay(ctx, maindb.ListEntriesByYearMonthDayParams{
 		StartDate: start.Format("2006-01-02"),
 		EndDate:   end.Format("2006-01-02"),
+		Now:       sql.NullTime{Time: now, Valid: true},
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
@@ -115,8 +117,9 @@ func (app *AppImpl) HandleDateArchive(c echo.Context) error {
 
 func (app *AppImpl) HandleArchive(c echo.Context) error {
 	ctx := c.Request().Context()
+	now := Now()
 
-	archives, err := app.MainDB().Q.ListArchiveMonths(ctx)
+	archives, err := app.MainDB().Q.ListArchiveMonths(ctx, sql.NullTime{Time: now, Valid: true})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch archives").SetInternal(err)
 	}
@@ -159,9 +162,11 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 	}
 
 	// 1. 表示対象となるユニークな日付を取得 (次ページ判定用に +1)
+	now := Now()
 	dates, err := app.MainDB().Q.ListUniqueDates(ctx, maindb.ListUniqueDatesParams{
 		TargetDate: targetDate,
 		Limit:      int64(maxDays + 1),
+		Now:        sql.NullTime{Time: now, Valid: true},
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch dates").SetInternal(err)
@@ -183,7 +188,10 @@ func (app *AppImpl) HandleIndex(c echo.Context) error {
 	}
 
 	// 2. 取得した日付に含まれる全記事を取得
-	entries, err := app.MainDB().Q.ListEntriesByDates(ctx, dates)
+	entries, err := app.MainDB().Q.ListEntriesByDates(ctx, maindb.ListEntriesByDatesParams{
+		Dates: dates,
+		Now:   sql.NullTime{Time: now, Valid: true},
+	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
 	}
@@ -273,15 +281,17 @@ func (app *AppImpl) HandleCategory(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusBadRequest, "Invalid date format").SetInternal(err)
 		}
 	} else {
-		targetDate = time.Now()
+		targetDate = Now()
 	}
 
+	now := Now()
 	fetchLimit := limit + 1
 
 	entries, err := app.MainDB().Q.ListEntriesByCategory(ctx, maindb.ListEntriesByCategoryParams{
 		Title:      fmt.Sprintf("%%[%s]%%", category),
 		TargetDate: targetDate.Format("2006-01-02"),
 		Limit:      int64(fetchLimit),
+		Now:        sql.NullTime{Time: now, Valid: true},
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
@@ -324,9 +334,11 @@ func (app *AppImpl) JoinBaseURL(path string) string {
 func (app *AppImpl) HandleFeed(c echo.Context) error {
 	ctx := c.Request().Context()
 
+	now := Now()
 	entries, err := app.MainDB().Q.ListEntries(ctx, maindb.ListEntriesParams{
-		TargetDate: time.Now().Format("2006-01-02"),
+		TargetDate: now.Format("2006-01-02"),
 		Limit:      20,
+		Now:        sql.NullTime{Time: now, Valid: true},
 	})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries").SetInternal(err)
@@ -384,7 +396,8 @@ func (app *AppImpl) HandleFeed(c echo.Context) error {
 func (app *AppImpl) HandleSitemap(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	rows, err := app.MainDB().Q.ListAllEntriesForSitemap(ctx)
+	now := Now()
+	rows, err := app.MainDB().Q.ListAllEntriesForSitemap(ctx, sql.NullTime{Time: now, Valid: true})
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch entries for sitemap").SetInternal(err)
 	}
@@ -620,7 +633,11 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 	}
 	trackbacks := view.NewViewTrackbacks(rows)
 
-	olderEntry, err := app.MainDB().Q.GetOlderEntry(ctx, entry.CreatedAt)
+	now := Now()
+	olderEntry, err := app.MainDB().Q.GetOlderEntry(ctx, maindb.GetOlderEntryParams{
+		CreatedAt: entry.CreatedAt,
+		Now:       sql.NullTime{Time: now, Valid: true},
+	})
 	if err != nil && err != sql.ErrNoRows {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch older entry").SetInternal(err)
 	}
@@ -630,7 +647,10 @@ func (app *AppImpl) HandlePath(c echo.Context) error {
 		olderPtr = &v
 	}
 
-	newerEntry, err := app.MainDB().Q.GetNewerEntry(ctx, entry.CreatedAt)
+	newerEntry, err := app.MainDB().Q.GetNewerEntry(ctx, maindb.GetNewerEntryParams{
+		CreatedAt: entry.CreatedAt,
+		Now:       sql.NullTime{Time: now, Valid: true},
+	})
 	if err != nil && err != sql.ErrNoRows {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch newer entry").SetInternal(err)
 	}

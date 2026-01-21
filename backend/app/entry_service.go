@@ -34,8 +34,12 @@ func NewEntryService(app App) *EntryService {
 }
 
 func (s *EntryService) SaveEntry(ctx context.Context, params SaveEntryParams) (*maindb.Entry, error) {
-	now := time.Now()
+	now := Now()
 	status := params.Status
+
+	if params.PublishAt.Valid {
+		params.PublishAt.Time = params.PublishAt.Time.In(APP_TZ)
+	}
 
 	// 0. バリデーション
 	if status == string(maindb.StatusScheduled) || status == string(maindb.StatusReserved) {
@@ -239,7 +243,7 @@ func (s *EntryService) CalculateNextPath(ctx context.Context, qtx maindb.Querier
 
 // PublishScheduledEntries は公開予定日時が過ぎたエントリを公開状態にする
 func (s *EntryService) PublishScheduledEntries(ctx context.Context) error {
-	now := time.Now()
+	now := Now()
 	entries, err := s.app.MainDB().Q.FindScheduledEntriesToPublish(ctx, sql.NullTime{Time: now, Valid: true})
 	if err != nil {
 		return fmt.Errorf("failed to find scheduled entries: %w", err)

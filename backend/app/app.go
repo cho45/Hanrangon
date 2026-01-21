@@ -29,6 +29,20 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+var APP_TZ *time.Location
+
+func init() {
+	var err error
+	APP_TZ, err = time.LoadLocation("Asia/Tokyo")
+	if err != nil {
+		panic(fmt.Errorf("failed to load location Asia/Tokyo: %w", err))
+	}
+}
+
+func Now() time.Time {
+	return time.Now().In(APP_TZ)
+}
+
 // ProgressSession は進捗追跡用のセッション情報
 type ProgressSession struct {
 	ID        string
