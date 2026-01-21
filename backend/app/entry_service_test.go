@@ -513,4 +513,48 @@ func TestEntryService_SaveEntry_StateTransitions(t *testing.T) {
 			assert.True(t, entry.CreatedAt.Equal(past), "CreatedAt should be maintained when transitioning from public to draft")
 		})
 	})
+
+	t.Run("TimezoneBug_Reproduction", func(t *testing.T) {
+		e := setupTest(t)
+		defer e.close()
+		ctx := context.Background()
+		service := e.app.EntryService()
+
+		// 1. 未来の予約投稿を作成 (現在から 5 時間後)
+		// バグを再現するため、明示的に UTC の時刻を渡す
+		// (ユーザーの DB では publish_at が UTC 文字列になっているため)
+		futureJST := time.Now().In(APP_TZ).Add(5 * time.Hour).Truncate(time.Second)
+		futureUTC := futureJST.UTC()
+		entry, err := service.SaveEntry(ctx, SaveEntryParams{
+			Title:     "Future Reserved",
+			Body:      "Body",
+			Format:    "Markdown",
+			Status:    "reserved",
+			PublishAt: sql.NullTime{Time: futureUTC, Valid: true},
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "reserved", entry.Status)
+
+		// DB に保存された publish_at を確認
+		// ドライバによる自動変換を避けるため TEXT にキャストして取得
+		var rawPublishAt string
+		err = e.app.MainDB().DB.QueryRow("SELECT CAST(publish_at AS TEXT) FROM entries WHERE id = ?", entry.ID).Scan(&rawPublishAt)
+		require.NoError(t, err)
+		t.Logf("Raw publish_at in DB: %s", rawPublishAt)
+		t.Logf("Go future time: %v", futureJST)
+
+		// 2. PublishScheduledEntries を実行
+		// 本来なら 5 時間後の記事なので公開されないはず
+		err = service.PublishScheduledEntries(ctx)
+		require.NoError(t, err)
+
+		// 3. 公開状態を確認
+		res, err := e.app.MainDB().Q.GetEntryById(ctx, entry.ID)
+		require.NoError(t, err)
+
+		// バグが再現すれば、ここで status が "public" になってしまう
+		if res.Status == "public" {
+			t.Errorf("BUG REPRODUCED: Future entry (scheduled for %v) was published immediately", futureJST)
+		}
+	})
 }

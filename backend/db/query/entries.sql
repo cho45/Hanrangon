@@ -2,12 +2,12 @@
 
 -- name: ListEntries :many
 SELECT * FROM entries
-WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND date <= sqlc.arg(target_date)
+WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= sqlc.arg(now)) AND date <= sqlc.arg(target_date)
 ORDER BY date DESC, created_at ASC
 LIMIT sqlc.arg('limit');
 
 -- name: CountEntries :one
-SELECT count(*) FROM entries WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP);
+SELECT count(*) FROM entries WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= sqlc.arg(now));
 
 -- name: ListPathsByDate :many
 SELECT path FROM entries WHERE date = sqlc.arg(date);
@@ -18,18 +18,18 @@ WHERE path = sqlc.arg(path) LIMIT 1;
 
 -- name: ListEntriesByYearMonthDay :many
 SELECT * FROM entries
-WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND sqlc.arg(start_date) <= date AND date < sqlc.arg(end_date)
+WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= sqlc.arg(now)) AND sqlc.arg(start_date) <= date AND date < sqlc.arg(end_date)
 ORDER BY created_at;
 
 -- name: GetOlderEntry :one
 SELECT * FROM entries
-WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND created_at < sqlc.arg(created_at)
+WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= sqlc.arg(now)) AND created_at < sqlc.arg(created_at)
 ORDER BY created_at DESC
 LIMIT 1;
 
 -- name: GetNewerEntry :one
 SELECT * FROM entries
-WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND created_at > sqlc.arg(created_at)
+WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= sqlc.arg(now)) AND created_at > sqlc.arg(created_at)
 ORDER BY created_at ASC
 LIMIT 1;
 
@@ -39,13 +39,13 @@ SELECT
 	strftime('%m', date) as month,
 	count(*) as count
 FROM entries
-WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP)
+WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= sqlc.arg(now))
 GROUP BY strftime('%Y-%m', date)
 ORDER BY year DESC, month ASC;
 
 -- name: ListEntriesByCategory :many
 SELECT * FROM entries
-WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND title LIKE sqlc.arg(title) AND date <= sqlc.arg(target_date)
+WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= sqlc.arg(now)) AND title LIKE sqlc.arg(title) AND date <= sqlc.arg(target_date)
 ORDER BY date DESC, created_at ASC
 LIMIT sqlc.arg('limit');
 
@@ -55,18 +55,18 @@ WHERE id IN (sqlc.slice('ids'));
 
 -- name: ListUniqueDates :many
 SELECT DISTINCT date FROM entries
-WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND date <= sqlc.arg(target_date)
+WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= sqlc.arg(now)) AND date <= sqlc.arg(target_date)
 ORDER BY date DESC
 LIMIT sqlc.arg('limit');
 
 -- name: ListEntriesByDates :many
 SELECT * FROM entries
-WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP) AND date IN (sqlc.slice('dates'))
+WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= sqlc.arg(now)) AND date IN (sqlc.slice('dates'))
 ORDER BY date DESC, created_at ASC;
 
 -- name: ListAllEntriesForSitemap :many
 SELECT path, modified_at FROM entries
-WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= CURRENT_TIMESTAMP)
+WHERE status = 'public' AND (publish_at IS NULL OR publish_at <= sqlc.arg(now))
 ORDER BY date DESC;
 
 -- name: CreateEntry :one

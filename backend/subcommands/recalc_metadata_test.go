@@ -3,6 +3,7 @@ package subcommands
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/cho45/hanrangon/backend/app"
 	"github.com/cho45/hanrangon/internal/testutil"
@@ -18,12 +19,13 @@ func TestRecalcMetadata(t *testing.T) {
 	ctx := context.Background()
 
 	// テストデータの準備
+	now := time.Now().Format("2006-01-02 15:04:05-07:00")
 	_, err := dbs.MainDB.Exec(`
 		INSERT INTO entries (id, path, title, body, formatted_body, summary, image_url, format, date, created_at, modified_at)
 		VALUES
-		(1, '/test1', 'Title 1', 'Body 1', '<p>Formatted Body 1 <img src="/img1.png"></p>', '', '', 'html', '2024-01-01', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-		(2, '/test2', 'Title 2', 'Body 2', '<p>Formatted Body 2 <img src="/img2.png"></p>', '', '', 'html', '2024-01-02', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-	`)
+		(1, '/test1', 'Title 1', 'Body 1', '<p>Formatted Body 1 <img src="/img1.png"></p>', '', '', 'html', '2024-01-01', ?, ?),
+		(2, '/test2', 'Title 2', 'Body 2', '<p>Formatted Body 2 <img src="/img2.png"></p>', '', '', 'html', '2024-01-02', ?, ?)
+	`, now, now, now, now)
 	if err != nil {
 		t.Fatal(err)
 	}

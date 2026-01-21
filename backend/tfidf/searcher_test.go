@@ -3,6 +3,7 @@ package tfidf
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/cho45/hanrangon/internal/testutil"
 )
@@ -34,9 +35,10 @@ func TestSearch(t *testing.T) {
 		{10, "JS", "I love javascript"},
 	}
 
+	now := time.Now().Format("2006-01-02 15:04:05-07:00")
 	for _, e := range entries {
-		_, err := dataDB.Exec("INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at, status) VALUES (?, ?, ?, ?, ?, 'Hatena', '2024-01-01', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'public')",
-			e.id, e.title, e.body, e.body, e.title)
+		_, err := dataDB.Exec("INSERT INTO entries (id, title, body, formatted_body, path, format, date, created_at, modified_at, status) VALUES (?, ?, ?, ?, ?, 'Hatena', '2024-01-01', ?, ?, 'public')",
+			e.id, e.title, e.body, e.body, e.title, now, now)
 		if err != nil {
 			t.Fatalf("failed to insert entry %d: %v", e.id, err)
 		}

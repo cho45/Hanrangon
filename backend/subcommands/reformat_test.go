@@ -3,6 +3,7 @@ package subcommands
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/cho45/hanrangon/backend/app"
 	"github.com/cho45/hanrangon/internal/testutil"
@@ -17,12 +18,13 @@ func TestReformat(t *testing.T) {
 	ctx := context.Background()
 
 	// テストデータの準備 (古いフォーマット結果を持つエントリ)
+	now := time.Now().Format("2006-01-02 15:04:05-07:00")
 	_, err := dbs.MainDB.Exec(`
 		INSERT INTO entries (id, path, title, body, formatted_body, format, date, created_at, modified_at)
 		VALUES
-		(1, '2024/01/01/1', 'Title 1', 'Body 1', 'OLD FORMAT 1', 'Markdown', '2024-01-01', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-		(2, '2024/01/02/1', 'Title 2', 'Body 2', 'OLD FORMAT 2', 'Markdown', '2024-01-02', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-	`)
+		(1, '2024/01/01/1', 'Title 1', 'Body 1', 'OLD FORMAT 1', 'Markdown', '2024-01-01', ?, ?),
+		(2, '2024/01/02/1', 'Title 2', 'Body 2', 'OLD FORMAT 2', 'Markdown', '2024-01-02', ?, ?)
+	`, now, now, now, now)
 	if err != nil {
 		t.Fatal(err)
 	}

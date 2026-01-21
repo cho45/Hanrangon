@@ -36,6 +36,7 @@ func (s *CacheService) Set(ctx context.Context, key string, content []byte, etag
 			Content:     content,
 			Etag:        etag,
 			ContentType: contentType,
+			CreatedAt:   Now(),
 		}); err != nil {
 			return fmt.Errorf("failed to insert cache: %w", err)
 		}

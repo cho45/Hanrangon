@@ -14,6 +14,7 @@ export interface InsertCacheParams {
   content: string;
   etag: string;
   content_type: string;
+  created_at: string;
 }
 export interface InsertCacheRelationParams {
   cache_key: string;

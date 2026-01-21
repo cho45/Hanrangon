@@ -365,7 +365,7 @@ func (app *AppImpl) HandleAdminApiPreview(c echo.Context) error {
 
 	// 3. Render using public templates
 	summary, imageURL := view.ExtractSummaryAndFirstImage(processedBody, 70)
-	now := time.Now()
+	now := Now()
 	entry := maindb.Entry{
 		ID:            0,
 		Title:         req.Title,
@@ -406,7 +406,7 @@ func (app *AppImpl) HandleAdminApiUploadImage(c echo.Context) error {
 	}
 	defer src.Close()
 
-	now := time.Now()
+	now := Now()
 	// Normalize filename to NFC and add timestamp prefix.
 	// Use filepath.Base to prevent path traversal.
 	filename := fmt.Sprintf("%s-%s", now.Format("20060102150405"), filepath.Base(norm.NFC.String(file.Filename)))
