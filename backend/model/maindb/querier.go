@@ -7,28 +7,27 @@ package maindb
 import (
 	"context"
 	"database/sql"
-	"time"
 )
 
 type Querier interface {
 	CountAllEntries(ctx context.Context) (int64, error)
-	CountEntries(ctx context.Context) (int64, error)
+	CountEntries(ctx context.Context, now sql.NullTime) (int64, error)
 	CreateEntry(ctx context.Context, arg CreateEntryParams) (Entry, error)
 	CreateTrackback(ctx context.Context, arg CreateTrackbackParams) error
 	DeleteTrackbacksBySourceEntryId(ctx context.Context, trackbackEntryID sql.NullInt64) error
 	FindScheduledEntriesToPublish(ctx context.Context, now sql.NullTime) ([]Entry, error)
 	GetEntryById(ctx context.Context, id int64) (Entry, error)
 	GetEntryByPath(ctx context.Context, path string) (Entry, error)
-	GetNewerEntry(ctx context.Context, createdAt time.Time) (Entry, error)
-	GetOlderEntry(ctx context.Context, createdAt time.Time) (Entry, error)
+	GetNewerEntry(ctx context.Context, arg GetNewerEntryParams) (Entry, error)
+	GetOlderEntry(ctx context.Context, arg GetOlderEntryParams) (Entry, error)
 	ListAllEntries(ctx context.Context) ([]Entry, error)
-	ListAllEntriesForSitemap(ctx context.Context) ([]ListAllEntriesForSitemapRow, error)
-	ListArchiveMonths(ctx context.Context) ([]ListArchiveMonthsRow, error)
+	ListAllEntriesForSitemap(ctx context.Context, now sql.NullTime) ([]ListAllEntriesForSitemapRow, error)
+	ListArchiveMonths(ctx context.Context, now sql.NullTime) ([]ListArchiveMonthsRow, error)
 	// Note: date column is now TEXT type, so sqlc can map it directly to string without CAST.
 	ListEntries(ctx context.Context, arg ListEntriesParams) ([]Entry, error)
 	ListEntriesAdmin(ctx context.Context, arg ListEntriesAdminParams) ([]Entry, error)
 	ListEntriesByCategory(ctx context.Context, arg ListEntriesByCategoryParams) ([]Entry, error)
-	ListEntriesByDates(ctx context.Context, dates []string) ([]Entry, error)
+	ListEntriesByDates(ctx context.Context, arg ListEntriesByDatesParams) ([]Entry, error)
 	ListEntriesByIds(ctx context.Context, ids []int64) ([]Entry, error)
 	ListEntriesByYearMonthDay(ctx context.Context, arg ListEntriesByYearMonthDayParams) ([]Entry, error)
 	ListPathsByDate(ctx context.Context, date string) ([]string, error)

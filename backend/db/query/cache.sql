@@ -1,6 +1,6 @@
 -- name: InsertCache :exec
-INSERT OR REPLACE INTO cache (cache_key, content, etag, content_type)
-VALUES (?, ?, ?, ?);
+INSERT OR REPLACE INTO cache (cache_key, content, etag, content_type, created_at)
+VALUES (?, ?, ?, ?, ?);
 
 -- name: GetCache :one
 SELECT * FROM cache WHERE cache_key = ?;

@@ -95,15 +95,16 @@ func (q *Queries) GetMetadata(ctx context.Context, key string) (string, error) {
 }
 
 const insertCache = `-- name: InsertCache :exec
-INSERT OR REPLACE INTO cache (cache_key, content, etag, content_type)
-VALUES (?, ?, ?, ?)
+INSERT OR REPLACE INTO cache (cache_key, content, etag, content_type, created_at)
+VALUES (?, ?, ?, ?, ?)
 `
 
 type InsertCacheParams struct {
-	CacheKey    string `json:"cache_key"`
-	Content     []byte `json:"content"`
-	Etag        string `json:"etag"`
-	ContentType string `json:"content_type"`
+	CacheKey    string    `json:"cache_key"`
+	Content     []byte    `json:"content"`
+	Etag        string    `json:"etag"`
+	ContentType string    `json:"content_type"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 func (q *Queries) InsertCache(ctx context.Context, arg InsertCacheParams) error {
@@ -112,6 +113,7 @@ func (q *Queries) InsertCache(ctx context.Context, arg InsertCacheParams) error 
 		arg.Content,
 		arg.Etag,
 		arg.ContentType,
+		arg.CreatedAt,
 	)
 	return err
 }

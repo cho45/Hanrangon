@@ -3,6 +3,7 @@ package subcommands
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/cho45/hanrangon/backend/app"
 	"github.com/cho45/hanrangon/backend/tfidf"
@@ -31,13 +32,14 @@ func TestRecalcTFIDF(t *testing.T) {
 
 	// テストデータの準備 (DF > 1 にするために同じ単語を含むエントリを複数作成)
 	// DF=1 の単語は postings に入らないため、共通の単語を複数含める必要がある
+	now := time.Now().Format("2006-01-02 15:04:05-07:00")
 	_, err = dbs.MainDB.Exec(`
 		INSERT INTO entries (id, path, title, body, formatted_body, format, date, created_at, modified_at)
 		VALUES
-		(1, '/test1', 'Common Title', 'This is a common programming language. It is very fast and efficient.', '<p>Content 1</p>', 'html', '2024-01-01', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-		(2, '/test2', 'Common Title', 'This is another common programming language. It is very popular and easy.', '<p>Content 2</p>', 'html', '2024-01-02', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-		(3, '/test3', 'Unique Title', 'This is a unique entry but it also mentions programming and language.', '<p>Content 3</p>', 'html', '2024-01-03', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-	`)
+		(1, '/test1', 'Common Title', 'This is a common programming language. It is very fast and efficient.', '<p>Content 1</p>', 'html', '2024-01-01', ?, ?),
+		(2, '/test2', 'Common Title', 'This is another common programming language. It is very popular and easy.', '<p>Content 2</p>', 'html', '2024-01-02', ?, ?),
+		(3, '/test3', 'Unique Title', 'This is a unique entry but it also mentions programming and language.', '<p>Content 3</p>', 'html', '2024-01-03', ?, ?)
+	`, now, now, now, now, now, now)
 	if err != nil {
 		t.Fatal(err)
 	}

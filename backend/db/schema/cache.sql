@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS cache (
     content BLOB,
     etag TEXT NOT NULL,
     content_type TEXT NOT NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS cache_relation (
