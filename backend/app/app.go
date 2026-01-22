@@ -27,6 +27,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 )
 
 var APP_TZ *time.Location
@@ -81,6 +83,7 @@ type AppImpl struct {
 	cacheService         *CacheService
 	postprocessProcessor *BatchProcessor
 	postprocessMu        sync.Mutex
+	prometheusRegistry   *prometheus.Registry
 }
 
 func NewApp(
@@ -123,6 +126,12 @@ func NewApp(
 		storage = NewLocalStorage(config.UploadDir, "/images/entry/")
 	}
 
+	reg := prometheus.NewRegistry()
+	if !config.IsTest() {
+		reg.MustRegister(collectors.NewGoCollector())
+		reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	}
+
 	app := &AppImpl{
 		mainDB:               mainDB,
 		tfidfDB:              tfidfDB,
@@ -137,7 +146,9 @@ func NewApp(
 		templates:            templates,
 		storage:              storage,
 		imageProcessor:       NewImageProcessor(config),
+		prometheusRegistry:   reg,
 	}
+
 	app.cacheService = NewCacheService(cacheDB)
 	app.entryService = NewEntryService(app)
 
@@ -163,6 +174,7 @@ func (a *AppImpl) Templates() *Templates                             { return a.
 func (a *AppImpl) EntryService() *EntryService                       { return a.entryService }
 func (a *AppImpl) CacheService() *CacheService                       { return a.cacheService }
 func (a *AppImpl) Storage() StorageClient                            { return a.storage }
+func (a *AppImpl) PrometheusRegistry() *prometheus.Registry          { return a.prometheusRegistry }
 
 func (a *AppImpl) Close() error {
 	a.postprocessMu.Lock()
