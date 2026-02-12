@@ -34,17 +34,24 @@ go test -v -tags "sqlite_math_functions" ./backend/formatter/...
 
 ### データベースの初期化
 
-`internal/testutil` を使用して、テストごとにクリーンな SQLite データベースを構築できる。
+`internal/testutil` を使用して、テストごとにクリーンな SQLite データベース（インメモリ）を構築できる。
 
 ```go
-import "github.com/cho45/hanrangon/internal/testutil"
+import (
+    "testing"
+    "github.com/cho45/hanrangon/internal/testutil"
+)
 
 func TestSomething(t *testing.T) {
-    // 4 つのデータベース（Main, TFIDF, Worker, Images）を自動生成する
+    // 環境変数 (HANRANGON_BASE_DIR, HANRANGON_CONFIG) のセットアップ
+    testutil.SetupEnvironment()
+
+    // 5つのデータベース（Main, TFIDF, Worker, Images, Cache）を自動生成する
     dbs := testutil.SetupAllDBs(t)
     defer dbs.Close()
 
     // dbs.MainDB.Q などから sqlc 生成のクエリを実行できる
+    ctx := context.Background()
     entry, err := dbs.MainDB.Q.GetEntry(ctx, "entry-id")
 
     // トランザクションの使用例
@@ -54,8 +61,10 @@ func TestSomething(t *testing.T) {
 }
 ```
 
-- タイムゾーンは `Asia/Tokyo` に統一。
-- `dbs.MainDB` などの各フィールドは `model.Database[Q]` 型のラッパーになっており、以下の機能を持つ：
+- **`testutil.SetupEnvironment()`**: `HANRANGON_BASE_DIR` や `HANRANGON_CONFIG` をテスト用に設定するために**必須**。
+- **データベース**: `SetupAllDBs` は `MainDB`, `TFIDFDB`, `WorkerDB`, `ImagesDB`, `CacheDB` の5つのデータベースを含む `DBs` 構造体を返す。これらはすべてインメモリ SQLite として高速に動作するよう調整されている。
+- ** `dbs.Close()`**: テスト終了時にリソースを解放するため、必ず `defer` で呼び出すこと。
+- **各 DB フィールド**: `model.Database[Q]` 型のラッパーになっており、以下の機能を持つ：
     - `.Q`: `sqlc` で生成された Querier インターフェース。直接クエリを実行可能。
     - `.DB`: `*sql.DB` 本体へのアクセス。
     - `.WithTx(ctx, fn)`: トランザクション内での処理実行。
