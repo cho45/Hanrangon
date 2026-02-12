@@ -1,5 +1,5 @@
 # 各種ツールのバイナリを公式イメージから取得
-FROM golang:1.24 AS go-dist
+FROM golang:1.25 AS go-dist
 FROM sqlc/sqlc:latest AS sqlc-dist
 
 # ベースに debian-slim を使用
