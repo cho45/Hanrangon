@@ -349,6 +349,26 @@ relative-time {
 	text-align: justify;
 }
 
+/* Responsive iframe & video */
+.content iframe {
+	display: block;
+	margin: auto;
+	max-width: 100%;
+}
+
+/* YouTube embeds maintain 16:9 aspect ratio */
+.content iframe[src*="youtube.com/embed/"] {
+	aspect-ratio: 16/9;
+	width: 100%;
+	height: auto;
+}
+
+.content video {
+	display: block;
+	margin: auto;
+	max-width: 100%;
+}
+
 /* Large Photos & Code Breakout (Universal) */
 article.photo .content .photo,
 article.photo .content img,
