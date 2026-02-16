@@ -12,6 +12,7 @@ import (
 
 	"github.com/cho45/hanrangon/backend/view"
 	"github.com/gorilla/sessions"
+	"github.com/labstack/echo-contrib/echoprometheus"
 	"github.com/labstack/echo-contrib/pprof"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
@@ -25,6 +26,11 @@ func NewServer(app *AppImpl) *echo.Echo {
 	e.Debug = config.IsDevelopment()
 
 	e.Pre(app.HeadToGetMiddleware)
+	if !app.config.IsTest() {
+		e.Use(echoprometheus.NewMiddlewareWithConfig(echoprometheus.MiddlewareConfig{
+			Registerer: app.prometheusRegistry,
+		}))
+	}
 
 	if os.Getenv("PPROF") == "true" {
 		pprof.Register(e)
@@ -177,6 +183,7 @@ func NewServer(app *AppImpl) *echo.Echo {
 
 	e.GET("/api/search", app.HandleApiSearch)
 	e.GET("/images/ogp/:id", app.HandleOGP)
+	e.GET("/metrics", app.MetricsHandler())
 
 	// Auth
 	e.GET("/login", app.HandleLogin)

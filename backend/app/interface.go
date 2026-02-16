@@ -13,6 +13,7 @@ import (
 	"github.com/cho45/hanrangon/backend/model/tfidfdb"
 	"github.com/cho45/hanrangon/backend/model/workerdb"
 	"github.com/cho45/hanrangon/backend/tfidf"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // ProgressReporter は進捗状況を報告するためのインターフェース
@@ -51,6 +52,9 @@ type App interface {
 	// Postprocess
 	Postprocess(ctx context.Context, html string, reporter ProgressReporter) (string, error)
 	PostprocessBatch(ctx context.Context, idleTimeout time.Duration) (*BatchProcessor, error)
+
+	// Prometheus
+	PrometheusRegistry() *prometheus.Registry
 
 	// Utils for Service
 	EnqueuePublishedEntryJobs(ctx context.Context, entryID int64) error
