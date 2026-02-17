@@ -2,6 +2,7 @@ package subcommands
 
 import (
 	"context"
+	"database/sql"
 	"encoding/csv"
 	"flag"
 	"fmt"
@@ -24,6 +25,8 @@ import (
 const insertSubtechEntrySQL = `INSERT INTO entries (
 	title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, publish_at, status
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+const selectCreatedAtByDateSQL = `SELECT created_at FROM entries WHERE date = ?`
 
 var subtechSectionHeader = regexp.MustCompile(`(?m)^\*(\d{10})\*(.*)$`)
 
@@ -73,7 +76,8 @@ func ImportSubtech(ctx context.Context, application app.App, args []string) erro
 	if err != nil {
 		return err
 	}
-	if len(entries) == 0 {
+	parsedCount := len(entries)
+	if parsedCount == 0 {
 		log.Printf("no entries found in %s", csvPath)
 		return nil
 	}
@@ -84,13 +88,28 @@ func ImportSubtech(ctx context.Context, application app.App, args []string) erro
 	}
 	defer tx.Rollback()
 
+	existingTimestamps, err := loadExistingTimestampSet(ctx, tx, entries)
+	if err != nil {
+		return err
+	}
+	entries, skippedByTimestamp := filterSubtechEntriesByTimestamp(entries, existingTimestamps)
+
+	log.Printf("parsed %d entries from %s", parsedCount, csvPath)
+	if skippedByTimestamp > 0 {
+		log.Printf("skipped %d entries due to existing/duplicate timestamps", skippedByTimestamp)
+	}
+	if len(entries) == 0 {
+		log.Printf("no new entries to import")
+		return nil
+	}
+
 	baseCounters, err := loadExistingPathCounters(ctx, tx.Q, entries)
 	if err != nil {
 		return err
 	}
 	assignSubtechPaths(entries, baseCounters)
 
-	log.Printf("parsed %d entries from %s", len(entries), csvPath)
+	log.Printf("to import: %d entries", len(entries))
 	log.Printf("date range: %s .. %s", entries[0].Date, entries[len(entries)-1].Date)
 	if *dryRun {
 		return nil
@@ -145,7 +164,7 @@ func ImportSubtech(ctx context.Context, application app.App, args []string) erro
 		return fmt.Errorf("failed to commit import transaction: %w", err)
 	}
 
-	log.Printf("import completed: inserted %d entries", len(entries))
+	log.Printf("import completed: inserted %d entries (skipped=%d)", len(entries), skippedByTimestamp)
 	return nil
 }
 
@@ -354,6 +373,65 @@ func loadExistingPathCounters(ctx context.Context, q maindb.Querier, entries []s
 	}
 
 	return counters, nil
+}
+
+type subtechTimestampQueryer interface {
+	QueryContext(context.Context, string, ...interface{}) (*sql.Rows, error)
+}
+
+func loadExistingTimestampSet(ctx context.Context, q subtechTimestampQueryer, entries []subtechEntry) (map[int64]struct{}, error) {
+	dateSet := map[string]struct{}{}
+	for _, e := range entries {
+		dateSet[e.Date] = struct{}{}
+	}
+
+	timestamps := map[int64]struct{}{}
+	for date := range dateSet {
+		rows, err := q.QueryContext(ctx, selectCreatedAtByDateSQL, date)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list existing timestamps for date %s: %w", date, err)
+		}
+		for rows.Next() {
+			var createdAt time.Time
+			if err := rows.Scan(&createdAt); err != nil {
+				rows.Close()
+				return nil, fmt.Errorf("failed to scan existing timestamp for date %s: %w", date, err)
+			}
+			timestamps[createdAt.Unix()] = struct{}{}
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("failed while reading existing timestamps for date %s: %w", date, err)
+		}
+		rows.Close()
+	}
+
+	return timestamps, nil
+}
+
+func filterSubtechEntriesByTimestamp(entries []subtechEntry, existing map[int64]struct{}) ([]subtechEntry, int) {
+	if len(entries) == 0 {
+		return entries, 0
+	}
+
+	seen := make(map[int64]struct{}, len(existing)+len(entries))
+	for ts := range existing {
+		seen[ts] = struct{}{}
+	}
+
+	filtered := make([]subtechEntry, 0, len(entries))
+	skipped := 0
+	for _, e := range entries {
+		ts := e.CreatedAt.Unix()
+		if _, ok := seen[ts]; ok {
+			skipped++
+			continue
+		}
+		seen[ts] = struct{}{}
+		filtered = append(filtered, e)
+	}
+
+	return filtered, skipped
 }
 
 func buildEntryURL(baseURL string, path string) string {

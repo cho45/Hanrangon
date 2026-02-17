@@ -278,6 +278,52 @@ func TestImportSubtech_NoWetRunDoesNotWrite(t *testing.T) {
 	}
 }
 
+func TestImportSubtech_IdempotentByTimestamp(t *testing.T) {
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+
+	config := app.LoadConfig()
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, dbs.CacheDB, nil, nil, nil, nil)
+	ctx := context.Background()
+
+	csvPath := filepath.Join(t.TempDir(), "subtech.csv")
+	err := writeSubtechCSV(csvPath, [][]string{
+		{"date", "title", "body", "comment", "text"},
+		{
+			"2019-07-08",
+			"",
+			"",
+			"",
+			"*1562562166*first\nhello world\n\n*1562562266*second\nline2",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ImportSubtech(ctx, application, []string{"-file", csvPath, "-wet-run"}); err != nil {
+		t.Fatalf("first ImportSubtech() error = %v", err)
+	}
+	count1, err := application.MainDB().Q.CountAllEntries(ctx)
+	if err != nil {
+		t.Fatalf("CountAllEntries() after first import error = %v", err)
+	}
+	if count1 != 2 {
+		t.Fatalf("entry count after first import = %d, want 2", count1)
+	}
+
+	if err := ImportSubtech(ctx, application, []string{"-file", csvPath, "-wet-run"}); err != nil {
+		t.Fatalf("second ImportSubtech() error = %v", err)
+	}
+	count2, err := application.MainDB().Q.CountAllEntries(ctx)
+	if err != nil {
+		t.Fatalf("CountAllEntries() after second import error = %v", err)
+	}
+	if count2 != 2 {
+		t.Fatalf("entry count after second import = %d, want 2", count2)
+	}
+}
+
 func TestDecorateSubtechTitle(t *testing.T) {
 	tests := []struct {
 		name string
