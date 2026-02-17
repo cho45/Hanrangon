@@ -203,7 +203,8 @@ if (batchMode) {
       try {
         const input = JSON.parse(line);
         dispatcher = new BatchDispatcher(input.id);
-        await processHTML(input.params?.html || input.html, baseURL, dispatcher);
+        const html = input.params?.html ?? input.html ?? '';
+        await processHTML(html, baseURL, dispatcher);
       } catch (error) {
         if (dispatcher) {
           dispatcher.error(error);

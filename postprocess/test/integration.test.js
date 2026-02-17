@@ -148,6 +148,34 @@ describe('Integration tests', () => {
   });
 
   describe('Batch mode (JSON-RPC)', () => {
+    it('should handle empty html in params without falling back to undefined', async () => {
+      const proc = spawn('node', [mainJsPath, '--batch']);
+      const rl = (await import('node:readline')).createInterface({ input: proc.stdout });
+
+      proc.stdin.write(JSON.stringify({
+        jsonrpc: '2.0',
+        id: 777,
+        method: 'process',
+        params: { html: '' }
+      }) + '\n');
+
+      let terminalMessage;
+      for await (const line of rl) {
+        const msg = JSON.parse(line);
+        if (msg.result || msg.error) {
+          terminalMessage = msg;
+          break;
+        }
+      }
+
+      proc.stdin.end();
+      proc.kill();
+
+      assert(terminalMessage.result, `Should return result, got: ${JSON.stringify(terminalMessage)}`);
+      assert.strictEqual(terminalMessage.id, 777);
+      assert.strictEqual(terminalMessage.result.html, '');
+    });
+
     it('should process HTML via JSON-RPC', async () => {
       const html = '<p>Math: \\(x^2\\)</p>';
       const input = JSON.stringify({
