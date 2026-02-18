@@ -7,6 +7,10 @@ describe('WidgetProcessor', () => {
   it('applies() should detect iframes', async () => {
     const processor = new WidgetProcessor();
     assert.strictEqual(processor.applies(new JSDOM('<iframe></iframe>').window.document.body), true);
+    assert.strictEqual(
+      processor.applies(new JSDOM('<a href="http://subtech.g.hatena.ne.jp/cho45/20071117/1195309573">x</a>').window.document.body),
+      true
+    );
     assert.strictEqual(processor.applies(new JSDOM('<p>Plain text</p>').window.document.body), false);
   });
 
@@ -122,6 +126,39 @@ describe('WidgetProcessor', () => {
 
       assert.strictEqual(iframe.src, 'https://www.youtube.com/embed/test');
       assert.strictEqual(script.src, 'https://example.com/script.js');
+    });
+  });
+
+  describe('Subtech link rewrite', () => {
+    it('should rewrite old subtech absolute link to local path', async () => {
+      const html = `
+        <p><a href="http://subtech.g.hatena.ne.jp/cho45/20071117/1195309573">ref</a></p>
+      `;
+
+      const { window } = new JSDOM(html);
+      const dom = window.document.body;
+
+      const processor = new WidgetProcessor();
+      await processor.run(dom);
+
+      const a = dom.querySelector('a');
+      assert.strictEqual(a.getAttribute('href'), '/2007/11/17/1195309573');
+      assert.strictEqual(a.textContent, 'ref');
+    });
+
+    it('should keep non-matching subtech links unchanged', async () => {
+      const html = `
+        <p><a href="http://subtech.g.hatena.ne.jp/cho45/20071117/">index</a></p>
+      `;
+
+      const { window } = new JSDOM(html);
+      const dom = window.document.body;
+
+      const processor = new WidgetProcessor();
+      await processor.run(dom);
+
+      const a = dom.querySelector('a');
+      assert.strictEqual(a.getAttribute('href'), 'http://subtech.g.hatena.ne.jp/cho45/20071117/');
     });
   });
 });

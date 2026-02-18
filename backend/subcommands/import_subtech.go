@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/csv"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -26,7 +27,11 @@ const insertSubtechEntrySQL = `INSERT INTO entries (
 	title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, publish_at, status
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-const selectCreatedAtByDateSQL = `SELECT created_at FROM entries WHERE date = ?`
+const updateSubtechEntrySQL = `UPDATE entries SET
+	title = ?, body = ?, formatted_body = ?, summary = ?, image_url = ?, path = ?, format = ?, date = ?, created_at = ?, modified_at = ?, publish_at = ?, status = ?
+WHERE id = ?`
+
+const selectEntriesByDateForTimestampSQL = `SELECT id, created_at FROM entries WHERE date = ?`
 
 var subtechSectionHeader = regexp.MustCompile(`(?m)^\*(\d{10})\*(.*)$`)
 
@@ -35,6 +40,7 @@ type subtechEntry struct {
 	Body         string
 	Date         string
 	Path         string
+	Timestamp    int64
 	CreatedAt    time.Time
 	ModifiedAt   time.Time
 	SourceCSVRow int
@@ -81,6 +87,7 @@ func ImportSubtech(ctx context.Context, application app.App, args []string) erro
 		log.Printf("no entries found in %s", csvPath)
 		return nil
 	}
+	entries, deduped := dedupeSubtechEntriesByTimestamp(entries)
 
 	tx, err := application.MainDB().BeginImmediate(ctx)
 	if err != nil {
@@ -88,19 +95,20 @@ func ImportSubtech(ctx context.Context, application app.App, args []string) erro
 	}
 	defer tx.Rollback()
 
-	existingTimestamps, err := loadExistingTimestampSet(ctx, tx, entries)
+	existingByTimestamp, err := loadExistingEntriesByTimestamp(ctx, tx, entries)
 	if err != nil {
 		return err
 	}
-	entries, skippedByTimestamp := filterSubtechEntriesByTimestamp(entries, existingTimestamps)
 
 	log.Printf("parsed %d entries from %s", parsedCount, csvPath)
-	if skippedByTimestamp > 0 {
-		log.Printf("skipped %d entries due to existing/duplicate timestamps", skippedByTimestamp)
+	if deduped > 0 {
+		log.Printf("deduplicated %d duplicate timestamp entries from source", deduped)
 	}
-	if len(entries) == 0 {
-		log.Printf("no new entries to import")
-		return nil
+
+	for i := range entries {
+		if entries[i].Timestamp > 0 {
+			entries[i].Path = buildSubtechTimestampPath(entries[i].CreatedAt, entries[i].Timestamp)
+		}
 	}
 
 	baseCounters, err := loadExistingPathCounters(ctx, tx.Q, entries)
@@ -109,11 +117,20 @@ func ImportSubtech(ctx context.Context, application app.App, args []string) erro
 	}
 	assignSubtechPaths(entries, baseCounters)
 
-	log.Printf("to import: %d entries", len(entries))
-	log.Printf("date range: %s .. %s", entries[0].Date, entries[len(entries)-1].Date)
-	if *dryRun {
-		return nil
+	plannedInserts := 0
+	plannedUpdates := 0
+	for _, e := range entries {
+		if e.Timestamp > 0 {
+			if _, ok := existingByTimestamp[e.Timestamp]; ok {
+				plannedUpdates++
+				continue
+			}
+		}
+		plannedInserts++
 	}
+
+	log.Printf("to process: %d entries (insert=%d update=%d)", len(entries), plannedInserts, plannedUpdates)
+	log.Printf("date range: %s .. %s", entries[0].Date, entries[len(entries)-1].Date)
 
 	processor, err := application.PostprocessBatch(ctx, 30*time.Minute)
 	if err != nil {
@@ -121,10 +138,33 @@ func ImportSubtech(ctx context.Context, application app.App, args []string) erro
 	}
 	defer func() { _ = processor.Close() }()
 
+	insertedCount := 0
+	updatedCount := 0
 	for i := range entries {
 		e := entries[i]
 		entryURL := buildEntryURL(application.Config().BaseURL, e.Path)
 		title := decorateSubtechTitle(e.Title)
+		existing, hasExistingByTimestamp := existingByTimestamp[e.Timestamp]
+		hasExisting := hasExistingByTimestamp
+
+		entryByPath, pathExists, err := findEntryByPath(ctx, tx.Q, e.Path)
+		if err != nil {
+			return fmt.Errorf("failed to check path at csv_row=%d part=%d path=%s url=%s: %w", e.SourceCSVRow, e.SourcePart, e.Path, entryURL, err)
+		}
+		if hasExistingByTimestamp {
+			if pathExists && entryByPath.ID != existing.ID {
+				return fmt.Errorf("path conflict at csv_row=%d part=%d path=%s url=%s: path %s already used by entry id=%d", e.SourceCSVRow, e.SourcePart, e.Path, entryURL, e.Path, entryByPath.ID)
+			}
+		} else if pathExists {
+			// fallback行(timestampなし) または date不整合で timestamp-map で拾えない既存行は path で更新する
+			if e.Timestamp == 0 || entryByPath.CreatedAt.Unix() == e.Timestamp {
+				existing = existingSubtechEntry{ID: entryByPath.ID}
+				hasExisting = true
+			} else {
+				return fmt.Errorf("path conflict at csv_row=%d part=%d path=%s url=%s: path %s already used by entry id=%d", e.SourceCSVRow, e.SourcePart, e.Path, entryURL, e.Path, entryByPath.ID)
+			}
+		}
+
 		formatted, err := formatter.Format(e.Body, "Hatena")
 		if err != nil {
 			return fmt.Errorf("format failed at csv_row=%d part=%d path=%s url=%s: %w", e.SourceCSVRow, e.SourcePart, e.Path, entryURL, err)
@@ -137,34 +177,72 @@ func ImportSubtech(ctx context.Context, application app.App, args []string) erro
 		}
 		summary, imageURL := view.ExtractSummaryAndFirstImage(processed, 70)
 
-		_, err = tx.ExecContext(ctx, insertSubtechEntrySQL,
-			title,
-			e.Body,
-			processed,
-			summary,
-			imageURL,
-			e.Path,
-			"Hatena",
-			e.Date,
-			e.CreatedAt,
-			e.ModifiedAt,
-			nil,
-			string(maindb.StatusPublic),
-		)
-		if err != nil {
-			return fmt.Errorf("insert failed at csv_row=%d part=%d path=%s url=%s: %w", e.SourceCSVRow, e.SourcePart, e.Path, entryURL, err)
+		action := "inserted"
+		if *dryRun {
+			if hasExisting {
+				updatedCount++
+				action = "would-update"
+			} else {
+				insertedCount++
+				action = "would-insert"
+			}
+		} else if hasExisting {
+			_, err = tx.ExecContext(ctx, updateSubtechEntrySQL,
+				title,
+				e.Body,
+				processed,
+				summary,
+				imageURL,
+				e.Path,
+				"Hatena",
+				e.Date,
+				e.CreatedAt,
+				e.ModifiedAt,
+				nil,
+				string(maindb.StatusPublic),
+				existing.ID,
+			)
+			if err != nil {
+				return fmt.Errorf("update failed at csv_row=%d part=%d id=%d path=%s url=%s: %w", e.SourceCSVRow, e.SourcePart, existing.ID, e.Path, entryURL, err)
+			}
+			updatedCount++
+			action = "updated"
+		} else {
+			_, err = tx.ExecContext(ctx, insertSubtechEntrySQL,
+				title,
+				e.Body,
+				processed,
+				summary,
+				imageURL,
+				e.Path,
+				"Hatena",
+				e.Date,
+				e.CreatedAt,
+				e.ModifiedAt,
+				nil,
+				string(maindb.StatusPublic),
+			)
+			if err != nil {
+				return fmt.Errorf("insert failed at csv_row=%d part=%d path=%s url=%s: %w", e.SourceCSVRow, e.SourcePart, e.Path, entryURL, err)
+			}
+			insertedCount++
 		}
 
 		if (i+1)%100 == 0 || i+1 == len(entries) {
-			log.Printf("imported %d/%d (last path=%s url=%s)", i+1, len(entries), e.Path, entryURL)
+			log.Printf("processed %d/%d (last=%s path=%s url=%s)", i+1, len(entries), action, e.Path, entryURL)
 		}
+	}
+
+	if *dryRun {
+		log.Printf("dry-run completed: would-insert=%d would-update=%d deduped=%d", insertedCount, updatedCount, deduped)
+		return nil
 	}
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit import transaction: %w", err)
 	}
 
-	log.Printf("import completed: inserted %d entries (skipped=%d)", len(entries), skippedByTimestamp)
+	log.Printf("import completed: inserted=%d updated=%d deduped=%d", insertedCount, updatedCount, deduped)
 	return nil
 }
 
@@ -283,6 +361,8 @@ func parseSubtechTextSections(text string, rowDate string, csvRow int) ([]subtec
 			Title:        title,
 			Body:         body,
 			Date:         createdAt.Format("2006-01-02"),
+			Path:         buildSubtechTimestampPath(createdAt, ts),
+			Timestamp:    ts,
 			CreatedAt:    createdAt,
 			ModifiedAt:   createdAt,
 			SourceCSVRow: csvRow,
@@ -293,15 +373,16 @@ func parseSubtechTextSections(text string, rowDate string, csvRow int) ([]subtec
 }
 
 func parseSubtechFallback(text string, rowDate string, csvRow int) ([]subtechEntry, error) {
+	if isSubtechCommentedOut(text) {
+		return nil, nil
+	}
+
 	day, err := time.ParseInLocation("2006-01-02", rowDate, app.APP_TZ)
 	if err != nil {
 		return nil, fmt.Errorf("invalid date at csv row %d (%s): %w", csvRow, rowDate, err)
 	}
 
 	cleaned := strings.TrimSpace(text)
-	if strings.HasPrefix(cleaned, "><!--") && strings.HasSuffix(cleaned, "--><") {
-		cleaned = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(cleaned, "><!--"), "--><"))
-	}
 
 	title := ""
 	body := cleaned
@@ -329,6 +410,11 @@ func parseSubtechFallback(text string, rowDate string, csvRow int) ([]subtechEnt
 	}, nil
 }
 
+func isSubtechCommentedOut(text string) bool {
+	cleaned := strings.TrimSpace(text)
+	return strings.HasPrefix(cleaned, "><!--") && strings.HasSuffix(cleaned, "--><")
+}
+
 func assignSubtechPaths(entries []subtechEntry, initial map[string]int) {
 	counters := map[string]int{}
 	for date, n := range initial {
@@ -336,6 +422,9 @@ func assignSubtechPaths(entries []subtechEntry, initial map[string]int) {
 	}
 
 	for i := range entries {
+		if entries[i].Path != "" {
+			continue
+		}
 		d := entries[i].Date
 		counters[d]++
 		entries[i].Path = strings.ReplaceAll(d, "-", "/") + "/" + strconv.Itoa(counters[d])
@@ -379,59 +468,91 @@ type subtechTimestampQueryer interface {
 	QueryContext(context.Context, string, ...interface{}) (*sql.Rows, error)
 }
 
-func loadExistingTimestampSet(ctx context.Context, q subtechTimestampQueryer, entries []subtechEntry) (map[int64]struct{}, error) {
+type existingSubtechEntry struct {
+	ID int64
+}
+
+func loadExistingEntriesByTimestamp(ctx context.Context, q subtechTimestampQueryer, entries []subtechEntry) (map[int64]existingSubtechEntry, error) {
+	candidateTimestamps := map[int64]struct{}{}
 	dateSet := map[string]struct{}{}
 	for _, e := range entries {
+		if e.Timestamp <= 0 {
+			continue
+		}
+		candidateTimestamps[e.Timestamp] = struct{}{}
 		dateSet[e.Date] = struct{}{}
 	}
+	if len(candidateTimestamps) == 0 {
+		return map[int64]existingSubtechEntry{}, nil
+	}
 
-	timestamps := map[int64]struct{}{}
+	existingByTimestamp := map[int64]existingSubtechEntry{}
 	for date := range dateSet {
-		rows, err := q.QueryContext(ctx, selectCreatedAtByDateSQL, date)
+		rows, err := q.QueryContext(ctx, selectEntriesByDateForTimestampSQL, date)
 		if err != nil {
-			return nil, fmt.Errorf("failed to list existing timestamps for date %s: %w", date, err)
+			return nil, fmt.Errorf("failed to list existing entries for date %s: %w", date, err)
 		}
 		for rows.Next() {
+			var id int64
 			var createdAt time.Time
-			if err := rows.Scan(&createdAt); err != nil {
+			if err := rows.Scan(&id, &createdAt); err != nil {
 				rows.Close()
-				return nil, fmt.Errorf("failed to scan existing timestamp for date %s: %w", date, err)
+				return nil, fmt.Errorf("failed to scan existing entry for date %s: %w", date, err)
 			}
-			timestamps[createdAt.Unix()] = struct{}{}
+			ts := createdAt.Unix()
+			if _, ok := candidateTimestamps[ts]; !ok {
+				continue
+			}
+			if existing, ok := existingByTimestamp[ts]; ok && existing.ID != id {
+				rows.Close()
+				return nil, fmt.Errorf("multiple existing entries found with same timestamp %d (ids: %d, %d)", ts, existing.ID, id)
+			}
+			existingByTimestamp[ts] = existingSubtechEntry{ID: id}
 		}
 		if err := rows.Err(); err != nil {
 			rows.Close()
-			return nil, fmt.Errorf("failed while reading existing timestamps for date %s: %w", date, err)
+			return nil, fmt.Errorf("failed while reading existing entries for date %s: %w", date, err)
 		}
 		rows.Close()
 	}
 
-	return timestamps, nil
+	return existingByTimestamp, nil
 }
 
-func filterSubtechEntriesByTimestamp(entries []subtechEntry, existing map[int64]struct{}) ([]subtechEntry, int) {
-	if len(entries) == 0 {
-		return entries, 0
-	}
-
-	seen := make(map[int64]struct{}, len(existing)+len(entries))
-	for ts := range existing {
-		seen[ts] = struct{}{}
-	}
-
-	filtered := make([]subtechEntry, 0, len(entries))
-	skipped := 0
+func dedupeSubtechEntriesByTimestamp(entries []subtechEntry) ([]subtechEntry, int) {
+	seen := map[int64]int{}
+	deduped := make([]subtechEntry, 0, len(entries))
+	dropped := 0
 	for _, e := range entries {
-		ts := e.CreatedAt.Unix()
-		if _, ok := seen[ts]; ok {
-			skipped++
+		if e.Timestamp <= 0 {
+			deduped = append(deduped, e)
 			continue
 		}
-		seen[ts] = struct{}{}
-		filtered = append(filtered, e)
+		if idx, ok := seen[e.Timestamp]; ok {
+			// 同一timestampがCSV内に複数ある場合は後勝ちにする。
+			deduped[idx] = e
+			dropped++
+			continue
+		}
+		seen[e.Timestamp] = len(deduped)
+		deduped = append(deduped, e)
 	}
+	return deduped, dropped
+}
 
-	return filtered, skipped
+func findEntryByPath(ctx context.Context, q maindb.Querier, path string) (*maindb.Entry, bool, error) {
+	found, err := q.GetEntryByPath(ctx, path)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return &found, true, nil
+}
+
+func buildSubtechTimestampPath(createdAt time.Time, timestamp int64) string {
+	return createdAt.Format("2006/01/02/") + strconv.FormatInt(timestamp, 10)
 }
 
 func buildEntryURL(baseURL string, path string) string {

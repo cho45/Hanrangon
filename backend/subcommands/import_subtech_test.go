@@ -2,7 +2,9 @@ package subcommands
 
 import (
 	"context"
+	"database/sql"
 	"encoding/csv"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,14 +55,14 @@ func TestParseSubtechCSV_SplitSortAndPath(t *testing.T) {
 		t.Errorf("entry[2] = %#v, want next day/body", got[2])
 	}
 
-	if got[0].Path != "2019/07/08/1" {
-		t.Errorf("entry[0].Path = %q, want %q", got[0].Path, "2019/07/08/1")
+	if got[0].Path != "2019/07/08/1562550000" {
+		t.Errorf("entry[0].Path = %q, want %q", got[0].Path, "2019/07/08/1562550000")
 	}
-	if got[1].Path != "2019/07/08/2" {
-		t.Errorf("entry[1].Path = %q, want %q", got[1].Path, "2019/07/08/2")
+	if got[1].Path != "2019/07/08/1562562166" {
+		t.Errorf("entry[1].Path = %q, want %q", got[1].Path, "2019/07/08/1562562166")
 	}
-	if got[2].Path != "2019/07/09/1" {
-		t.Errorf("entry[2].Path = %q, want %q", got[2].Path, "2019/07/09/1")
+	if got[2].Path != "2019/07/09/1562640000" {
+		t.Errorf("entry[2].Path = %q, want %q", got[2].Path, "2019/07/09/1562640000")
 	}
 }
 
@@ -73,7 +75,7 @@ func TestParseSubtechCSV_FallbackRowWithoutTimestamp(t *testing.T) {
 			"",
 			"",
 			"",
-			"><!--*fallback title\nfallback body\n--><",
+			"*fallback title\nfallback body",
 		},
 	}); err != nil {
 		t.Fatal(err)
@@ -103,6 +105,30 @@ func TestParseSubtechCSV_FallbackRowWithoutTimestamp(t *testing.T) {
 	wantCreatedAt := time.Date(2008, 1, 9, 0, 0, 0, 0, app.APP_TZ)
 	if !got[0].CreatedAt.Equal(wantCreatedAt) {
 		t.Errorf("CreatedAt = %v, want %v", got[0].CreatedAt, wantCreatedAt)
+	}
+}
+
+func TestParseSubtechCSV_IgnoreCommentedOutRowWithoutTimestamp(t *testing.T) {
+	csvPath := filepath.Join(t.TempDir(), "subtech.csv")
+	if err := writeSubtechCSV(csvPath, [][]string{
+		{"date", "title", "body", "comment", "text"},
+		{
+			"2008-01-09",
+			"",
+			"",
+			"",
+			"><!--*deleted title\ndeleted body\n--><",
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := parseSubtechCSV(csvPath)
+	if err != nil {
+		t.Fatalf("parseSubtechCSV() error = %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("len(got) = %d, want 0 (commented-out row should be ignored)", len(got))
 	}
 }
 
@@ -203,11 +229,11 @@ func TestImportSubtech_ExistingSameDayEntriesAndStoredFields(t *testing.T) {
 		t.Fatalf("ImportSubtech() error = %v", err)
 	}
 
-	first, err := application.MainDB().Q.GetEntryByPath(ctx, "2019/07/08/11")
+	first, err := application.MainDB().Q.GetEntryByPath(ctx, "2019/07/08/1562562166")
 	if err != nil {
 		t.Fatalf("failed to get first imported entry: %v", err)
 	}
-	second, err := application.MainDB().Q.GetEntryByPath(ctx, "2019/07/08/12")
+	second, err := application.MainDB().Q.GetEntryByPath(ctx, "2019/07/08/1562562266")
 	if err != nil {
 		t.Fatalf("failed to get second imported entry: %v", err)
 	}
@@ -321,6 +347,172 @@ func TestImportSubtech_IdempotentByTimestamp(t *testing.T) {
 	}
 	if count2 != 2 {
 		t.Fatalf("entry count after second import = %d, want 2", count2)
+	}
+}
+
+func TestImportSubtech_UpdateExistingByTimestamp(t *testing.T) {
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+
+	config := app.LoadConfig()
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, dbs.CacheDB, nil, nil, nil, nil)
+	ctx := context.Background()
+
+	ts := int64(1562562166)
+	existingAt := time.Unix(ts, 0).In(app.APP_TZ)
+	_, err := dbs.MainDB.Exec(`
+		INSERT INTO entries (id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, status)
+		VALUES (1, 'old', 'old body', '<p>old</p>', '', '', '2019/07/08/10', 'Hatena', '2019-07-08', ?, ?, 'public')
+	`, existingAt, existingAt)
+	if err != nil {
+		t.Fatalf("failed to insert existing entry: %v", err)
+	}
+
+	csvPath := filepath.Join(t.TempDir(), "subtech.csv")
+	err = writeSubtechCSV(csvPath, [][]string{
+		{"date", "title", "body", "comment", "text"},
+		{
+			"2019-07-08",
+			"",
+			"",
+			"",
+			"*1562562166*updated\nnew body",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ImportSubtech(ctx, application, []string{"-file", csvPath, "-wet-run"}); err != nil {
+		t.Fatalf("ImportSubtech() error = %v", err)
+	}
+
+	count, err := application.MainDB().Q.CountAllEntries(ctx)
+	if err != nil {
+		t.Fatalf("CountAllEntries() error = %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("entry count = %d, want 1", count)
+	}
+
+	updated, err := application.MainDB().Q.GetEntryByPath(ctx, "2019/07/08/1562562166")
+	if err != nil {
+		t.Fatalf("failed to get updated entry by new path: %v", err)
+	}
+	if updated.ID != 1 {
+		t.Fatalf("updated.ID = %d, want 1", updated.ID)
+	}
+	if updated.Title != "[subtech] updated" {
+		t.Errorf("updated.Title = %q, want %q", updated.Title, "[subtech] updated")
+	}
+	if !strings.Contains(updated.FormattedBody, "<p>new body</p>") {
+		t.Errorf("updated.FormattedBody = %q, want contains <p>new body</p>", updated.FormattedBody)
+	}
+
+	_, err = application.MainDB().Q.GetEntryByPath(ctx, "2019/07/08/10")
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("old path lookup error = %v, want sql.ErrNoRows", err)
+	}
+}
+
+func TestImportSubtech_FallbackPathUpdatesExistingByPath(t *testing.T) {
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+
+	config := app.LoadConfig()
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, dbs.CacheDB, nil, nil, nil, nil)
+	ctx := context.Background()
+
+	existingAt := time.Date(2008, 1, 10, 0, 0, 0, 0, app.APP_TZ)
+	_, err := dbs.MainDB.Exec(`
+		INSERT INTO entries (id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, status)
+		VALUES (1, 'old', 'old body', '<p>old</p>', '', '', '2008/01/09/1', 'Hatena', '2008-01-10', ?, ?, 'public')
+	`, existingAt, existingAt)
+	if err != nil {
+		t.Fatalf("failed to insert existing entry: %v", err)
+	}
+
+	csvPath := filepath.Join(t.TempDir(), "subtech.csv")
+	err = writeSubtechCSV(csvPath, [][]string{
+		{"date", "title", "body", "comment", "text"},
+		{
+			"2008-01-09",
+			"",
+			"",
+			"",
+			"*fallback title\nfallback body",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ImportSubtech(ctx, application, []string{"-file", csvPath, "-wet-run"}); err != nil {
+		t.Fatalf("ImportSubtech() error = %v", err)
+	}
+
+	count, err := application.MainDB().Q.CountAllEntries(ctx)
+	if err != nil {
+		t.Fatalf("CountAllEntries() error = %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("entry count = %d, want 1", count)
+	}
+
+	updated, err := application.MainDB().Q.GetEntryByPath(ctx, "2008/01/09/1")
+	if err != nil {
+		t.Fatalf("failed to get updated fallback entry: %v", err)
+	}
+	if updated.ID != 1 {
+		t.Fatalf("updated.ID = %d, want 1", updated.ID)
+	}
+	if updated.Date != "2008-01-09" {
+		t.Errorf("updated.Date = %q, want %q", updated.Date, "2008-01-09")
+	}
+	if updated.Title != "[subtech] fallback title" {
+		t.Errorf("updated.Title = %q, want %q", updated.Title, "[subtech] fallback title")
+	}
+}
+
+func TestImportSubtech_DryRunRunsValidation(t *testing.T) {
+	dbs := testutil.SetupAllDBs(t)
+	defer dbs.Close()
+
+	config := app.LoadConfig()
+	application := app.NewApp(config, dbs.MainDB, dbs.TFIDFDB, dbs.WorkerDB, dbs.ImagesDB, dbs.CacheDB, nil, nil, nil, nil)
+	ctx := context.Background()
+
+	// path は一致するが timestamp(created_at) が一致しない既存行を作る
+	existingAt := time.Unix(1562562167, 0).In(app.APP_TZ)
+	_, err := dbs.MainDB.Exec(`
+		INSERT INTO entries (id, title, body, formatted_body, summary, image_url, path, format, date, created_at, modified_at, status)
+		VALUES (1, 'existing', 'existing', '<p>existing</p>', '', '', '2019/07/08/1562562166', 'Hatena', '2019-07-08', ?, ?, 'public')
+	`, existingAt, existingAt)
+	if err != nil {
+		t.Fatalf("failed to insert existing entry: %v", err)
+	}
+
+	csvPath := filepath.Join(t.TempDir(), "subtech.csv")
+	err = writeSubtechCSV(csvPath, [][]string{
+		{"date", "title", "body", "comment", "text"},
+		{
+			"2019-07-08",
+			"",
+			"",
+			"",
+			"*1562562166*first\nhello world",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = ImportSubtech(ctx, application, []string{"-file", csvPath, "-dry-run"})
+	if err == nil {
+		t.Fatal("ImportSubtech() error = nil, want path conflict")
+	}
+	if !strings.Contains(err.Error(), "path conflict") {
+		t.Fatalf("ImportSubtech() error = %v, want contains path conflict", err)
 	}
 }
 
