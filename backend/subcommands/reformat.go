@@ -5,11 +5,44 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cho45/hanrangon/backend/app"
 	"github.com/cho45/hanrangon/backend/formatter"
 )
+
+type int64ListFlag []int64
+
+func (f *int64ListFlag) String() string {
+	if f == nil {
+		return ""
+	}
+	parts := make([]string, len(*f))
+	for i, v := range *f {
+		parts[i] = strconv.FormatInt(v, 10)
+	}
+	return strings.Join(parts, ",")
+}
+
+func (f *int64ListFlag) Set(value string) error {
+	for _, raw := range strings.Split(value, ",") {
+		s := strings.TrimSpace(raw)
+		if s == "" {
+			continue
+		}
+		id, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid id %q: %w", s, err)
+		}
+		if id <= 0 {
+			return fmt.Errorf("id must be positive: %d", id)
+		}
+		*f = append(*f, id)
+	}
+	return nil
+}
 
 func init() {
 	Register(Definition{
@@ -23,10 +56,22 @@ func Reformat(ctx context.Context, application app.App, args []string) error {
 	fs := flag.NewFlagSet("reformat", flag.ExitOnError)
 	all := fs.Bool("all", false, "reformat all entries")
 	prefix := fs.String("prefix", "", "path prefix to reformat")
+	var ids int64ListFlag
+	fs.Var(&ids, "id", "entry ID to reformat (repeatable, supports comma-separated values)")
 	fs.Parse(args)
 
-	if !*all && *prefix == "" {
-		fmt.Println("Usage: hanrangon reformat [-all | -prefix PREFIX]")
+	targets := 0
+	if *all {
+		targets++
+	}
+	if *prefix != "" {
+		targets++
+	}
+	if len(ids) > 0 {
+		targets++
+	}
+	if targets != 1 {
+		fmt.Println("Usage: hanrangon reformat [-all | -prefix PREFIX | -id ID[,ID...]]")
 		fs.PrintDefaults()
 		return nil
 	}
@@ -37,10 +82,18 @@ func Reformat(ctx context.Context, application app.App, args []string) error {
 	if *all {
 		log.Println("Reformatting all entries...")
 		query = "SELECT id, path, body, format FROM entries ORDER BY date DESC, created_at DESC"
-	} else {
+	} else if *prefix != "" {
 		log.Printf("Reformatting entries with prefix: %s...", *prefix)
 		query = "SELECT id, path, body, format FROM entries WHERE path LIKE ? || '%' ORDER BY date DESC, created_at DESC"
 		queryArgs = append(queryArgs, *prefix)
+	} else {
+		placeholders := make([]string, len(ids))
+		for i, id := range ids {
+			placeholders[i] = "?"
+			queryArgs = append(queryArgs, id)
+		}
+		log.Printf("Reformatting entries with IDs: %s...", ids.String())
+		query = fmt.Sprintf("SELECT id, path, body, format FROM entries WHERE id IN (%s) ORDER BY date DESC, created_at DESC", strings.Join(placeholders, ","))
 	}
 
 	rows, err := application.MainDB().QueryContext(ctx, query, queryArgs...)

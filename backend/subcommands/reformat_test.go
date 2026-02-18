@@ -29,6 +29,21 @@ func TestReformat(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	resetOldFormats := func(t *testing.T) {
+		t.Helper()
+		_, err := dbs.MainDB.Exec(`
+			UPDATE entries
+			SET formatted_body = CASE id
+				WHEN 1 THEN 'OLD FORMAT 1'
+				WHEN 2 THEN 'OLD FORMAT 2'
+			END
+			WHERE id IN (1, 2)
+		`)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	t.Run("Usage (no args)", func(t *testing.T) {
 		err := Reformat(ctx, application, []string{})
 		if err != nil {
@@ -36,7 +51,27 @@ func TestReformat(t *testing.T) {
 		}
 	})
 
+	t.Run("Reformat with multiple -id", func(t *testing.T) {
+		resetOldFormats(t)
+
+		err := Reformat(ctx, application, []string{"-id", "1", "-id", "2"})
+		if err != nil {
+			t.Errorf("expected nil error, got %v", err)
+		}
+
+		var count int
+		err = dbs.MainDB.DB.QueryRow("SELECT COUNT(*) FROM entries WHERE formatted_body LIKE 'OLD FORMAT%'").Scan(&count)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if count != 0 {
+			t.Errorf("expected all specified entries to be reformatted, but %d still have old format", count)
+		}
+	})
+
 	t.Run("Reformat with -prefix", func(t *testing.T) {
+		resetOldFormats(t)
+
 		err := Reformat(ctx, application, []string{"-prefix", "2024/01/01"})
 		if err != nil {
 			t.Errorf("expected nil error, got %v", err)
@@ -63,6 +98,8 @@ func TestReformat(t *testing.T) {
 	})
 
 	t.Run("Reformat with -all", func(t *testing.T) {
+		resetOldFormats(t)
+
 		err := Reformat(ctx, application, []string{"-all"})
 		if err != nil {
 			t.Errorf("expected nil error, got %v", err)
