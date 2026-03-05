@@ -6,3 +6,11 @@ if (target) {
     target.innerHTML = '';
     mount(App, { target });
 }
+
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/admin/sw.js', { scope: '/admin/' }).then((registration) => {
+            registration.update();
+        });
+    });
+}
