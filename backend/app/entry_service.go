@@ -271,7 +271,11 @@ func (s *EntryService) PublishScheduledEntries(ctx context.Context) error {
 				// 予約投稿 (Reserve):
 				// 保存時に既存パスがあれば維持されるが、それは無視される。
 				// 公開タイミングで、公開予定日の記事数に基づき YYYY/MM/DD/N 形式でパスを強制的に採番・確定させる。
-				date := e.PublishAt.Time.Format("2006-01-02")
+				publishAt := now
+				if e.PublishAt.Valid {
+					publishAt = e.PublishAt.Time.In(APP_TZ)
+				}
+				date := publishAt.Format("2006-01-02")
 				// パスを生成 (最大値+1)
 				path, err := s.CalculateNextPath(ctx, qtx, date)
 				if err != nil {
@@ -281,7 +285,7 @@ func (s *EntryService) PublishScheduledEntries(ctx context.Context) error {
 					ID:         e.ID,
 					Path:       path,
 					Date:       date,
-					CreatedAt:  now,
+					CreatedAt:  publishAt,
 					ModifiedAt: now,
 				})
 				if err != nil {
@@ -296,7 +300,7 @@ func (s *EntryService) PublishScheduledEntries(ctx context.Context) error {
 					ID:         e.ID,
 					Path:       e.Path,
 					Date:       e.Date,
-					CreatedAt:  now,
+					CreatedAt:  e.CreatedAt,
 					ModifiedAt: now,
 				})
 				if err != nil {

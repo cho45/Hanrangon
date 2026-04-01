@@ -115,31 +115,33 @@ func TestEntryService_PublishScheduledEntries(t *testing.T) {
 	ctx := context.Background()
 	service := e.app.EntryService()
 
-	past := time.Now().Add(-1 * time.Hour)
+	publishAt := time.Now().Add(-1 * time.Hour).Truncate(time.Second)
+	reservedCreatedAt := publishAt.Add(-23 * time.Hour)
+	scheduledCreatedAt := publishAt.Add(-22 * time.Hour)
 
 	// 1. Reserved entry (no path yet)
 	reserved, err := e.app.MainDB().Q.CreateEntry(ctx, maindb.CreateEntryParams{
 		Title:      "Reserved",
 		Body:       "Body",
 		Status:     "reserved",
-		PublishAt:  sql.NullTime{Time: past, Valid: true},
-		CreatedAt:  past,
-		ModifiedAt: past,
-		Date:       past.Format("2006-01-02"),
+		PublishAt:  sql.NullTime{Time: publishAt, Valid: true},
+		CreatedAt:  reservedCreatedAt,
+		ModifiedAt: reservedCreatedAt,
+		Date:       publishAt.Format("2006-01-02"),
 	})
 	require.NoError(t, err)
 
 	// 2. Scheduled entry (path already determined)
-	scheduledPath := past.Format("2006/01/02") + "/100"
+	scheduledPath := publishAt.Format("2006/01/02") + "/100"
 	scheduled, err := e.app.MainDB().Q.CreateEntry(ctx, maindb.CreateEntryParams{
 		Title:      "Scheduled",
 		Body:       "Body",
 		Status:     "scheduled",
 		Path:       scheduledPath,
-		PublishAt:  sql.NullTime{Time: past, Valid: true},
-		CreatedAt:  past,
-		ModifiedAt: past,
-		Date:       past.Format("2006-01-02"),
+		PublishAt:  sql.NullTime{Time: publishAt, Valid: true},
+		CreatedAt:  scheduledCreatedAt,
+		ModifiedAt: scheduledCreatedAt,
+		Date:       publishAt.Format("2006-01-02"),
 	})
 	require.NoError(t, err)
 
@@ -152,12 +154,18 @@ func TestEntryService_PublishScheduledEntries(t *testing.T) {
 	assert.Equal(t, "public", res.Status)
 	assert.NotEmpty(t, res.Path)
 	assert.NotEqual(t, reserved.Path, res.Path)
+	assert.True(t, res.CreatedAt.Equal(publishAt),
+		"reserved created_at should match publish_at. created_at=%v publish_at=%v original_created_at=%v",
+		res.CreatedAt, publishAt, reservedCreatedAt)
 
 	// Verify scheduled
 	sch, err := e.app.MainDB().Q.GetEntryById(ctx, scheduled.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "public", sch.Status)
 	assert.Equal(t, scheduledPath, sch.Path)
+	assert.True(t, sch.CreatedAt.Equal(scheduledCreatedAt),
+		"scheduled created_at should be preserved and independent from publish_at. before=%v after=%v publish_at=%v",
+		scheduledCreatedAt, sch.CreatedAt, scheduled.PublishAt.Time)
 }
 
 func TestEntryService_SaveEntry_StateTransitions(t *testing.T) {
