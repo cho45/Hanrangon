@@ -55,6 +55,8 @@ func (app *AppImpl) CSRF(next echo.HandlerFunc) echo.HandlerFunc {
 		} else {
 			sk = cookie.Value
 		}
+		// 同一リクエスト内でハンドラから参照できるように保持する。
+		c.Set(SessionKeyName, sk)
 
 		// 安全なメソッド（参照系）は許可
 		switch c.Request().Method {

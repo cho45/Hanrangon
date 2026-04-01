@@ -78,30 +78,31 @@ type DebugInfo struct {
 	NumGC         uint32 `json:"num_gc"`
 }
 
-func (app *AppImpl) HandleAdminEdit(c echo.Context) error {
-	cookie, _ := c.Cookie(CSRFCookieName)
-	sk := ""
-	if cookie != nil {
-		sk = cookie.Value
+func getCSRFSessionKey(c echo.Context) string {
+	if v := c.Get(SessionKeyName); v != nil {
+		if sk, ok := v.(string); ok {
+			return sk
+		}
 	}
+	cookie, _ := c.Cookie(CSRFCookieName)
+	if cookie != nil {
+		return cookie.Value
+	}
+	return ""
+}
 
+func (app *AppImpl) HandleAdminEdit(c echo.Context) error {
 	data := &view.AdminIndexData{
 		LayoutData: app.newLayoutData(c, "エントリ編集"),
-		SessionKey: sk,
+		SessionKey: getCSRFSessionKey(c),
 	}
 	return app.templates.RenderWithLayout(c, "admin/layout.html", "admin/index.html", data)
 }
 
 func (app *AppImpl) HandleAdminIndex(c echo.Context) error {
-	cookie, _ := c.Cookie(CSRFCookieName)
-	sk := ""
-	if cookie != nil {
-		sk = cookie.Value
-	}
-
 	data := &view.AdminIndexData{
 		LayoutData: app.newLayoutData(c, "管理画面"),
-		SessionKey: sk,
+		SessionKey: getCSRFSessionKey(c),
 	}
 	return app.templates.RenderWithLayout(c, "admin/layout.html", "admin/index.html", data)
 }
@@ -119,17 +120,11 @@ func (app *AppImpl) HandleLogin(c echo.Context) error {
 		return c.Redirect(http.StatusFound, returnPath)
 	}
 
-	cookie, _ := c.Cookie(CSRFCookieName)
-	sk := ""
-	if cookie != nil {
-		sk = cookie.Value
-	}
-
 	data := &view.LoginData{
 		LayoutData: app.newLayoutData(c, "ログイン"),
 		ErrorMsg:   "",
 		ReturnPath: returnPath,
-		SessionKey: sk,
+		SessionKey: getCSRFSessionKey(c),
 	}
 	return app.templates.Render(c, "admin/login.html", data)
 }
@@ -169,8 +164,10 @@ func (app *AppImpl) HandleLoginPost(c echo.Context) error {
 	}
 
 	data := &view.LoginData{
+		LayoutData: app.newLayoutData(c, "ログイン"),
 		ErrorMsg:   "Invalid Username or Password",
 		ReturnPath: returnPath,
+		SessionKey: getCSRFSessionKey(c),
 	}
 	return app.templates.Render(c, "admin/login.html", data)
 }
